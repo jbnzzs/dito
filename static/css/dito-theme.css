@@ -395,5 +395,75 @@ a:hover {
    ------------------------------------------------------------ */
 
 /* ------------------------------------------------------------
-   8. Utilitários específicos
+   8. Utilitários específicos — Dashboard
    ------------------------------------------------------------ */
+
+/* Cards de estatísticas */
+.dito-stat-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem;
+}
+
+.dito-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    flex-shrink: 0;
+}
+
+.dito-stat-number {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #1C1C1A;
+    line-height: 1;
+    margin-bottom: 0.15rem;
+}
+
+.dito-stat-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #6B6A66;
+}
+
+/* Cards de status (visão coordenação) */
+.dito-status-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.65rem 0.85rem;
+    background: #FFFFFF;
+    border: 0.5px solid #D8CFC5;
+    border-radius: 8px;
+}
+
+.dito-status-count {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #1C1C1A;
+}
+
+/* Estado vazio */
+.dito-empty-state {
+    text-align: center;
+    padding: 2.5rem 1rem;
+    color: #6B6A66;
+}
+
+.dito-empty-state i {
+    font-size: 2.5rem;
+    display: block;
+    margin-bottom: 0.75rem;
+    opacity: 0.4;
+}
+
+.dito-empty-state p {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin: 0;
+}

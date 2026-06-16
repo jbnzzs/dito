@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Dito!{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block content %}
+
+{# ---- Saudação ---- #}
+<div class="d-flex align-items-start justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <h2 class="mb-1">
+            {{ saudacao }}, {{ request.user.first_name|default:request.user.username }}!
+        </h2>
+        <p class="text-secondary mb-0" style="font-size: 0.875rem;">
+            <i class="bi bi-calendar3 me-1"></i>{{ hoje }}
+        </p>
+    </div>
+    {% if visao == "coordenacao" %}
+    <a href="#" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>
+        Cadastrar imagem
+    </a>
+    {% endif %}
+</div>
+
+
+{# ============================================================ #}
+{# VISÃO COORDENAÇÃO / ADMINISTRADOR                            #}
+{# ============================================================ #}
+{% if visao == "coordenacao" %}
+
+{# Resumo #}
+<div class="row g-3 mb-4">
+
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body dito-stat-card">
+                <div class="dito-stat-icon" style="background:#F3DEE1; color:#A62E38;">
+                    <i class="bi bi-images"></i>
+                </div>
+                <div>
+                    <div class="dito-stat-number">{{ total }}</div>
+                    <div class="dito-stat-label">Total de imagens</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body dito-stat-card">
+                <div class="dito-stat-icon" style="background:#DBEAFE; color:#3A5FA0;">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
+                <div>
+                    <div class="dito-stat-number">{{ pendentes }}</div>
+                    <div class="dito-stat-label">Em andamento</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body dito-stat-card">
+                <div class="dito-stat-icon" style="background:#D1FAE5; color:#2E7A52;">
+                    <i class="bi bi-check-circle"></i>
+                </div>
+                <div>
+                    <div class="dito-stat-number">{{ finalizadas }}</div>
+                    <div class="dito-stat-label">Finalizadas</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{# Imagens por status #}
+<div class="card mb-4">
+    <div class="card-body">
+        <h6 class="fw-bold mb-3">
+            <i class="bi bi-diagram-3 me-2 text-secondary"></i>
+            Imagens por status do workflow
+        </h6>
+
+        {% if total == 0 %}
+        <div class="dito-empty-state">
+            <i class="bi bi-inbox"></i>
+            <p>Nenhuma imagem cadastrada ainda.</p>
+        </div>
+        {% else %}
+        <div class="row g-2">
+            {% for s in por_status %}
+            <div class="col-lg-4 col-md-6">
+                <div class="dito-status-card">
+                    <span class="dito-status dito-status-{{ s.slug }}">{{ s.nome }}</span>
+                    <span class="dito-status-count">{{ s.total }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+{# Histórico recente #}
+<div class="card">
+    <div class="card-body">
+        <h6 class="fw-bold mb-3">
+            <i class="bi bi-clock-history me-2 text-secondary"></i>
+            Movimentações recentes
+        </h6>
+
+        {% if historico_recente %}
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Data / Hora</th>
+                        <th>Ação</th>
+                        <th>Imagem</th>
+                        <th>Usuário</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in historico_recente %}
+                    <tr>
+                        <td class="text-secondary" style="font-size:0.8rem; white-space:nowrap;">
+                            {{ item.criado_em|date:"d/m/Y H:i" }}
+                        </td>
+                        <td>{{ item.get_tipo_acao_display }}</td>
+                        <td><span class="dito-retranca">{{ item.imagem.retranca }}</span></td>
+                        <td class="text-secondary">
+                            {{ item.usuario.get_full_name|default:item.usuario.username }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="dito-empty-state">
+            <i class="bi bi-clock"></i>
+            <p>Nenhuma movimentação registrada ainda.</p>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+
+{# ============================================================ #}
+{# VISÃO DESCRITOR                                              #}
+{# ============================================================ #}
+{% elif visao == "descritor" %}
+
+<div class="row g-3 mb-4">
+
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body dito-stat-card">
+                <div class="dito-stat-icon" style="background:#F3DEE1; color:#A62E38;">
+                    <i class="bi bi-images"></i>
+                </div>
+                <div>
+                    <div class="dito-stat-number">{{ total_minhas }}</div>
+                    <div class="dito-stat-label">Minhas imagens</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body dito-stat-card">
+                <div class="dito-stat-icon" style="background:#FEF9C3; color:#8B7340;">
+                    <i class="bi bi-pencil-square"></i>
+                </div>
+                <div>
+                    <div class="dito-stat-number">{{ disponiveis_count }}</div>
+                    <div class="dito-stat-label">Disponíveis para descrição</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <h6 class="fw-bold mb-3">
+            <i class="bi bi-check2-square me-2 text-secondary"></i>
+            Tarefas disponíveis
+        </h6>
+
+        {% if disponiveis %}
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Retranca</th>
+                        <th>Obra</th>
+                        <th>Etapa</th>
+                        <th>Status</th>
+                        <th>Prazo</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for imagem in disponiveis %}
+                    <tr>
+                        <td><span class="dito-retranca">{{ imagem.retranca }}</span></td>
+                        <td>{{ imagem.nome_obra }}</td>
+                        <td>{{ imagem.etapa }}</td>
+                        <td>
+                            <span class="dito-status dito-status-{{ imagem.status.slug }}">
+                                {{ imagem.status.nome }}
+                            </span>
+                        </td>
+                        <td class="text-secondary" style="font-size:0.875rem;">
+                            {% if imagem.prazo %}{{ imagem.prazo|date:"d/m/Y" }}{% else %}—{% endif %}
+                        </td>
+                        <td>
+                            <a href="#" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-pencil me-1"></i>Descrever
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="dito-empty-state">
+            <i class="bi bi-check-circle"></i>
+            <p>Nenhuma tarefa disponível no momento.</p>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+
+{# ============================================================ #}
+{# VISÃO REVISOR                                                #}
+{# ============================================================ #}
+{% elif visao == "revisor" %}
+
+<div class="row g-3 mb-4">
+
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body dito-stat-card">
+                <div class="dito-stat-icon" style="background:#F3DEE1; color:#A62E38;">
+                    <i class="bi bi-images"></i>
+                </div>
+                <div>
+                    <div class="dito-stat-number">{{ total_minhas }}</div>
+                    <div class="dito-stat-label">Minhas imagens</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body dito-stat-card">
+                <div class="dito-stat-icon" style="background:#EDE9FE; color:#6B52A0;">
+                    <i class="bi bi-eye"></i>
+                </div>
+                <div>
+                    <div class="dito-stat-number">{{ para_conferir_count }}</div>
+                    <div class="dito-stat-label">Para conferir</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <h6 class="fw-bold mb-3">
+            <i class="bi bi-eye me-2 text-secondary"></i>
+            Tarefas para conferência
+        </h6>
+
+        {% if para_conferir %}
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Retranca</th>
+                        <th>Obra</th>
+                        <th>Etapa</th>
+                        <th>Status</th>
+                        <th>Prazo</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for imagem in para_conferir %}
+                    <tr>
+                        <td><span class="dito-retranca">{{ imagem.retranca }}</span></td>
+                        <td>{{ imagem.nome_obra }}</td>
+                        <td>{{ imagem.etapa }}</td>
+                        <td>
+                            <span class="dito-status dito-status-{{ imagem.status.slug }}">
+                                {{ imagem.status.nome }}
+                            </span>
+                        </td>
+                        <td class="text-secondary" style="font-size:0.875rem;">
+                            {% if imagem.prazo %}{{ imagem.prazo|date:"d/m/Y" }}{% else %}—{% endif %}
+                        </td>
+                        <td>
+                            <a href="#" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye me-1"></i>Conferir
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="dito-empty-state">
+            <i class="bi bi-check-circle"></i>
+            <p>Nenhuma tarefa para conferência no momento.</p>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+{% endif %}
+
+{% endblock %}
