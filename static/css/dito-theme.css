@@ -131,8 +131,264 @@ a:hover {
    ------------------------------------------------------------ */
 
 /* ------------------------------------------------------------
-   6. Sidebar e navegação   (próxima sub-etapa)
+   6. Sidebar, header e layout autenticado
    ------------------------------------------------------------ */
+
+/* Layout geral */
+.dito-layout {
+    display: flex;
+    min-height: 100vh;
+}
+
+/* ---- Sidebar ---- */
+.dito-sidebar {
+    width: 260px;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    background: #590515;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    transition: width 0.25s ease;
+    overflow: hidden;
+    z-index: 200;
+}
+
+.dito-sidebar.collapsed { width: 64px; }
+
+/* Header da sidebar */
+.dito-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    min-height: 64px;
+    flex-shrink: 0;
+}
+
+.dito-sidebar-logo-full {
+    height: 28px;
+    transition: opacity 0.2s ease;
+}
+
+.dito-sidebar-logo-icon {
+    height: 28px;
+    display: none;
+}
+
+.dito-sidebar.collapsed .dito-sidebar-logo-full { display: none; }
+.dito-sidebar.collapsed .dito-sidebar-logo-icon { display: block; }
+
+/* Nav */
+.dito-sidebar-nav {
+    flex: 1;
+    padding: 0.75rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.dito-nav-section {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #F3DEE1;
+    opacity: 0.4;
+    padding: 0.75rem 0.75rem 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: opacity 0.2s ease;
+}
+
+.dito-sidebar.collapsed .dito-nav-section { opacity: 0; }
+
+.dito-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: 6px;
+    color: #F3DEE1;
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 600;
+    opacity: 0.8;
+    white-space: nowrap;
+    transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.dito-nav-item:hover,
+.dito-nav-item.active {
+    background: rgba(255, 255, 255, 0.1);
+    opacity: 1;
+    color: #FFFFFF;
+}
+
+.dito-nav-item i {
+    font-size: 1.05rem;
+    flex-shrink: 0;
+    width: 20px;
+    text-align: center;
+}
+
+.dito-nav-label {
+    overflow: hidden;
+    max-width: 200px;
+    transition: opacity 0.2s ease, max-width 0.25s ease;
+}
+
+.dito-sidebar.collapsed .dito-nav-label {
+    opacity: 0;
+    max-width: 0;
+}
+
+/* Footer da sidebar */
+.dito-sidebar-footer {
+    padding: 0.75rem 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+}
+
+.dito-collapse-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: 6px;
+    color: #F3DEE1;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: 'Cairo', system-ui, sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    opacity: 0.65;
+    width: 100%;
+    white-space: nowrap;
+    transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.dito-collapse-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    opacity: 1;
+}
+
+.dito-collapse-btn i {
+    font-size: 1.05rem;
+    flex-shrink: 0;
+    width: 20px;
+    text-align: center;
+    transition: transform 0.25s ease;
+}
+
+.dito-sidebar.collapsed .dito-collapse-btn i {
+    transform: rotate(180deg);
+}
+
+.dito-collapse-label {
+    overflow: hidden;
+    max-width: 200px;
+    transition: opacity 0.2s ease, max-width 0.25s ease;
+}
+
+.dito-sidebar.collapsed .dito-collapse-label {
+    opacity: 0;
+    max-width: 0;
+}
+
+/* ---- Área principal ---- */
+.dito-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: #F8F3EE;
+}
+
+/* ---- Header ---- */
+.dito-header {
+    height: 64px;
+    background: #FFFFFF;
+    border-bottom: 0.5px solid #D8CFC5;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    flex-shrink: 0;
+}
+
+.dito-header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.dito-header-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1C1C1A;
+}
+
+.dito-header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.dito-user-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.dito-user-name {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #1C1C1A;
+    line-height: 1.2;
+}
+
+.dito-user-tipo {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #6B6A66;
+    line-height: 1.2;
+}
+
+.dito-logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.85rem;
+    background: none;
+    border: 0.5px solid #D8CFC5;
+    border-radius: 6px;
+    color: #6B6A66;
+    font-family: 'Cairo', system-ui, sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.dito-logout-btn:hover {
+    border-color: #A62E38;
+    color: #A62E38;
+}
+
+/* ---- Conteúdo ---- */
+.dito-content {
+    flex: 1;
+    padding: 2rem 1.5rem;
+}
 
 /* ------------------------------------------------------------
    7. Busca e retranca   (bloco 3 da Etapa 4)
