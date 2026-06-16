@@ -1,0 +1,143 @@
+/* ============================================================
+   Dito! — Tema visual
+   Importar APÓS o Bootstrap.
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   1. Variáveis do Bootstrap
+   ------------------------------------------------------------ */
+:root {
+    /* Cor principal */
+    --bs-primary: #A62E38;
+    --bs-primary-rgb: 166, 46, 56;
+
+    /* Fundo e texto */
+    --bs-body-bg: #F8F3EE;
+    --bs-body-color: #1C1C1A;
+    --bs-body-font-family: 'Cairo', system-ui, -apple-system, sans-serif;
+    --bs-body-font-size: 0.9375rem;
+    --bs-body-line-height: 1.6;
+    --bs-body-font-weight: 500;
+
+    /* Bordas */
+    --bs-border-color: #D8CFC5;
+    --bs-border-width: 0.5px;
+    --bs-border-radius: 8px;
+    --bs-border-radius-sm: 6px;
+    --bs-border-radius-lg: 10px;
+
+    /* Links */
+    --bs-link-color: #A62E38;
+    --bs-link-hover-color: #590515;
+
+    /* Superfícies */
+    --bs-card-bg: #F2F2F2;
+    --bs-modal-bg: #F2F2F2;
+
+    /* Secundária */
+    --bs-secondary-color: #6B6A66;
+    --bs-secondary-bg: #F8F3EE;
+
+    /* Estados semânticos */
+    --bs-success: #3B6D11;
+    --bs-danger: #A62E38;
+    --bs-warning: #BF7D2C;
+
+    /* Tipografia */
+    --bs-headings-font-family: 'Cairo', system-ui, -apple-system, sans-serif;
+    --bs-headings-font-weight: 800;
+    --bs-headings-color: #1C1C1A;
+}
+
+/* ------------------------------------------------------------
+   2. Variáveis internas do Dito!
+   ------------------------------------------------------------ */
+:root {
+    --dito-vinho: #A62E38;
+    --dito-vinho-escuro: #590515;
+    --dito-vinho-claro: #F3DEE1;
+    --dito-dourado: #BF7D2C;
+    --dito-dourado-claro: #F2D0A7;
+    --dito-bege: #D8CFC5;
+    --dito-grafite: #1C1C1A;
+}
+
+/* ------------------------------------------------------------
+   3. Ajustes globais
+   ------------------------------------------------------------ */
+body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.01em;
+}
+
+.btn {
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.card {
+    border: 0.5px solid var(--dito-bege);
+}
+
+a {
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: none;
+}
+
+/* ------------------------------------------------------------
+   4. Overrides de botões e links (Bootstrap)
+   ------------------------------------------------------------ */
+
+/* Botão primário — grená */
+.btn-primary {
+    --bs-btn-bg: var(--dito-vinho);
+    --bs-btn-border-color: var(--dito-vinho);
+    --bs-btn-hover-bg: var(--dito-vinho-escuro);
+    --bs-btn-hover-border-color: var(--dito-vinho-escuro);
+    --bs-btn-active-bg: var(--dito-vinho-escuro);
+    --bs-btn-active-border-color: var(--dito-vinho-escuro);
+    --bs-btn-disabled-bg: var(--dito-vinho);
+    --bs-btn-disabled-border-color: var(--dito-vinho);
+}
+
+/* Botão outline primário — grená */
+.btn-outline-primary {
+    --bs-btn-color: var(--dito-vinho);
+    --bs-btn-border-color: var(--dito-vinho);
+    --bs-btn-hover-bg: var(--dito-vinho);
+    --bs-btn-hover-border-color: var(--dito-vinho);
+    --bs-btn-active-bg: var(--dito-vinho);
+    --bs-btn-active-border-color: var(--dito-vinho);
+}
+
+/* Links — grená */
+a {
+    color: var(--dito-vinho);
+}
+
+a:hover {
+    color: var(--dito-vinho-escuro);
+}
+
+/* ------------------------------------------------------------
+   5. Badges de status   (bloco 3 da Etapa 4)
+   ------------------------------------------------------------ */
+
+/* ------------------------------------------------------------
+   6. Sidebar e navegação   (próxima sub-etapa)
+   ------------------------------------------------------------ */
+
+/* ------------------------------------------------------------
+   7. Busca e retranca   (bloco 3 da Etapa 4)
+   ------------------------------------------------------------ */
+
+/* ------------------------------------------------------------
+   8. Utilitários específicos
+   ------------------------------------------------------------ */
