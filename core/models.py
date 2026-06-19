@@ -124,6 +124,12 @@ class Imagem(models.Model):
         blank=True,
         verbose_name="Nome do arquivo",
     )
+    caminho_arquivo = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name="Caminho do arquivo",
+        help_text="Caminho ou referência de onde o arquivo está armazenado.",
+    )
     tamanho_arquivo = models.CharField(
         max_length=30,
         blank=True,

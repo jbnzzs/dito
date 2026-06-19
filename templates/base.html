@@ -36,7 +36,7 @@
             <!-- Seção principal (todos os perfis) -->
             <span class="dito-nav-section">Principal</span>
 
-            <a href="#" class="dito-nav-item {% block nav_dashboard %}{% endblock %}">
+            <a href="{% url 'dashboard' %}" class="dito-nav-item {% block nav_dashboard %}{% endblock %}">
                 <i class="bi bi-house"></i>
                 <span class="dito-nav-label">Dashboard</span>
             </a>
@@ -55,7 +55,7 @@
             {% if request.user.tipo == 'coordenador' or request.user.tipo == 'administrador' %}
             <span class="dito-nav-section">Editorial</span>
 
-            <a href="#" class="dito-nav-item {% block nav_imagens %}{% endblock %}">
+            <a href="{% url 'imagens_lista' %}" class="dito-nav-item {% block nav_imagens %}{% endblock %}">
                 <i class="bi bi-images"></i>
                 <span class="dito-nav-label">Imagens</span>
             </a>
