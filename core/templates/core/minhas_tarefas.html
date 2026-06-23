@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block title %}Minhas Tarefas — Dito!{% endblock %}
+{% block page_title %}Minhas Tarefas{% endblock %}
+{% block nav_tarefas %}active{% endblock %}
+
+{% block content %}
+
+{# ---- Cabeçalho ---- #}
+<div class="d-flex align-items-start justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <h2 class="mb-1">{{ titulo_secao }}</h2>
+        <p class="text-secondary mb-0" style="font-size:0.875rem;">
+            {{ total }} tarefa{{ total|pluralize }} encontrada{{ total|pluralize }}
+        </p>
+    </div>
+</div>
+
+{# ---- Cards de resumo por status ---- #}
+{% if contadores %}
+<div class="row g-2 mb-4">
+    {% for slug, count in contadores.items %}
+    {% if count > 0 or slug in slugs_ativos or mostrar_todos_status %}
+    <div class="col-4">
+        <a href="?status={{ slug }}"
+           class="card text-decoration-none {% if slug == status_slug_ativo %}border-primary{% endif %}"
+           style="{% if slug == status_slug_ativo %}border-color:#A62E38 !important; border-width:1.5px !important;{% endif %}">
+            <div class="card-body py-2 px-3">
+                <div class="d-flex align-items-center justify-content-between">
+                    <span class="dito-status dito-status-{{ slug }}" style="font-size:0.7rem;">
+                        {% for s in status_list %}{% if s.slug == slug %}{{ s.nome }}{% endif %}{% endfor %}
+                    </span>
+                    <span class="fw-bold" style="font-size:1.1rem; color:#1C1C1A;">{{ count }}</span>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+{# ---- Filtros ---- #}
+<div class="card mb-3">
+    <div class="card-body py-2 px-3">
+        <form method="get" class="d-flex align-items-center gap-3 flex-wrap">
+
+            <div class="dito-search flex-grow-1" style="max-width:360px;">
+                <i class="bi bi-search text-secondary"></i>
+                <input type="text" name="busca" value="{{ busca }}"
+                       placeholder="Buscar por retranca...">
+            </div>
+
+            <select name="status" class="form-select"
+                    style="max-width:220px; font-size:0.875rem;">
+                <option value="">Todos os status</option>
+                {% for s in status_list %}
+                <option value="{{ s.slug }}"
+                    {% if s.slug == status_slug_ativo %}selected{% endif %}>
+                    {{ s.nome }}
+                </option>
+                {% endfor %}
+            </select>
+
+            <button type="submit" class="btn btn-primary btn-sm px-3">
+                <i class="bi bi-funnel me-1"></i> Filtrar
+            </button>
+
+            {% if busca or status_slug_ativo %}
+            <a href="{% url 'minhas_tarefas' %}"
+               class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-x me-1"></i> Limpar
+            </a>
+            {% endif %}
+
+        </form>
+    </div>
+</div>
+
+{# ---- Tabela de tarefas ---- #}
+<div class="card">
+    <div class="card-body p-0">
+        {% if tarefas %}
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">Retranca</th>
+                        <th>Obra</th>
+                        <th>Disciplina</th>
+                        <th>Etapa</th>
+                        <th>Status</th>
+                        <th>Prazo</th>
+                        {% if request.user.tipo == 'coordenador' or request.user.tipo == 'administrador' %}
+                        <th>Responsável</th>
+                        {% endif %}
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for img in tarefas %}
+                    <tr>
+                        <td class="ps-3">
+                            <span class="dito-retranca">{{ img.retranca }}</span>
+                        </td>
+                        <td style="font-size:0.875rem;">
+                            {{ img.nome_obra }}
+                        </td>
+                        <td style="font-size:0.875rem;">
+                            {{ img.componente_curricular|default:"—" }}
+                        </td>
+                        <td style="font-size:0.875rem;">
+                            {{ img.etapa }}
+                        </td>
+                        <td>
+                            <span class="dito-status dito-status-{{ img.status.slug }}">
+                                {{ img.status.nome }}
+                            </span>
+                        </td>
+                        <td style="font-size:0.8rem;"
+                            class="{% if img.prazo %}text-secondary{% else %}text-secondary{% endif %}">
+                            {% if img.prazo %}
+                                {{ img.prazo|date:"d/m/Y" }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        {% if request.user.tipo == 'coordenador' or request.user.tipo == 'administrador' %}
+                        <td style="font-size:0.875rem;">
+                            {% if img.responsavel %}
+                                {{ img.responsavel.get_full_name|default:img.responsavel.username }}
+                            {% else %}
+                                <span class="text-secondary">—</span>
+                            {% endif %}
+                        </td>
+                        {% endif %}
+                        <td class="text-end pe-3">
+                            {% if img.status.slug in slugs_ativos %}
+                            <a href="{% url 'descricao_imagem' img.pk %}"
+                               class="btn btn-sm btn-primary">
+                                <i class="bi {{ acao_icon }} me-1"></i>{{ acao_label }}
+                            </a>
+                            {% else %}
+                            <a href="{% url 'descricao_imagem' img.pk %}"
+                               class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-eye me-1"></i>Ver
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Paginação #}
+        {% if pagina_obj.has_other_pages %}
+        <div class="d-flex align-items-center justify-content-between px-3 py-2 border-top"
+             style="font-size:0.875rem;">
+            <span class="text-secondary">
+                Página {{ pagina_obj.number }} de {{ pagina_obj.paginator.num_pages }}
+                &nbsp;·&nbsp; {{ total }} tarefa{{ total|pluralize }}
+            </span>
+            <div class="d-flex gap-1 align-items-center">
+
+                {% if pagina_obj.has_previous %}
+                <a href="?pagina=1{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}"
+                   class="btn btn-outline-secondary btn-sm" title="Primeira">
+                    <i class="bi bi-chevron-double-left"></i>
+                </a>
+                <a href="?pagina={{ pagina_obj.previous_page_number }}{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}"
+                   class="btn btn-outline-secondary btn-sm" title="Anterior">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+                {% endif %}
+
+                {% for num in pagina_obj.paginator.page_range %}
+                    {% if pagina_obj.number == num %}
+                    <button class="btn btn-primary btn-sm">{{ num }}</button>
+                    {% elif num > pagina_obj.number|add:"-3" and num < pagina_obj.number|add:"3" %}
+                    <a href="?pagina={{ num }}{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}"
+                       class="btn btn-outline-secondary btn-sm">{{ num }}</a>
+                    {% endif %}
+                {% endfor %}
+
+                {% if pagina_obj.has_next %}
+                <a href="?pagina={{ pagina_obj.next_page_number }}{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}"
+                   class="btn btn-outline-secondary btn-sm" title="Próxima">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+                <a href="?pagina={{ pagina_obj.paginator.num_pages }}{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}"
+                   class="btn btn-outline-secondary btn-sm" title="Última">
+                    <i class="bi bi-chevron-double-right"></i>
+                </a>
+                {% endif %}
+
+                <form method="get" class="d-flex align-items-center gap-1 ms-2">
+                    {% if status_slug_ativo %}<input type="hidden" name="status" value="{{ status_slug_ativo }}">{% endif %}
+                    {% if busca %}<input type="hidden" name="busca" value="{{ busca }}">{% endif %}
+                    <input type="number" name="pagina" min="1"
+                           max="{{ pagina_obj.paginator.num_pages }}"
+                           placeholder="{{ pagina_obj.number }}"
+                           style="width:60px; font-size:0.8rem; padding:0.25rem 0.4rem; border:0.5px solid #D8CFC5; border-radius:6px; text-align:center; background:#fff; font-family:'Cairo',sans-serif;">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-arrow-right"></i>
+                    </button>
+                </form>
+
+            </div>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="dito-empty-state py-5">
+            <i class="bi bi-check2-all"></i>
+            <p>
+                {% if busca or status_slug_ativo %}
+                    Nenhuma tarefa encontrada com os filtros aplicados.
+                {% else %}
+                    Nenhuma tarefa atribuída a você no momento.
+                {% endif %}
+            </p>
+            {% if busca or status_slug_ativo %}
+            <a href="{% url 'minhas_tarefas' %}" class="btn btn-outline-primary mt-2">
+                <i class="bi bi-x me-1"></i> Limpar filtros
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,710 @@
+{% extends "base.html" %}
+
+{% block title %}{{ imagem.retranca }} — Dito!{% endblock %}
+{% block page_title %}Descrição{% endblock %}
+{% block nav_imagens %}active{% endblock %}
+
+{% block content %}
+
+<style>
+/* ---- Picker de idioma ---- */
+.idioma-picker {
+    position: relative;
+    display: inline-block;
+}
+
+.idioma-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.75rem;
+    border: 0.5px solid #D8CFC5;
+    border-radius: 6px;
+    background: #F8F3EE;
+    font-family: 'Cairo', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #1C1C1A;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.15s;
+    min-width: 140px;
+}
+
+.idioma-btn:hover { border-color: #A62E38; }
+.idioma-btn i { font-size: 0.7rem; margin-left: auto; }
+
+.idioma-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 500;
+    background: #FFFFFF;
+    border: 0.5px solid #D8CFC5;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    width: 260px;
+    display: none;
+    flex-direction: column;
+}
+
+.idioma-dropdown.aberto { display: flex; }
+
+.idioma-search {
+    border: none;
+    border-bottom: 0.5px solid #D8CFC5;
+    border-radius: 8px 8px 0 0;
+    padding: 0.6rem 0.85rem;
+    font-family: 'Cairo', sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1C1C1A;
+    outline: none;
+    background: #F8F3EE;
+}
+
+.idioma-lista {
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 0.35rem 0;
+}
+
+.idioma-opcao {
+    padding: 0.45rem 0.85rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1C1C1A;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.idioma-opcao:hover,
+.idioma-opcao.destacado { background: #F3DEE1; color: #590515; }
+
+.idioma-opcao .idioma-cod {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #6B6A66;
+    margin-left: 0.4rem;
+}
+
+.idioma-separador {
+    padding: 0.3rem 0.85rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #B4B2A9;
+    background: #F8F3EE;
+}
+
+/* ---- Trecho item ---- */
+.trecho-item {
+    background: #FFFFFF;
+    border: 0.5px solid #D8CFC5;
+    border-radius: 8px;
+    padding: 1rem;
+    transition: border-color 0.15s;
+}
+.trecho-item:focus-within { border-color: #A62E38; }
+
+/* ---- Workflow card ---- */
+.dito-workflow-card {
+    background: #BF7D2C;
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.dito-workflow-info strong {
+    display: block;
+    color: #FFFFFF;
+    font-size: 0.875rem;
+    font-weight: 700;
+    margin-bottom: 0.15rem;
+}
+
+.dito-workflow-info span {
+    color: #F2D0A7;
+    font-size: 0.8rem;
+    opacity: 0.85;
+}
+
+.btn-workflow-avancar {
+    background: #FFFFFF;
+    color: #BF7D2C;
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem 1.25rem;
+    font-family: 'Cairo', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 800;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: background 0.15s, transform 0.1s;
+    white-space: nowrap;
+}
+
+.btn-workflow-avancar:hover {
+    background: #F2D0A7;
+    transform: translateY(-1px);
+}
+
+.btn-workflow-salvar {
+    background: rgba(255,255,255,0.15);
+    color: #FFFFFF;
+    border: 0.5px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    padding: 0.6rem 1.25rem;
+    font-family: 'Cairo', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: background 0.15s;
+    white-space: nowrap;
+}
+
+.btn-workflow-salvar:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+/* ---- Preview ---- */
+.descricao-preview-box {
+    background: #FFFFFF;
+    border: 0.5px solid #D8CFC5;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+}
+
+.trecho-preview-item {
+    padding: 0.75rem 0;
+    border-bottom: 0.5px solid #F2F2F2;
+}
+
+.trecho-preview-item:last-child { border-bottom: none; }
+</style>
+
+{# ---- Cabeçalho ---- #}
+<div class="d-flex align-items-start justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <a href="{% url 'imagens_lista' %}" class="text-secondary" style="font-size:0.875rem;">
+                <i class="bi bi-arrow-left me-1"></i>Imagens
+            </a>
+            <span class="text-secondary">/</span>
+            <span class="dito-retranca">{{ imagem.retranca }}</span>
+        </div>
+        <h2 class="mb-0">{{ imagem.nome_obra }}</h2>
+    </div>
+    <span class="dito-status dito-status-{{ imagem.status.slug }}" id="badgeStatus">
+        {{ imagem.status.nome }}
+    </span>
+</div>
+
+{# ---- Bloqueio ---- #}
+{% if motivo_bloqueio %}
+<div class="card mb-4" style="border-color:#FCA5A5;">
+    <div class="card-body" style="background:#FEE2E2; border-radius:8px;">
+        <div class="d-flex align-items-start gap-3">
+            <i class="bi bi-lock-fill mt-1" style="color:#9B5050; font-size:1.25rem; flex-shrink:0;"></i>
+            <div>
+                <p class="fw-bold mb-1" style="color:#9B5050;">Acesso restrito</p>
+                <p class="mb-0" style="color:#9B5050; font-size:0.875rem;">{{ motivo_bloqueio }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ---- Toast ---- #}
+<div id="toastFeedback" style="
+    position:fixed; bottom:1.5rem; right:1.5rem; z-index:9999;
+    background:#1C1C1A; color:#fff; border-radius:8px;
+    padding:0.75rem 1.25rem; font-size:0.875rem; font-weight:600;
+    display:none; align-items:center; gap:0.5rem;
+    box-shadow:0 4px 16px rgba(0,0,0,0.2);
+">
+    <i id="toastIcon" class="bi bi-check-circle"></i>
+    <span id="toastMsg">Salvo.</span>
+</div>
+
+<div class="row g-4">
+
+    {# ---- Coluna esquerda: metadados ---- #}
+    <div class="col-lg-3">
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:#6B6A66;">
+                    <i class="bi bi-tag me-1"></i> Metadados editoriais
+                </h6>
+                <div class="d-flex flex-column gap-3" style="font-size:0.875rem;">
+                    <div>
+                        <div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Retranca</div>
+                        <span class="dito-retranca">{{ imagem.retranca }}</span>
+                    </div>
+                    <div>
+                        <div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Obra</div>
+                        <div class="fw-bold">{{ imagem.nome_obra|default:"—" }}</div>
+                    </div>
+                    {% if imagem.componente_curricular %}
+                    <div>
+                        <div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Disciplina</div>
+                        <div>{{ imagem.componente_curricular }}</div>
+                    </div>
+                    {% endif %}
+                    {% if imagem.volume_ano_modulo %}
+                    <div>
+                        <div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Volume / Ano</div>
+                        <div>{{ imagem.volume_ano_modulo }}</div>
+                    </div>
+                    {% endif %}
+                    {% if imagem.capitulo_unidade %}
+                    <div>
+                        <div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Capítulo / Unidade</div>
+                        <div>{{ imagem.capitulo_unidade }}</div>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Etapa</div>
+                        <div>{{ imagem.get_etapa_display }}</div>
+                    </div>
+                    {% if imagem.prazo %}
+                    <div>
+                        <div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Prazo</div>
+                        <div>{{ imagem.prazo|date:"d/m/Y" }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% if imagem.nome_arquivo %}
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:#6B6A66;">
+                    <i class="bi bi-file-earmark-image me-1"></i> Informações técnicas
+                </h6>
+                <div class="d-flex flex-column gap-3" style="font-size:0.875rem;">
+                    <div>
+                        <div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Arquivo</div>
+                        <div style="word-break:break-all; font-size:0.8rem;">{{ imagem.nome_arquivo }}</div>
+                    </div>
+                    {% if imagem.dimensoes %}<div><div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase;">Dimensões</div><div>{{ imagem.dimensoes }}</div></div>{% endif %}
+                    {% if imagem.resolucao %}<div><div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase;">Resolução</div><div>{{ imagem.resolucao }}</div></div>{% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:#6B6A66;">
+                    <i class="bi bi-people me-1"></i> Equipe
+                </h6>
+                <div class="d-flex flex-column gap-3" style="font-size:0.875rem;">
+                    {% if imagem.responsavel %}
+                    <div>
+                        <div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Responsável</div>
+                        <div>{{ imagem.responsavel.get_full_name|default:imagem.responsavel.username }}</div>
+                        <div class="text-secondary" style="font-size:0.75rem;">{{ imagem.responsavel.get_tipo_display }}</div>
+                    </div>
+                    {% endif %}
+                    {% if descricao and descricao.descritor %}
+                    <div>
+                        <div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Descritor</div>
+                        <div>{{ descricao.descritor.get_full_name|default:descricao.descritor.username }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    {# ---- Coluna principal ---- #}
+    <div class="col-lg-9 d-flex flex-column gap-4">
+
+        {% if pode_editar %}
+
+        {# ---- Editor de trechos ---- #}
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h6 class="fw-bold mb-0">
+                        <i class="bi bi-pencil-square me-2 text-secondary"></i>
+                        Editor de descrição
+                    </h6>
+                    <button class="btn btn-outline-primary btn-sm" onclick="adicionarTrecho()">
+                        <i class="bi bi-plus-lg me-1"></i> Novo trecho
+                    </button>
+                </div>
+
+                <div id="listaTrechos" class="d-flex flex-column gap-3">
+                    {% for trecho in trechos %}
+                    <div class="trecho-item" data-ordem="{{ trecho.ordem }}">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="text-secondary" style="font-size:0.75rem; font-weight:700; min-width:65px;">
+                                Trecho {{ trecho.ordem }}
+                            </span>
+                            <div class="idioma-picker">
+                                <button type="button" class="idioma-btn" onclick="togglePicker(this)">
+                                    <span class="idioma-nome-exibir">{{ trecho.idioma_nome }}</span>
+                                    <i class="bi bi-chevron-down"></i>
+                                </button>
+                                <div class="idioma-dropdown">
+                                    <input type="text" class="idioma-search" placeholder="Buscar idioma..." oninput="filtrarOpcoes(this)">
+                                    <div class="idioma-lista" data-lista></div>
+                                </div>
+                                <input type="hidden" class="idioma-codigo" value="{{ trecho.idioma_codigo }}">
+                                <input type="hidden" class="idioma-nome" value="{{ trecho.idioma_nome }}">
+                            </div>
+                            <button class="btn btn-sm ms-auto" onclick="removerTrecho(this)"
+                                    style="color:#9B5050; border:0.5px solid #FCA5A5; background:#FEE2E2; border-radius:6px; padding:0.25rem 0.6rem;">
+                                <i class="bi bi-trash3"></i>
+                            </button>
+                        </div>
+                        <textarea class="form-control trecho-texto" rows="4"
+                                  placeholder="Digite a descrição deste trecho..."
+                                  style="font-size:0.9375rem; line-height:1.7; resize:vertical; border:0.5px solid #D8CFC5;">{{ trecho.texto }}</textarea>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                {% if not trechos %}
+                <script>document.addEventListener("DOMContentLoaded", adicionarTrecho);</script>
+                {% endif %}
+
+            </div>
+        </div>
+
+        {# ---- Descrição completa (seção dedicada) ---- #}
+        <div class="card">
+            <div class="card-body">
+                <h6 class="fw-bold mb-1">
+                    <i class="bi bi-eye me-2 text-secondary"></i>
+                    Descrição completa
+                    <span class="text-secondary ms-2" style="font-size:0.8rem; font-weight:500;" id="contadorTrechos">
+                        {{ trechos|length }} trecho{{ trechos|length|pluralize }}
+                    </span>
+                </h6>
+                <p class="text-secondary mb-3" style="font-size:0.8rem;">
+                    Atualizada automaticamente ao salvar. Trechos em idioma estrangeiro aparecem em itálico.
+                </p>
+
+                <div id="previewDescricao" class="d-flex flex-column gap-0">
+                    {% for trecho in trechos %}
+                    <div class="trecho-preview-item">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="text-secondary" style="font-size:0.75rem; font-weight:700;">Trecho {{ trecho.ordem }}</span>
+                            <span class="dito-retranca" style="font-size:0.7rem;">{{ trecho.idioma_nome }}</span>
+                        </div>
+                        <p class="mb-0" style="font-size:0.9375rem; line-height:1.7;
+                            {% if trecho.idioma_codigo != 'por' %}font-style:italic;{% endif %}">
+                            {{ trecho.texto }}
+                        </p>
+                    </div>
+                    {% empty %}
+                    <div class="dito-empty-state py-3">
+                        <i class="bi bi-file-text"></i>
+                        <p>Nenhuma descrição registrada ainda.</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {# ---- Ações do workflow (ao fundo) ---- #}
+        <div class="dito-workflow-card">
+            <div class="dito-workflow-info">
+                <strong><i class="bi bi-arrow-right-circle me-1"></i> Ações do workflow</strong>
+                <span>Status atual: {{ imagem.status.nome }}</span>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn-workflow-salvar" onclick="salvarTrechos()">
+                    <i class="bi bi-floppy"></i> Salvar e continuar
+                </button>
+                <button class="btn-workflow-avancar" onclick="salvarEAvancar()">
+                    <i class="bi bi-check2-circle"></i> Salvar e enviar para próxima etapa
+                </button>
+            </div>
+        </div>
+
+        {% else %}
+
+        {# ---- Somente visualização ---- #}
+        <div class="card">
+            <div class="card-body">
+                <h6 class="fw-bold mb-1">
+                    <i class="bi bi-eye me-2 text-secondary"></i>
+                    Descrição completa
+                    <span class="text-secondary ms-2" style="font-size:0.8rem; font-weight:500;">
+                        {{ trechos|length }} trecho{{ trechos|length|pluralize }}
+                    </span>
+                </h6>
+                <p class="text-secondary mb-3" style="font-size:0.8rem;">
+                    Trechos em idioma estrangeiro aparecem em itálico.
+                </p>
+                <div class="d-flex flex-column gap-0">
+                    {% for trecho in trechos %}
+                    <div class="trecho-preview-item">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="text-secondary" style="font-size:0.75rem; font-weight:700;">Trecho {{ trecho.ordem }}</span>
+                            <span class="dito-retranca" style="font-size:0.7rem;">{{ trecho.idioma_nome }}</span>
+                        </div>
+                        <p class="mb-0" style="font-size:0.9375rem; line-height:1.7;
+                            {% if trecho.idioma_codigo != 'por' %}font-style:italic;{% endif %}">
+                            {{ trecho.texto }}
+                        </p>
+                    </div>
+                    {% empty %}
+                    <div class="dito-empty-state py-3">
+                        <i class="bi bi-file-text"></i>
+                        <p>Nenhuma descrição registrada ainda.</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {% endif %}
+
+    </div>
+</div>
+
+{% if pode_editar %}
+<script>
+const SALVAR_URL = "{% url 'salvar_trecho' imagem.pk %}";
+const AVANCAR_URL = "{% url 'avancar_status' imagem.pk %}";
+const CSRF = "{{ csrf_token }}";
+const IDIOMAS = {{ idiomas_json|safe }};
+const PRIORITARIOS = ["por","eng","spa","fra","deu","ita","jpn","zho","lat","ara","rus","hin","kor","grk"];
+
+// ---- Picker de idioma ---- //
+
+function renderizarLista(lista, filtro) {
+    filtro = (filtro || "").toLowerCase();
+    const itens = IDIOMAS.filter(i =>
+        !filtro || i.nome.toLowerCase().includes(filtro) || i.codigo.includes(filtro)
+    );
+
+    let html = "";
+    if (!filtro) {
+        html += `<div class="idioma-separador">Mais usados</div>`;
+        IDIOMAS.filter(i => PRIORITARIOS.includes(i.codigo)).forEach(i => {
+            html += `<div class="idioma-opcao" onclick="selecionarIdioma(this,'${i.codigo}','${i.nome.replace(/'/g,"\\'")}')">
+                        ${i.nome}<span class="idioma-cod">${i.codigo}</span></div>`;
+        });
+        html += `<div class="idioma-separador">Todos os idiomas</div>`;
+        IDIOMAS.filter(i => !PRIORITARIOS.includes(i.codigo)).forEach(i => {
+            html += `<div class="idioma-opcao" onclick="selecionarIdioma(this,'${i.codigo}','${i.nome.replace(/'/g,"\\'")}')">
+                        ${i.nome}<span class="idioma-cod">${i.codigo}</span></div>`;
+        });
+    } else {
+        if (!itens.length) {
+            html = `<div class="idioma-opcao text-secondary">Nenhum resultado.</div>`;
+        } else {
+            itens.slice(0, 80).forEach(i => {
+                html += `<div class="idioma-opcao" onclick="selecionarIdioma(this,'${i.codigo}','${i.nome.replace(/'/g,"\\'")}')">
+                            ${i.nome}<span class="idioma-cod">${i.codigo}</span></div>`;
+            });
+        }
+    }
+    lista.innerHTML = html;
+}
+
+function togglePicker(btn) {
+    const picker = btn.closest(".idioma-picker");
+    const dropdown = picker.querySelector(".idioma-dropdown");
+    const lista = picker.querySelector("[data-lista]");
+    const jaAberto = dropdown.classList.contains("aberto");
+
+    // Fechar todos
+    document.querySelectorAll(".idioma-dropdown.aberto").forEach(d => {
+        d.classList.remove("aberto");
+        d.querySelector("input").value = "";
+    });
+
+    if (!jaAberto) {
+        renderizarLista(lista, "");
+        dropdown.classList.add("aberto");
+        dropdown.querySelector(".idioma-search").focus();
+    }
+}
+
+function filtrarOpcoes(input) {
+    const lista = input.closest(".idioma-dropdown").querySelector("[data-lista]");
+    renderizarLista(lista, input.value);
+}
+
+function selecionarIdioma(opcao, codigo, nome) {
+    const dropdown = opcao.closest(".idioma-dropdown");
+    const picker = dropdown.closest(".idioma-picker");
+    picker.querySelector(".idioma-nome-exibir").textContent = nome;
+    picker.querySelector(".idioma-codigo").value = codigo;
+    picker.querySelector(".idioma-nome").value = nome;
+    dropdown.classList.remove("aberto");
+    dropdown.querySelector("input").value = "";
+}
+
+// Fechar picker ao clicar fora
+document.addEventListener("click", function(e) {
+    if (!e.target.closest(".idioma-picker")) {
+        document.querySelectorAll(".idioma-dropdown.aberto").forEach(d => {
+            d.classList.remove("aberto");
+            d.querySelector("input").value = "";
+        });
+    }
+});
+
+// ---- Adicionar trecho ---- //
+
+function criarPickerHTML(codigo, nome) {
+    return `
+        <div class="idioma-picker">
+            <button type="button" class="idioma-btn" onclick="togglePicker(this)">
+                <span class="idioma-nome-exibir">${nome}</span>
+                <i class="bi bi-chevron-down"></i>
+            </button>
+            <div class="idioma-dropdown">
+                <input type="text" class="idioma-search" placeholder="Buscar idioma..." oninput="filtrarOpcoes(this)">
+                <div class="idioma-lista" data-lista></div>
+            </div>
+            <input type="hidden" class="idioma-codigo" value="${codigo}">
+            <input type="hidden" class="idioma-nome" value="${nome}">
+        </div>`;
+}
+
+function adicionarTrecho() {
+    const lista = document.getElementById("listaTrechos");
+    const numero = lista.querySelectorAll(".trecho-item").length + 1;
+    const div = document.createElement("div");
+    div.className = "trecho-item";
+    div.setAttribute("data-ordem", numero);
+    div.innerHTML = `
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="text-secondary" style="font-size:0.75rem; font-weight:700; min-width:65px;">Trecho ${numero}</span>
+            ${criarPickerHTML("por", "Português")}
+            <button class="btn btn-sm ms-auto" onclick="removerTrecho(this)"
+                    style="color:#9B5050; border:0.5px solid #FCA5A5; background:#FEE2E2; border-radius:6px; padding:0.25rem 0.6rem;">
+                <i class="bi bi-trash3"></i>
+            </button>
+        </div>
+        <textarea class="form-control trecho-texto" rows="4"
+                  placeholder="Digite a descrição deste trecho..."
+                  style="font-size:0.9375rem; line-height:1.7; resize:vertical; border:0.5px solid #D8CFC5;"></textarea>
+    `;
+    lista.appendChild(div);
+    div.querySelector("textarea").focus();
+    renumerarTrechos();
+}
+
+function removerTrecho(btn) {
+    const lista = document.getElementById("listaTrechos");
+    if (lista.querySelectorAll(".trecho-item").length <= 1) {
+        mostrarToast("A descrição precisa ter pelo menos 1 trecho.", false);
+        return;
+    }
+    btn.closest(".trecho-item").remove();
+    renumerarTrechos();
+}
+
+function renumerarTrechos() {
+    document.querySelectorAll(".trecho-item").forEach((item, i) => {
+        item.setAttribute("data-ordem", i + 1);
+        const label = item.querySelector("span");
+        if (label) label.textContent = `Trecho ${i + 1}`;
+    });
+}
+
+// ---- Coletar e salvar ---- //
+
+function coletarTrechos() {
+    const trechos = [];
+    document.querySelectorAll(".trecho-item").forEach((item, i) => {
+        const texto = item.querySelector(".trecho-texto").value.trim();
+        const codigo = item.querySelector(".idioma-codigo").value;
+        const nome = item.querySelector(".idioma-nome").value;
+        if (texto) trechos.push({ ordem: i + 1, texto, idioma_codigo: codigo, idioma_nome: nome });
+    });
+    return trechos;
+}
+
+async function salvarTrechos() {
+    const trechos = coletarTrechos();
+    if (!trechos.length) { mostrarToast("Adicione ao menos um trecho.", false); return; }
+    const res = await fetch(SALVAR_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+        body: JSON.stringify({ trechos }),
+    });
+    const data = await res.json();
+    if (data.ok) { mostrarToast(`Salvo com sucesso. ${data.total} trecho(s).`, true); atualizarPreview(trechos); }
+    else mostrarToast(data.erro || "Erro ao salvar.", false);
+}
+
+async function salvarEAvancar() {
+    const trechos = coletarTrechos();
+    if (!trechos.length) { mostrarToast("Adicione ao menos um trecho.", false); return; }
+    const r1 = await fetch(SALVAR_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+        body: JSON.stringify({ trechos }),
+    });
+    const d1 = await r1.json();
+    if (!d1.ok) { mostrarToast(d1.erro || "Erro ao salvar.", false); return; }
+    const r2 = await fetch(AVANCAR_URL, { method: "POST", headers: { "X-CSRFToken": CSRF } });
+    const d2 = await r2.json();
+    if (d2.ok) {
+        mostrarToast(`Enviado: ${d2.novo_status}`, true);
+        atualizarPreview(trechos);
+        const badge = document.getElementById("badgeStatus");
+        if (badge) { badge.textContent = d2.novo_status; badge.className = `dito-status dito-status-${d2.novo_slug}`; }
+    } else mostrarToast(d2.erro || "Erro ao avançar.", false);
+}
+
+function atualizarPreview(trechos) {
+    const preview = document.getElementById("previewDescricao");
+    const contador = document.getElementById("contadorTrechos");
+    if (contador) contador.textContent = `${trechos.length} trecho${trechos.length !== 1 ? "s" : ""}`;
+    if (!trechos.length) {
+        preview.innerHTML = `<div class="dito-empty-state py-3"><i class="bi bi-file-text"></i><p>Nenhuma descrição.</p></div>`;
+        return;
+    }
+    preview.innerHTML = trechos.map((t, i) => `
+        <div class="trecho-preview-item">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="text-secondary" style="font-size:0.75rem; font-weight:700;">Trecho ${i + 1}</span>
+                <span class="dito-retranca" style="font-size:0.7rem;">${t.idioma_nome}</span>
+            </div>
+            <p class="mb-0" style="font-size:0.9375rem; line-height:1.7;${t.idioma_codigo !== 'por' ? 'font-style:italic;' : ''}">
+                ${t.texto}
+            </p>
+        </div>`).join("");
+}
+
+function mostrarToast(msg, ok) {
+    const t = document.getElementById("toastFeedback");
+    t.style.background = ok ? "#1C1C1A" : "#9B5050";
+    document.getElementById("toastIcon").className = ok ? "bi bi-check-circle" : "bi bi-exclamation-circle";
+    document.getElementById("toastMsg").textContent = msg;
+    t.style.display = "flex";
+    setTimeout(() => t.style.display = "none", 3500);
+}
+
+document.addEventListener("keydown", e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); salvarTrechos(); }
+});
+</script>
+{% endif %}
+
+{% endblock %}

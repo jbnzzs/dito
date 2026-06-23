@@ -79,7 +79,9 @@
                     {% for img in imagens %}
                     <tr>
                         <td class="ps-3">
-                            <span class="dito-retranca">{{ img.retranca }}</span>
+                            <a href="{% url 'descricao_imagem' img.pk %}" class="dito-retranca" style="text-decoration:none;">
+                                {{ img.retranca }}
+                            </a>
                         </td>
                         <td style="font-size:0.875rem;">{{ img.nome_obra }}</td>
                         <td style="font-size:0.875rem;">{{ img.componente_curricular }}</td>

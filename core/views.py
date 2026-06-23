@@ -85,6 +85,111 @@ def dashboard(request):
 
     return render(request, "core/dashboard.html", ctx)
 
+# ============================================================
+# MINHAS TAREFAS
+# ============================================================
+
+@login_required
+def minhas_tarefas(request):
+    from django.core.paginator import Paginator
+
+    usuario = request.user
+    status_slug = request.GET.get("status", "")
+    busca = request.GET.get("busca", "").strip()
+    pagina = request.GET.get("pagina", 1)
+
+    # Definir quais status e título conforme perfil
+    if usuario.tipo == usuario.Tipo.DESCRITOR:
+        slugs_visiveis = ["liberado-descricao", "descrevendo", "descrito"]
+        titulo_secao = "Minhas tarefas de descrição"
+        acao_label = "Descrever"
+        acao_icon = "bi-pencil-square"
+
+    elif usuario.tipo == usuario.Tipo.REVISOR:
+        slugs_visiveis = [
+            "liberado-conferencia", "em-conferencia", "conferido"
+        ]
+        titulo_secao = "Minhas tarefas de conferência"
+        acao_label = "Conferir"
+        acao_icon = "bi-eye"
+
+    elif usuario.tipo in (usuario.Tipo.COORDENADOR, usuario.Tipo.ADMINISTRADOR):
+        slugs_visiveis = [
+            "liberado-descricao", "descrevendo", "descrito",
+            "liberado-conferencia", "em-conferencia", "conferido",
+            "revisando", "revisado", "finalizado",
+        ]
+        titulo_secao = "Todas as tarefas"
+        acao_label = "Abrir"
+        acao_icon = "bi-arrow-right-circle"
+
+    else:
+        slugs_visiveis = []
+        titulo_secao = "Minhas tarefas"
+        acao_label = "Abrir"
+        acao_icon = "bi-arrow-right-circle"
+
+    # Queryset base
+    if usuario.tipo in (usuario.Tipo.COORDENADOR, usuario.Tipo.ADMINISTRADOR):
+        tarefas = Imagem.objects.filter(
+            ativo=True,
+            status__slug__in=slugs_visiveis,
+        )
+    else:
+        tarefas = Imagem.objects.filter(
+            ativo=True,
+            responsavel=usuario,
+            status__slug__in=slugs_visiveis,
+        )
+
+    # Filtros
+    if status_slug:
+        tarefas = tarefas.filter(status__slug=status_slug)
+    if busca:
+        tarefas = tarefas.filter(retranca__icontains=busca)
+
+    tarefas = tarefas.select_related("status", "responsavel").order_by("-criado_em")
+
+    # Contadores por status (para os cards de resumo)
+    from django.db.models import Count, Q
+    contadores = {}
+    for slug in slugs_visiveis:
+        if usuario.tipo in (usuario.Tipo.COORDENADOR, usuario.Tipo.ADMINISTRADOR):
+            contadores[slug] = Imagem.objects.filter(
+                ativo=True, status__slug=slug
+            ).count()
+        else:
+            contadores[slug] = Imagem.objects.filter(
+                ativo=True, responsavel=usuario, status__slug=slug
+            ).count()
+
+    total = tarefas.count()
+    paginador = Paginator(tarefas, 50)
+    pagina_obj = paginador.get_page(pagina)
+
+    # Status disponíveis para filtro
+    status_list = StatusWorkflow.objects.filter(
+        ativo=True, slug__in=slugs_visiveis
+    ).order_by("ordem")
+
+    ctx = {
+        "tarefas": pagina_obj,
+        "pagina_obj": pagina_obj,
+        "total": total,
+        "titulo_secao": titulo_secao,
+        "acao_label": acao_label,
+        "acao_icon": acao_icon,
+        "status_list": status_list,
+        "status_slug_ativo": status_slug,
+        "busca": busca,
+        "contadores": contadores,
+        "slugs_ativos": ["liberado-descricao", "descrevendo",
+                         "liberado-conferencia", "em-conferencia,"],
+        "mostrar_todos_status": usuario.tipo in (
+            usuario.Tipo.COORDENADOR, usuario.Tipo.ADMINISTRADOR
+        ),
+    }
+    return render(request, "core/minhas_tarefas.html", ctx)
 
 # ============================================================
 # IMAGENS — LISTAGEM
@@ -349,6 +454,194 @@ def importar_imagens(request):
     }
     return render(request, "core/importar_imagens.html", ctx)
 
+# ============================================================
+# DESCRIÇÃO DA IMAGEM
+# ============================================================
+
+@login_required
+def descricao_imagem(request, pk):
+    from django.shortcuts import get_object_or_404
+
+    imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
+    usuario = request.user
+    descricao = getattr(imagem, "descricao", None)
+
+    # ---- Verificar permissão de acesso ----
+    pode_editar = False
+    motivo_bloqueio = None
+
+    if usuario.tipo in (usuario.Tipo.ADMINISTRADOR, usuario.Tipo.COORDENADOR):
+        pode_editar = True
+
+    elif usuario.tipo == usuario.Tipo.DESCRITOR:
+        if imagem.status.slug not in ("liberado-descricao", "descrevendo"):
+            motivo_bloqueio = "Esta imagem não está disponível para descrição."
+        elif descricao and descricao.descritor_bloqueado:
+            motivo_bloqueio = "Seu acesso a esta descrição foi bloqueado após o salvamento. Somente o coordenador pode liberar novamente."
+        elif imagem.responsavel and imagem.responsavel != usuario:
+            motivo_bloqueio = "Esta tarefa está atribuída a outro descritor."
+        else:
+            pode_editar = True
+
+    elif usuario.tipo == usuario.Tipo.REVISOR:
+        if imagem.status.slug not in ("liberado-conferencia", "em-conferencia"):
+            motivo_bloqueio = "Esta imagem não está disponível para conferência."
+        else:
+            pode_editar = True
+
+    else:
+        motivo_bloqueio = "Você não tem permissão para acessar esta tela."
+
+    # ---- Buscar trechos existentes ----
+    trechos = []
+    if descricao:
+        trechos = descricao.trechos.filter(ativo=True).order_by("ordem")
+
+    # ---- Todos os idiomas via pycountry ----
+    import json
+
+    PRIORITARIOS = ["por", "eng", "spa", "fra", "deu", "ita", "jpn",
+                    "zho", "lat", "ara", "rus", "hin", "kor", "grk"]
+
+    todos = []
+    prioritarios = []
+    for lang in pycountry.languages:
+        if not hasattr(lang, "alpha_3"):
+            continue
+        entry = {"codigo": lang.alpha_3, "nome": lang.name}
+        if lang.alpha_3 in PRIORITARIOS:
+            prioritarios.append(entry)
+        else:
+            todos.append(entry)
+
+    prioritarios.sort(key=lambda x: x["nome"])
+    todos.sort(key=lambda x: x["nome"])
+    idiomas_json = json.dumps(prioritarios + todos, ensure_ascii=False)
+
+    ctx = {
+        "imagem": imagem,
+        "descricao": descricao,
+        "trechos": trechos,
+        "pode_editar": pode_editar,
+        "motivo_bloqueio": motivo_bloqueio,
+        "idiomas_json": idiomas_json,
+    }
+    return render(request, "core/descricao.html", ctx)
+
+import json
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+
+
+@login_required
+@require_POST
+def salvar_trecho(request, pk):
+    """Salva ou atualiza um trecho via AJAX."""
+    from django.shortcuts import get_object_or_404
+
+    imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
+    usuario = request.user
+
+    # Verificar permissão
+    pode_editar = False
+    if usuario.tipo in (usuario.Tipo.ADMINISTRADOR, usuario.Tipo.COORDENADOR):
+        pode_editar = True
+    elif usuario.tipo == usuario.Tipo.DESCRITOR:
+        descricao = getattr(imagem, "descricao", None)
+        if (imagem.status.slug in ("liberado-descricao", "descrevendo")
+                and (not descricao or not descricao.descritor_bloqueado)
+                and (not imagem.responsavel or imagem.responsavel == usuario)):
+            pode_editar = True
+    elif usuario.tipo == usuario.Tipo.REVISOR:
+        if imagem.status.slug in ("liberado-conferencia", "em-conferencia"):
+            pode_editar = True
+
+    if not pode_editar:
+        return JsonResponse({"ok": False, "erro": "Sem permissão."}, status=403)
+
+    try:
+        body = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "erro": "JSON inválido."}, status=400)
+
+    # Garantir que a Descrição existe
+    descricao, _ = Descricao.objects.get_or_create(
+        imagem=imagem,
+        defaults={"descritor": usuario, "descritor_bloqueado": False},
+    )
+
+    trechos_data = body.get("trechos", [])
+
+    with transaction.atomic():
+        # Apagar trechos antigos e recriar na ordem correta
+        descricao.trechos.all().delete()
+
+        novos = []
+        for i, t in enumerate(trechos_data, 1):
+            texto = t.get("texto", "").strip()
+            idioma_codigo = t.get("idioma_codigo", "por")
+            idioma_nome = t.get("idioma_nome", "Português")
+            if texto:
+                novos.append(Trecho(
+                    descricao=descricao,
+                    ordem=i,
+                    texto=texto,
+                    idioma_codigo=idioma_codigo,
+                    idioma_nome=idioma_nome,
+                ))
+
+        Trecho.objects.bulk_create(novos)
+
+    return JsonResponse({"ok": True, "total": len(novos)})
+
+
+@login_required
+@require_POST
+def avancar_status(request, pk):
+    """Avança o status da imagem no workflow."""
+    from django.shortcuts import get_object_or_404
+    from .models import HistoricoItem
+
+    imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
+    usuario = request.user
+
+    FLUXO = {
+        "liberado-descricao": "descrevendo",
+        "descrevendo": "descrito",
+        "descrito": "liberado-conferencia",
+        "liberado-conferencia": "em-conferencia",
+        "em-conferencia": "conferido",
+        "conferido": "revisando",
+        "revisando": "revisado",
+        "revisado": "finalizado",
+    }
+
+    proximo_slug = FLUXO.get(imagem.status.slug)
+    if not proximo_slug:
+        return JsonResponse({"ok": False, "erro": "Status final atingido."}, status=400)
+
+    try:
+        proximo_status = StatusWorkflow.objects.get(slug=proximo_slug)
+    except StatusWorkflow.DoesNotExist:
+        return JsonResponse({"ok": False, "erro": "Status não encontrado."}, status=400)
+
+    status_anterior = imagem.status
+    imagem.status = proximo_status
+    imagem.save()
+
+    HistoricoItem.objects.create(
+        imagem=imagem,
+        usuario=usuario,
+        tipo_acao=HistoricoItem.TipoAcao.STATUS_ALTERADO,
+        status_anterior=status_anterior,
+        novo_status=proximo_status,
+    )
+
+    return JsonResponse({
+        "ok": True,
+        "novo_status": proximo_status.nome,
+        "novo_slug": proximo_status.slug,
+    })
 
 # ============================================================
 # TESTE
