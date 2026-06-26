@@ -18,7 +18,7 @@
         <a href="{% url 'importar_imagens' %}" class="btn btn-outline-primary">
             <i class="bi bi-upload me-1"></i> Importar Excel
         </a>
-        <a href="#" class="btn btn-primary">
+        <a href="{% url 'imagem_criar' %}" class="btn btn-primary">
             <i class="bi bi-plus-lg me-1"></i> Cadastrar imagem
         </a>
     </div>
@@ -73,6 +73,7 @@
                         <th>Status</th>
                         <th>Responsável</th>
                         <th>Cadastrado em</th>
+                        <th class="text-end pe-3">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -96,6 +97,18 @@
                         </td>
                         <td class="text-secondary" style="font-size:0.8rem; white-space:nowrap;">
                             {{ img.criado_em|date:"d/m/Y H:i" }}
+                        </td>
+                        <td class="text-end pe-3" style="white-space:nowrap;">
+                            {% if request.user.tipo == 'coordenador' or request.user.tipo == 'administrador' %}
+                            <a href="{% url 'imagem_editar' img.pk %}"
+                               class="btn btn-sm btn-outline-secondary" title="Editar">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{% url 'imagem_excluir' img.pk %}"
+                               class="btn btn-sm btn-outline-danger" title="Excluir">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}

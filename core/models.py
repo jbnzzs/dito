@@ -130,6 +130,18 @@ class Imagem(models.Model):
         verbose_name="Caminho do arquivo",
         help_text="Caminho ou referência de onde o arquivo está armazenado.",
     )
+    url_fotoweb = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name="URL no FotoWeb",
+        help_text="Link para a página da imagem no FotoWeb (preview do asset).",
+    )
+    url_pdf = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name="URL do PDF",
+        help_text="Link para o PDF da imagem.",
+    )
     tamanho_arquivo = models.CharField(
         max_length=30,
         blank=True,

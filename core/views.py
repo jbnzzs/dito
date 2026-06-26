@@ -6,9 +6,10 @@ import pycountry
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.shortcuts import redirect, render
+from django.shortcuts import redirect, render, get_object_or_404
 
 from .models import Descricao, Imagem, StatusWorkflow, Trecho, Usuario
+from .forms import ImagemForm
 
 
 def _saudacao():
@@ -650,3 +651,82 @@ def avancar_status(request, pk):
 @login_required
 def teste(request):
     return render(request, "core/teste.html")
+
+# ============================================================
+#  CRUD
+# ============================================================
+
+def _pode_gerenciar_imagem(usuario):
+    """Regra de negócio: só Coordenador e Administrador gerenciam imagens."""
+    return usuario.tipo in (Usuario.Tipo.ADMINISTRADOR, Usuario.Tipo.COORDENADOR)
+
+
+@login_required
+def imagem_criar(request):
+    """Create — cadastra uma nova imagem individual."""
+    if not _pode_gerenciar_imagem(request.user):
+        messages.error(request, "Você não tem permissão para cadastrar imagens.")
+        return redirect("imagens_lista")
+
+    if request.method == "POST":
+        form = ImagemForm(request.POST)
+        if form.is_valid():
+            imagem = form.save(commit=False)
+            imagem.cadastrado_por = request.user
+            imagem.save()
+            messages.success(request, "Imagem cadastrada com sucesso.")
+            return redirect("imagens_lista")
+    else:
+        # Pré-seleciona o primeiro status do workflow (Liberado para descrição)
+        status_inicial = StatusWorkflow.objects.order_by("ordem").first()
+        form = ImagemForm(initial={"status": status_inicial})
+
+    return render(request, "core/imagem_form.html", {
+        "form": form,
+        "titulo": "Cadastrar imagem",
+    })
+
+
+@login_required
+def imagem_editar(request, pk):
+    """Update — edita os dados de uma imagem existente."""
+    imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
+
+    if not _pode_gerenciar_imagem(request.user):
+        messages.error(request, "Você não tem permissão para editar imagens.")
+        return redirect("imagens_lista")
+
+    if request.method == "POST":
+        form = ImagemForm(request.POST, instance=imagem)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Imagem atualizada com sucesso.")
+            return redirect("imagens_lista")
+    else:
+        form = ImagemForm(instance=imagem)
+
+    return render(request, "core/imagem_form.html", {
+        "form": form,
+        "titulo": "Editar imagem",
+        "imagem": imagem,
+    })
+
+
+@login_required
+def imagem_excluir(request, pk):
+    """Delete — exclusão LÓGICA (marca ativo=False, não apaga do banco)."""
+    imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
+
+    if not _pode_gerenciar_imagem(request.user):
+        messages.error(request, "Você não tem permissão para excluir imagens.")
+        return redirect("imagens_lista")
+
+    if request.method == "POST":
+        imagem.ativo = False
+        imagem.save()
+        messages.success(request, "Imagem excluída com sucesso.")
+        return redirect("imagens_lista")
+
+    return render(request, "core/imagem_excluir.html", {
+        "imagem": imagem,
+    })

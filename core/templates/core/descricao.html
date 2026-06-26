@@ -287,7 +287,22 @@
                 </div>
             </div>
         </div>
-
+        {% if imagem.url_fotoweb or imagem.url_pdf %}
+        <div class="d-flex gap-2 mb-3">
+            {% if imagem.url_fotoweb %}
+            <a href="{{ imagem.url_fotoweb }}" target="_blank" rel="noopener noreferrer"
+               class="btn btn-outline-primary btn-sm flex-fill d-flex align-items-center justify-content-center gap-1">
+                <i class="bi bi-image"></i> Ver imagem
+            </a>
+            {% endif %}
+            {% if imagem.url_pdf %}
+            <a href="{{ imagem.url_pdf }}" target="_blank" rel="noopener noreferrer"
+               class="btn btn-outline-secondary btn-sm flex-fill d-flex align-items-center justify-content-center gap-1">
+                <i class="bi bi-file-earmark-pdf"></i> Ver PDF
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
         {% if imagem.nome_arquivo %}
         <div class="card mb-3">
             <div class="card-body">

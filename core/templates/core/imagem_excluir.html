@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Excluir imagem — Dito!{% endblock %}
+{% block page_title %}Excluir imagem{% endblock %}
+{% block nav_imagens %}active{% endblock %}
+
+{% block content %}
+
+<div class="card mx-auto" style="max-width:560px;">
+    <div class="card-body p-4">
+        <div class="d-flex align-items-center gap-2 mb-3">
+            <i class="bi bi-exclamation-triangle-fill text-warning" style="font-size:1.5rem;"></i>
+            <h2 class="mb-0" style="font-size:1.25rem;">Confirmar exclusão</h2>
+        </div>
+
+        <p>Tem certeza que deseja excluir esta imagem?</p>
+
+        <div class="card mb-4" style="background:#F8F3EE;">
+            <div class="card-body py-3">
+                <div class="mb-1">
+                    <span class="dito-retranca">{{ imagem.retranca }}</span>
+                </div>
+                <div style="font-size:0.875rem;">{{ imagem.nome_obra }}</div>
+            </div>
+        </div>
+
+        <p class="text-secondary" style="font-size:0.875rem;">
+            A imagem não será apagada do banco de dados. Ela será marcada como
+            inativa e deixará de aparecer nas listagens, preservando o histórico.
+        </p>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="d-flex gap-2 justify-content-end">
+                <a href="{% url 'imagens_lista' %}" class="btn btn-outline-secondary">Cancelar</a>
+                <button type="submit" class="btn btn-danger">
+                    <i class="bi bi-trash me-1"></i> Sim, excluir
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
