@@ -536,9 +536,12 @@ from django.views.decorators.http import require_POST
 
 @login_required
 @require_POST
+@login_required
+@require_POST
 def salvar_trecho(request, pk):
-    """Salva ou atualiza um trecho via AJAX."""
+    """Salva ou atualiza os trechos de uma descrição via AJAX."""
     from django.shortcuts import get_object_or_404
+    from .models import HistoricoItem
 
     imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
     usuario = request.user
@@ -548,9 +551,9 @@ def salvar_trecho(request, pk):
     if usuario.tipo in (usuario.Tipo.ADMINISTRADOR, usuario.Tipo.COORDENADOR):
         pode_editar = True
     elif usuario.tipo == usuario.Tipo.DESCRITOR:
-        descricao = getattr(imagem, "descricao", None)
+        descricao_atual = getattr(imagem, "descricao", None)
         if (imagem.status.slug in ("liberado-descricao", "descrevendo")
-                and (not descricao or not descricao.descritor_bloqueado)
+                and (not descricao_atual or not descricao_atual.descritor_bloqueado)
                 and (not imagem.responsavel or imagem.responsavel == usuario)):
             pode_editar = True
     elif usuario.tipo == usuario.Tipo.REVISOR:
@@ -565,16 +568,18 @@ def salvar_trecho(request, pk):
     except json.JSONDecodeError:
         return JsonResponse({"ok": False, "erro": "JSON inválido."}, status=400)
 
+    descricao_existia = hasattr(imagem, "descricao")
+
     # Garantir que a Descrição existe
-    descricao, _ = Descricao.objects.get_or_create(
+    descricao, criada = Descricao.objects.get_or_create(
         imagem=imagem,
-        defaults={"descritor": usuario, "descritor_bloqueado": False},
+        defaults={"descritor": usuario if usuario.tipo == usuario.Tipo.DESCRITOR else None,
+                  "descritor_bloqueado": False},
     )
 
     trechos_data = body.get("trechos", [])
 
     with transaction.atomic():
-        # Apagar trechos antigos e recriar na ordem correta
         descricao.trechos.all().delete()
 
         novos = []
@@ -593,33 +598,47 @@ def salvar_trecho(request, pk):
 
         Trecho.objects.bulk_create(novos)
 
-    return JsonResponse({"ok": True, "total": len(novos)})
+        # ---- Registrar histórico: primeira descrição criada pelo Descritor ----
+        if usuario.tipo == usuario.Tipo.DESCRITOR and criada:
+            HistoricoItem.objects.create(
+                imagem=imagem,
+                descricao=descricao,
+                usuario=usuario,
+                tipo_acao=HistoricoItem.TipoAcao.DESCRICAO_INICIADA,
+                observacao="Descrição iniciada pelo descritor.",
+            )
 
+    return JsonResponse({"ok": True, "total": len(novos)})
 
 @login_required
 @require_POST
+@login_required
+@require_POST
 def avancar_status(request, pk):
-    """Avança o status da imagem no workflow."""
+    """Avança o status da imagem no workflow, registrando o tipo_acao específico."""
     from django.shortcuts import get_object_or_404
     from .models import HistoricoItem
 
     imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
     usuario = request.user
 
+    # Mapa de transição: slug atual -> (próximo slug, tipo_acao do HistoricoItem)
     FLUXO = {
-        "liberado-descricao": "descrevendo",
-        "descrevendo": "descrito",
-        "descrito": "liberado-conferencia",
-        "liberado-conferencia": "em-conferencia",
-        "em-conferencia": "conferido",
-        "conferido": "revisando",
-        "revisando": "revisado",
-        "revisado": "finalizado",
+        "liberado-descricao":   ("descrevendo",           HistoricoItem.TipoAcao.DESCRICAO_INICIADA),
+        "descrevendo":          ("descrito",              HistoricoItem.TipoAcao.DESCRICAO_SALVA),
+        "descrito":             ("liberado-conferencia",  HistoricoItem.TipoAcao.LIBERADO_CONFERENCIA),
+        "liberado-conferencia": ("em-conferencia",         HistoricoItem.TipoAcao.CONFERENCIA_INICIADA),
+        "em-conferencia":       ("conferido",             HistoricoItem.TipoAcao.CONFERENCIA_CONCLUIDA),
+        "conferido":            ("revisando",             HistoricoItem.TipoAcao.REVISAO_INICIADA),
+        "revisando":            ("revisado",              HistoricoItem.TipoAcao.REVISAO_CONCLUIDA),
+        "revisado":             ("finalizado",            HistoricoItem.TipoAcao.DESCRICAO_FINALIZADA),
     }
 
-    proximo_slug = FLUXO.get(imagem.status.slug)
-    if not proximo_slug:
+    transicao = FLUXO.get(imagem.status.slug)
+    if not transicao:
         return JsonResponse({"ok": False, "erro": "Status final atingido."}, status=400)
+
+    proximo_slug, tipo_acao = transicao
 
     try:
         proximo_status = StatusWorkflow.objects.get(slug=proximo_slug)
@@ -627,23 +646,44 @@ def avancar_status(request, pk):
         return JsonResponse({"ok": False, "erro": "Status não encontrado."}, status=400)
 
     status_anterior = imagem.status
-    imagem.status = proximo_status
-    imagem.save()
+    descricao = getattr(imagem, "descricao", None)
 
-    HistoricoItem.objects.create(
-        imagem=imagem,
-        usuario=usuario,
-        tipo_acao=HistoricoItem.TipoAcao.STATUS_ALTERADO,
-        status_anterior=status_anterior,
-        novo_status=proximo_status,
-    )
+    with transaction.atomic():
+        imagem.status = proximo_status
+        imagem.save()
+
+        # ---- Atualizar responsáveis da Descrição conforme a etapa ----
+        if descricao:
+            if proximo_slug == "descrevendo":
+                if not descricao.descritor:
+                    descricao.descritor = usuario
+                descricao.save()
+            elif proximo_slug == "em-conferencia":
+                if not descricao.revisor:
+                    descricao.revisor = usuario
+                descricao.save()
+            elif proximo_slug == "revisando":
+                if not descricao.coordenador:
+                    descricao.coordenador = usuario
+                descricao.save()
+            elif proximo_slug == "finalizado":
+                descricao.finalizado = True
+                descricao.save()
+
+        HistoricoItem.objects.create(
+            imagem=imagem,
+            descricao=descricao,
+            usuario=usuario,
+            tipo_acao=tipo_acao,
+            status_anterior=status_anterior,
+            novo_status=proximo_status,
+        )
 
     return JsonResponse({
         "ok": True,
         "novo_status": proximo_status.nome,
         "novo_slug": proximo_status.slug,
     })
-
 # ============================================================
 # TESTE
 # ============================================================

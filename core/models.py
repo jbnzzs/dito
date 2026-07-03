@@ -64,9 +64,10 @@ class StatusWorkflow(models.Model):
     descricao = models.TextField(blank=True, verbose_name="Descrição")
 
     class Meta:
-        verbose_name = "Status do workflow"
-        verbose_name_plural = "Status do workflow"
+        verbose_name = "Trecho"
+        verbose_name_plural = "Trechos"
         ordering = ["ordem"]
+        unique_together = [("descricao", "ordem")]
 
     def __str__(self):
         return f"{self.ordem}. {self.nome}"
@@ -92,6 +93,8 @@ class Imagem(models.Model):
     # ---- Metadados editoriais ----
     retranca = models.CharField(
         max_length=120,
+        unique=True,
+        db_index=True,
         verbose_name="Retranca",
         help_text="Identificador editorial da imagem.",
     )
@@ -99,7 +102,7 @@ class Imagem(models.Model):
     volume_ano_modulo = models.CharField(
         max_length=60,
         blank=True,
-        verbose_name="Volume / Ano / Módulo",
+        verbose_name="Volume/Ano/Módulo",
     )
     componente_curricular = models.CharField(
         max_length=100,
@@ -209,10 +212,6 @@ class Imagem(models.Model):
 # ============================================================
 
 class Descricao(models.Model):
-    """
-    Descrição vinculada a uma imagem.
-    Uma imagem possui uma descrição.
-    """
     imagem = models.OneToOneField(
         Imagem,
         on_delete=models.CASCADE,
@@ -220,53 +219,28 @@ class Descricao(models.Model):
         verbose_name="Imagem",
     )
 
-    # ---- Responsáveis por etapa ----
     descritor = models.ForeignKey(
-        Usuario,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="descricoes_produzidas",
-        verbose_name="Descritor",
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="descricoes_produzidas", verbose_name="Descritor",
     )
     revisor = models.ForeignKey(
-        Usuario,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="descricoes_revisadas",
-        verbose_name="Revisor",
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="descricoes_revisadas", verbose_name="Revisor",
     )
     coordenador = models.ForeignKey(
-        Usuario,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="descricoes_coordenadas",
-        verbose_name="Coordenador",
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="descricoes_coordenadas", verbose_name="Coordenador",
     )
 
-    # ---- Datas por etapa ----
-    inicio_descricao = models.DateTimeField(null=True, blank=True, verbose_name="Início da descrição")
-    fim_descricao = models.DateTimeField(null=True, blank=True, verbose_name="Fim da descrição")
-    inicio_conferencia = models.DateTimeField(null=True, blank=True, verbose_name="Início da conferência")
-    fim_conferencia = models.DateTimeField(null=True, blank=True, verbose_name="Fim da conferência")
-    inicio_revisao = models.DateTimeField(null=True, blank=True, verbose_name="Início da revisão final")
-    fim_revisao = models.DateTimeField(null=True, blank=True, verbose_name="Fim da revisão final")
-    finalizado_em = models.DateTimeField(null=True, blank=True, verbose_name="Finalizado em")
-
-    # ---- Controle de acesso ----
     descritor_bloqueado = models.BooleanField(
         default=False,
         verbose_name="Descritor bloqueado",
         help_text="Bloqueado automaticamente após o primeiro salvamento.",
     )
 
-    # ---- Conteúdo e observações ----
     observacoes = models.TextField(blank=True, verbose_name="Observações internas")
     finalizado = models.BooleanField(default=False, verbose_name="Finalizado")
 
-    # ---- Datas de controle ----
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 
@@ -277,6 +251,41 @@ class Descricao(models.Model):
     def __str__(self):
         return f"Descrição de {self.imagem.retranca}"
 
+    # ---- Datas por etapa (derivadas do HistoricoItem, não armazenadas) ----
+    def _data_evento(self, tipo_acao, ultimo=False):
+        qs = self.historico.filter(tipo_acao=tipo_acao).order_by(
+            "-criado_em" if ultimo else "criado_em"
+        )
+        item = qs.first()
+        return item.criado_em if item else None
+
+    @property
+    def inicio_descricao(self):
+        return self._data_evento("descricao_iniciada")
+
+    @property
+    def fim_descricao(self):
+        return self._data_evento("descricao_salva", ultimo=True)
+
+    @property
+    def inicio_conferencia(self):
+        return self._data_evento("conferencia_iniciada")
+
+    @property
+    def fim_conferencia(self):
+        return self._data_evento("conferencia_concluida")
+
+    @property
+    def inicio_revisao(self):
+        return self._data_evento("revisao_iniciada")
+
+    @property
+    def fim_revisao(self):
+        return self._data_evento("revisao_concluida")
+
+    @property
+    def finalizado_em(self):
+        return self._data_evento("descricao_finalizada")
 
 # ============================================================
 # TRECHO
