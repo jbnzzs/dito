@@ -64,10 +64,9 @@ class StatusWorkflow(models.Model):
     descricao = models.TextField(blank=True, verbose_name="Descrição")
 
     class Meta:
-        verbose_name = "Trecho"
-        verbose_name_plural = "Trechos"
+        verbose_name = "Status do workflow"
+        verbose_name_plural = "Status do workflow"
         ordering = ["ordem"]
-        unique_together = [("descricao", "ordem")]
 
     def __str__(self):
         return f"{self.ordem}. {self.nome}"
@@ -89,6 +88,10 @@ class Imagem(models.Model):
         P1       = "P1",       "P1 — Prova 1"
         P2       = "P2",       "P2 — Prova 2"
         P3       = "P3",       "P3 — Prova 3"
+
+    class StatusPagamento(models.TextChoices):
+        CONTABILIZADO = "contabilizado", "Contabilizado"
+        PAGO = "pago", "Pago"
 
     # ---- Metadados editoriais ----
     retranca = models.CharField(
@@ -190,6 +193,38 @@ class Imagem(models.Model):
         null=True,
         related_name="imagens_cadastradas",
         verbose_name="Cadastrado por",
+    )
+
+    # ---- Lote ----
+    lote = models.ForeignKey(
+        "Lote",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="imagens",
+        verbose_name="Lote",
+    )
+    importacao_id = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name="ID da importação",
+        help_text="Identifica todas as imagens vindas do mesmo upload de .xlsx, "
+                   "permitindo isolar o lote de origem na tela de organização em lotes.",
+    )
+
+    # ---- Pagamento ----
+    pagamento_descritor = models.CharField(
+        max_length=20,
+        choices=StatusPagamento.choices,
+        default=StatusPagamento.CONTABILIZADO,
+        verbose_name="Pagamento — Descritor",
+    )
+    pagamento_revisor = models.CharField(
+        max_length=20,
+        choices=StatusPagamento.choices,
+        default=StatusPagamento.CONTABILIZADO,
+        verbose_name="Pagamento — Revisor",
     )
 
     # ---- Datas e controle ----
@@ -305,7 +340,6 @@ class Trecho(models.Model):
     ordem = models.PositiveSmallIntegerField(verbose_name="Ordem")
     texto = models.TextField(verbose_name="Texto do trecho")
 
-    # Idioma via pycountry (código ISO 639-3)
     idioma_codigo = models.CharField(
         max_length=10,
         default="por",
@@ -326,16 +360,17 @@ class Trecho(models.Model):
         verbose_name = "Trecho"
         verbose_name_plural = "Trechos"
         ordering = ["ordem"]
+        unique_together = [("descricao", "ordem")]
 
     def __str__(self):
         return f"Trecho {self.ordem} — {self.idioma_nome} ({self.descricao.imagem.retranca})"
-
 
 # ============================================================
 # HISTÓRICO
 # ============================================================
 
 class HistoricoItem(models.Model):
+
     """
     Registro de ações relevantes no fluxo editorial.
     Garante rastreabilidade e auditoria.
@@ -357,6 +392,7 @@ class HistoricoItem(models.Model):
         DESCRICAO_FINALIZADA     = "descricao_finalizada",     "Descrição finalizada"
         ENVIADO_FOTOWEB          = "enviado_fotoweb",          "Enviado ao FotoWeb"
         STATUS_ALTERADO          = "status_alterado",          "Status alterado"
+        PAGAMENTO_ATUALIZADO     = "pagamento_atualizado",      "Status de pagamento atualizado"
 
     imagem = models.ForeignKey(
         Imagem,
@@ -414,3 +450,50 @@ class HistoricoItem(models.Model):
 
     def __str__(self):
         return f"{self.get_tipo_acao_display()} — {self.imagem.retranca} ({self.criado_em:%d/%m/%Y %H:%M})"
+
+# ============================================================
+# LOTES
+# ============================================================
+
+class Lote(models.Model):
+    """
+    Agrupamento manual de imagens, criado logo após a importação de um
+    arquivo .xlsx, para facilitar a atribuição de tarefas em bloco
+    (em vez de imagem por imagem) para descritores e revisores.
+    """
+    nome = models.CharField(
+        max_length=100,
+        unique=True,
+        verbose_name="Nome do lote",
+        help_text="Ex: 'Matemática V2 2026'.",
+    )
+    descricao = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Descrição",
+        help_text="Observação opcional sobre o critério usado para formar o lote.",
+    )
+    criado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.PROTECT,
+        related_name="lotes_criados",
+        verbose_name="Criado por",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
+    ativo = models.BooleanField(
+        default=True,
+        verbose_name="Ativo",
+        help_text="Exclusão lógica: lotes inativos não devem ser exibidos nas listagens.",
+    )
+
+    class Meta:
+        verbose_name = "Lote"
+        verbose_name_plural = "Lotes"
+        ordering = ["-criado_em"]
+
+    def __str__(self):
+        return self.nome
+
+    @property
+    def total_imagens(self):
+        return self.imagens.count()

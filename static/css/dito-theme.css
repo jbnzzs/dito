@@ -391,8 +391,69 @@ a:hover {
 }
 
 /* ------------------------------------------------------------
-   7. Busca e retranca   (bloco 3 da Etapa 4)
+   7. Busca e retranca
    ------------------------------------------------------------ */
+
+.dito-search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #FFFFFF;
+    border: 0.5px solid var(--dito-bege);
+    border-radius: 8px;
+    padding: 10px 14px;
+    cursor: text;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dito-search:focus-within {
+    border-color: var(--dito-vinho);
+    box-shadow: 0 0 0 3px rgba(166, 46, 56, 0.12);
+}
+
+.dito-search input {
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: 'Cairo', system-ui, sans-serif;
+    font-size: 14px;
+    color: var(--dito-grafite);
+    flex: 1;
+    min-width: 0;
+}
+
+.dito-search input::placeholder {
+    color: #B4B2A9;
+}
+
+.dito-retranca {
+    font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--dito-vinho-escuro);
+    background: var(--dito-vinho-claro);
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.02em;
+}
+
+/* Busca em destaque (modificador) */
+.dito-search-lg {
+    padding: 14px 18px;
+    border-radius: 12px;
+}
+
+.dito-search-lg input {
+    font-size: 1rem;
+}
+
+.dito-search-lg i {
+    font-size: 1.1rem;
+}
+
+.dito-search-lg:focus-within {
+    box-shadow: 0 0 0 4px rgba(166, 46, 56, 0.14);
+}
 
 /* ------------------------------------------------------------
    8. Utilitários específicos — Dashboard
@@ -466,4 +527,116 @@ a:hover {
     font-size: 0.9rem;
     font-weight: 600;
     margin: 0;
+}
+
+/* Card com conteúdo colado nas bordas (corta cantos internos) */
+.dito-card-flush {
+    overflow: hidden;
+}
+
+/* ------------------------------------------------------------
+   Popover de Datas (tela de Imagens)
+   ------------------------------------------------------------ */
+
+.dito-datas-popover {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background: #FFFFFF;
+    border: 0.5px solid #D8CFC5;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(28, 28, 26, 0.15);
+    padding: 10px 12px;
+    min-width: 220px;
+    text-align: left;
+    margin-top: 4px;
+}
+
+.dito-datas-popover.show {
+    display: block;
+}
+
+.dito-datas-popover-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 0.75rem;
+    padding: 3px 0;
+    border-bottom: 0.5px solid #D8CFC5;
+}
+
+.dito-datas-popover-item:last-child {
+    border-bottom: none;
+}
+
+.dito-datas-popover-item span {
+    color: #6B6A66;
+}
+
+.dito-datas-popover-item strong {
+    color: #1C1C1A;
+    white-space: nowrap;
+}
+
+/* ------------------------------------------------------------
+   Rótulo de campo de filtro
+   ------------------------------------------------------------ */
+
+.dito-filtro-label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #6B6A66;
+    margin-bottom: 4px;
+}
+
+/* ------------------------------------------------------------
+   Painel de Ações em Massa
+   ------------------------------------------------------------ */
+
+.dito-acao-massa {
+    background: var(--dito-vinho-claro);
+    border: 0.5px solid var(--dito-vinho);
+    border-left: 3px solid var(--dito-vinho);
+    border-radius: 8px;
+    padding: 12px 16px;
+}
+
+.dito-contador-badge {
+    background: #FFFFFF;
+    border: 0.5px solid var(--dito-vinho);
+    color: var(--dito-vinho-escuro);
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 12px;
+    margin-left: auto;
+}
+
+/* ------------------------------------------------------------
+   Toggle de Filtros Avançados
+   ------------------------------------------------------------ */
+
+.dito-filtros-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    background: #F2F2F2;
+    border: none;
+    border-top: 0.5px solid #D8CFC5;
+    padding: 8px 16px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #590515;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.dito-filtros-toggle:hover {
+    background: #F3DEE1;
 }

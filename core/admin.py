@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import Usuario, StatusWorkflow, Imagem, Descricao, Trecho, HistoricoItem
+from .models import Usuario, StatusWorkflow, Imagem, Descricao, Trecho, HistoricoItem, Lote
 
 
 @admin.register(Usuario)
@@ -56,3 +56,12 @@ class HistoricoItemAdmin(admin.ModelAdmin):
     search_fields = ("imagem__retranca",)
     ordering = ("-criado_em",)
     readonly_fields = ("criado_em",)
+
+
+@admin.register(Lote)
+class LoteAdmin(admin.ModelAdmin):
+    list_display = ("nome", "criado_por", "criado_em", "total_imagens", "ativo")
+    list_filter = ("ativo",)
+    search_fields = ("nome", "descricao")
+    ordering = ("-criado_em",)
+    readonly_fields = ("criado_por", "criado_em")
