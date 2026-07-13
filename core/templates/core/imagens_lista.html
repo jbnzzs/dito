@@ -166,19 +166,20 @@
     <div class="card-body p-0">
         {% if imagens %}
         <div class="table-responsive">
-            <table class="table table-sm mb-0" style="white-space:nowrap;">
+            <table class="table table-sm mb-0 dito-tabela">
                 <thead>
                     <tr>
                         <th>Retranca</th>
                         <th>Obra/Comp.</th>
                         <th>Responsáveis</th>
-                        <th class="text-center">Arquivos</th>
+                        <th>Arquivos</th>
                         <th>Status</th>
                         <th>Pagamento Desc.</th>
                         <th>Pagamento Rev.</th>
-                        <th class="text-center">Datas</th>
-                        <th class="text-end pe-3">Ações</th>
+                        <th>Datas</th>
+                        <th>Ações</th>
                     </tr>
+                </thead>
                 </thead>
                 <tbody>
                     {% for img in imagens %}
@@ -189,23 +190,27 @@
                             </a>
                         </td>
 
-                        <td style="font-size:0.8rem; white-space:normal;">
-                            <div class="fw-bold">{{ img.nome_obra|default:"—" }}</div>
-                            <div class="text-secondary" style="font-size:0.75rem;">{{ img.componente_curricular|default:"—" }}</div>
-                        </td>
-
-                        <td style="font-size:0.8rem; white-space:normal;">
-                            <div>
-                                <span class="text-secondary" style="font-size:0.7rem;">Descritor:</span>
-                                {% if img.descricao.descritor %}{{ img.descricao.descritor.get_full_name|default:img.descricao.descritor.username }}{% else %}{% endif %}
-                            </div>
-                            <div class="text-secondary" style="font-size:0.7rem;">
-                                <span style="font-size:0.7rem;">Revisor:</span>
-                                {% if img.descricao.revisor %}{{ img.descricao.revisor.get_full_name|default:img.descricao.revisor.username }}{% else %}{% endif %}
+                        <td>
+                            <div class="dito-celula-dupla">
+                                <span class="principal" title="{{ img.nome_obra }}">{{ img.nome_obra|default:"—" }}</span>
+                                <span class="secundaria" title="{{ img.componente_curricular }}">{{ img.componente_curricular|default:"—" }}</span>
                             </div>
                         </td>
 
-                        <td class="text-center">
+                        <td>
+                            <div class="dito-celula-dupla">
+                                <span class="dito-responsavel-linha">
+                                    <span class="rotulo">Descritor:</span>
+                                    {% if img.descricao.descritor %}{{ img.descricao.descritor.get_full_name|default:img.descricao.descritor.username }}{% else %}—{% endif %}
+                                </span>
+                                <span class="dito-responsavel-linha">
+                                    <span class="rotulo">Revisor:</span>
+                                    {% if img.descricao.revisor %}{{ img.descricao.revisor.get_full_name|default:img.descricao.revisor.username }}{% else %}—{% endif %}
+                                </span>
+                            </div>
+                        </td>
+
+                        <td>
                             {% if img.url_fotoweb %}
                             <a href="{{ img.url_fotoweb }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary" title="Ver imagem no FotoWeb">
                                 <i class="bi bi-image"></i>
@@ -232,7 +237,7 @@
                                 {% csrf_token %}
                                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
                                 <input type="hidden" name="tipo" value="descritor">
-                                <select name="status_pagamento" class="form-select form-select-sm" style="width:130px; font-size:0.75rem;" onchange="this.form.submit()">
+                                <select name="status_pagamento" class="form-select form-select-sm" onchange="this.form.submit()">
                                     <option value="contabilizado" {% if img.pagamento_descritor == "contabilizado" %}selected{% endif %}>Contabilizado</option>
                                     <option value="pago" {% if img.pagamento_descritor == "pago" %}selected{% endif %}>Pago</option>
                                 </select>
@@ -250,7 +255,7 @@
                                 {% csrf_token %}
                                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
                                 <input type="hidden" name="tipo" value="revisor">
-                                <select name="status_pagamento" class="form-select form-select-sm" style="width:130px; font-size:0.75rem;" onchange="this.form.submit()">
+                                <select name="status_pagamento" class="form-select form-select-sm" onchange="this.form.submit()">
                                     <option value="contabilizado" {% if img.pagamento_revisor == "contabilizado" %}selected{% endif %}>Contabilizado</option>
                                     <option value="pago" {% if img.pagamento_revisor == "pago" %}selected{% endif %}>Pago</option>
                                 </select>
@@ -262,44 +267,64 @@
                             {% endif %}
                         </td>
 
-                        <td class="text-center position-relative">
+                        <td class="position-relative">
                             <button type="button" class="btn btn-sm btn-outline-secondary dito-datas-btn" data-target="datas-{{ img.pk }}" title="Ver datas">
                                 <i class="bi bi-clock-history"></i>
                             </button>
                             <div id="datas-{{ img.pk }}" class="dito-datas-popover">
-                                <div class="dito-datas-popover-item"><span>Início Descrição</span><strong>{{ img.descricao.inicio_descricao|date:"d/m/Y H:i"|default:"—" }}</strong></div>
-                                <div class="dito-datas-popover-item"><span>Entregue Descrição</span><strong>{{ img.descricao.fim_descricao|date:"d/m/Y H:i"|default:"—" }}</strong></div>
-                                <div class="dito-datas-popover-item"><span>Início Revisão</span><strong>{{ img.descricao.inicio_conferencia|date:"d/m/Y H:i"|default:"—" }}</strong></div>
-                                <div class="dito-datas-popover-item"><span>Entregue Revisão</span><strong>{{ img.descricao.fim_conferencia|date:"d/m/Y H:i"|default:"—" }}</strong></div>
+                                <div class="dito-datas-popover-item"><span>Início Desc.</span><strong>{{ img.descricao.inicio_descricao|date:"d/m/Y H:i"|default:"—" }}</strong></div>
+                                <div class="dito-datas-popover-item"><span>Entregue Desc.</span><strong>{{ img.descricao.fim_descricao|date:"d/m/Y H:i"|default:"—" }}</strong></div>
+                                <div class="dito-datas-popover-item"><span>Início Rev.</span><strong>{{ img.descricao.inicio_conferencia|date:"d/m/Y H:i"|default:"—" }}</strong></div>
+                                <div class="dito-datas-popover-item"><span>Entregue Rev.</span><strong>{{ img.descricao.fim_conferencia|date:"d/m/Y H:i"|default:"—" }}</strong></div>
                                 <div class="dito-datas-popover-item"><span>Data Final</span><strong>{{ img.prazo|date:"d/m/Y"|default:"—" }}</strong></div>
                             </div>
                         </td>
 
-                        <td class="text-end pe-3">
+                        <td>
                             {% if request.user.tipo == 'coordenador' or request.user.tipo == 'administrador' %}
+                            <div class="dito-acoes-celula">
+
                                 {% if img.status.slug == 'liberado-descricao' %}
-                                <form method="post" action="{% url 'atribuir_descritor' img.pk %}" class="d-inline-flex gap-1 align-items-center mb-1">
+                                <form method="post" action="{% url 'atribuir_descritor' img.pk %}" id="formAtribuir{{ img.pk }}">
                                     {% csrf_token %}
                                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <select name="descritor_id" class="form-select form-select-sm" style="width:140px; font-size:0.75rem;" required>
+                                    <select name="descritor_id" class="form-select form-select-sm" required>
                                         <option value="">Descritor...</option>
                                         {% for d in descritores %}<option value="{{ d.pk }}">{{ d.get_full_name|default:d.username }}</option>{% endfor %}
                                     </select>
-                                    <button type="submit" class="btn btn-sm btn-primary" title="Atribuir"><i class="bi bi-person-check"></i></button>
                                 </form>
+
                                 {% elif img.status.slug == 'descrito' %}
-                                <form method="post" action="{% url 'liberar_conferencia' img.pk %}" class="d-inline-flex gap-1 align-items-center mb-1">
+                                <form method="post" action="{% url 'liberar_conferencia' img.pk %}" id="formAtribuir{{ img.pk }}">
                                     {% csrf_token %}
                                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <select name="revisor_id" class="form-select form-select-sm" style="width:140px; font-size:0.75rem;" required>
+                                    <select name="revisor_id" class="form-select form-select-sm" required>
                                         <option value="">Revisor...</option>
                                         {% for r in revisores %}<option value="{{ r.pk }}">{{ r.get_full_name|default:r.username }}</option>{% endfor %}
                                     </select>
-                                    <button type="submit" class="btn btn-sm btn-primary" title="Liberar para revisor"><i class="bi bi-send-check"></i></button>
                                 </form>
                                 {% endif %}
-                                <a href="{% url 'imagem_editar' img.pk %}" class="btn btn-sm btn-outline-secondary" title="Editar"><i class="bi bi-pencil"></i></a>
-                                <a href="{% url 'imagem_excluir' img.pk %}" class="btn btn-sm btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></a>
+
+                                <div class="dito-acoes-botoes">
+                                    {% if img.status.slug == 'liberado-descricao' %}
+                                    <button type="submit" form="formAtribuir{{ img.pk }}" class="btn btn-sm btn-primary" title="Atribuir descritor">
+                                        <i class="bi bi-person-check"></i>
+                                    </button>
+                                    {% elif img.status.slug == 'descrito' %}
+                                    <button type="submit" form="formAtribuir{{ img.pk }}" class="btn btn-sm btn-primary" title="Liberar para revisor">
+                                        <i class="bi bi-send-check"></i>
+                                    </button>
+                                    {% endif %}
+
+                                    <a href="{% url 'imagem_editar' img.pk %}" class="btn btn-sm btn-outline-secondary" title="Editar">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a href="{% url 'imagem_excluir' img.pk %}" class="btn btn-sm btn-outline-danger" title="Excluir">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </div>
+
+                            </div>
                             {% endif %}
                         </td>
                     </tr>

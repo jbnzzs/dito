@@ -473,6 +473,12 @@ class Lote(models.Model):
         verbose_name="Descrição",
         help_text="Observação opcional sobre o critério usado para formar o lote.",
     )
+    prazo = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Prazo do lote",
+        help_text="Ao salvar, este prazo é aplicado a todas as imagens do lote.",
+    )
     criado_por = models.ForeignKey(
         Usuario,
         on_delete=models.PROTECT,
@@ -486,6 +492,44 @@ class Lote(models.Model):
         help_text="Exclusão lógica: lotes inativos não devem ser exibidos nas listagens.",
     )
 
+    def esta_totalmente_descrito(self):
+        """True se todas as imagens ativas do lote estão com status 'descrito'."""
+        imagens = self.imagens.filter(ativo=True)
+        if not imagens.exists():
+            return False
+        return not imagens.exclude(status__slug="descrito").exists()
+
+    def liberar_para_conferencia(self, usuario):
+        """
+        Avança TODAS as imagens ativas do lote de 'descrito' para
+        'liberado-conferencia' de uma vez, registrando histórico por imagem.
+        Retorna a quantidade de imagens liberadas.
+        """
+        from django.db import transaction
+
+        proximo = StatusWorkflow.objects.get(slug="liberado-conferencia")
+        imagens = list(self.imagens.filter(ativo=True, status__slug="descrito"))
+
+        if not imagens:
+            return 0
+
+        with transaction.atomic():
+            for imagem in imagens:
+                status_anterior = imagem.status
+                imagem.status = proximo
+                imagem.responsavel = None
+                imagem.save()
+                HistoricoItem.objects.create(
+                    imagem=imagem,
+                    descricao=getattr(imagem, "descricao", None),
+                    usuario=usuario,
+                    tipo_acao=HistoricoItem.TipoAcao.LIBERADO_CONFERENCIA,
+                    status_anterior=status_anterior,
+                    novo_status=proximo,
+                    observacao=f"Liberado automaticamente: lote '{self.nome}' totalmente descrito.",
+                )
+        return len(imagens)
+
     class Meta:
         verbose_name = "Lote"
         verbose_name_plural = "Lotes"
@@ -496,4 +540,44 @@ class Lote(models.Model):
 
     @property
     def total_imagens(self):
-        return self.imagens.count()
+        return self.imagens.filter(ativo=True).count()
+
+    def propagar_prazo(self):
+        """
+        Aplica o prazo do lote a todas as imagens ativas vinculadas a ele.
+        Retorna a quantidade de imagens atualizadas.
+        """
+        if self.prazo is None:
+            return 0
+        return self.imagens.filter(ativo=True).update(prazo=self.prazo)
+
+    def progresso_por_status(self):
+        """
+        Retorna a distribuição das imagens ativas do lote pelos status do
+        workflow, na ordem oficial, com contagem e percentual de cada um.
+        Usado para montar a barra de progresso na tela de Lotes.
+        """
+        from django.db.models import Count
+
+        total = self.total_imagens
+        if total == 0:
+            return []
+
+        contagens = dict(
+            self.imagens.filter(ativo=True)
+            .values_list("status__slug")
+            .annotate(qtd=Count("id"))
+        )
+
+        resultado = []
+        for status in StatusWorkflow.objects.filter(ativo=True).order_by("ordem"):
+            qtd = contagens.get(status.slug, 0)
+            if qtd:
+                resultado.append({
+                    "slug": status.slug,
+                    "nome": status.nome,
+                    "ordem": status.ordem,
+                    "quantidade": qtd,
+                    "percentual": round((qtd / total) * 100, 1),
+                })
+        return resultado

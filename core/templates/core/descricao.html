@@ -442,12 +442,20 @@
         <div class="dito-workflow-card">
             <div class="dito-workflow-info">
                 <strong><i class="bi bi-arrow-right-circle me-1"></i> Ações do workflow</strong>
-                <span>Status atual: {{ imagem.status.nome }}</span>
+                <span>
+                    Status atual: {{ imagem.status.nome }}
+                    {% if imagem.lote %} &nbsp;·&nbsp; Lote: {{ imagem.lote.nome }}{% endif %}
+                </span>
             </div>
             <div class="d-flex gap-2 flex-wrap">
                 <button class="btn-workflow-salvar" onclick="salvarTrechos()">
                     <i class="bi bi-floppy"></i> Salvar e continuar
                 </button>
+                {% if imagem.lote %}
+                <a href="{% url 'proxima_imagem_lote' imagem.pk %}" class="btn-workflow-salvar" style="text-decoration:none;">
+                    <i class="bi bi-skip-forward"></i> Próxima do lote
+                </a>
+                {% endif %}
                 <button class="btn-workflow-avancar" onclick="salvarEAvancar()">
                     <i class="bi bi-check2-circle"></i> Salvar e enviar para próxima etapa
                 </button>
@@ -670,6 +678,7 @@ async function salvarTrechos() {
 async function salvarEAvancar() {
     const trechos = coletarTrechos();
     if (!trechos.length) { mostrarToast("Adicione ao menos um trecho.", false); return; }
+
     const r1 = await fetch(SALVAR_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
@@ -677,14 +686,35 @@ async function salvarEAvancar() {
     });
     const d1 = await r1.json();
     if (!d1.ok) { mostrarToast(d1.erro || "Erro ao salvar.", false); return; }
+
     const r2 = await fetch(AVANCAR_URL, { method: "POST", headers: { "X-CSRFToken": CSRF } });
     const d2 = await r2.json();
-    if (d2.ok) {
-        mostrarToast(`Enviado: ${d2.novo_status}`, true);
-        atualizarPreview(trechos);
-        const badge = document.getElementById("badgeStatus");
-        if (badge) { badge.textContent = d2.novo_status; badge.className = `dito-status dito-status-${d2.novo_slug}`; }
-    } else mostrarToast(d2.erro || "Erro ao avançar.", false);
+
+    if (!d2.ok) { mostrarToast(d2.erro || "Erro ao avançar.", false); return; }
+
+    atualizarPreview(trechos);
+    const badge = document.getElementById("badgeStatus");
+    if (badge) { badge.textContent = d2.novo_status; badge.className = `dito-status dito-status-${d2.novo_slug}`; }
+
+    // Lote inteiro concluído: libera automaticamente para a próxima fase
+    if (d2.lote_liberado) {
+        mostrarToast(
+            `Lote "${d2.lote_nome}" concluído! ${d2.lote_total} imagem(ns) liberada(s) para conferência.`,
+            true
+        );
+        setTimeout(() => { window.location.href = "/minhas-tarefas/"; }, 2500);
+        return;
+    }
+
+    // Ainda há imagens suas neste lote: segue para a próxima
+    if (d2.proxima_url) {
+        mostrarToast(`Enviado: ${d2.novo_status}. Indo para a próxima imagem do lote...`, true);
+        setTimeout(() => { window.location.href = d2.proxima_url; }, 1500);
+        return;
+    }
+
+    // Imagem avulsa ou sem próxima: comportamento normal
+    mostrarToast(`Enviado: ${d2.novo_status}`, true);
 }
 
 function atualizarPreview(trechos) {

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Lotes — Dito!{% endblock %}
+{% block page_title %}Lotes{% endblock %}
+{% block nav_lotes %}active{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+    {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }} mb-3">{{ msg }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <h2 class="mb-1">Lotes</h2>
+        <p class="text-secondary mb-0" style="font-size:0.875rem;">
+            {{ total_lotes }} lote{{ total_lotes|pluralize }}
+            {% if mostrar_inativos %}&nbsp;·&nbsp; <strong>mostrando inativos</strong>{% endif %}
+        </p>
+    </div>
+    <a href="{% url 'organizar_lotes_geral' %}" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i> Criar lote
+    </a>
+</div>
+
+<div class="card dito-card-flush mb-3">
+    <div class="card-body py-3 px-3">
+        <form method="get" class="d-flex align-items-center gap-3 flex-wrap">
+            <div class="dito-search flex-grow-1" style="max-width:360px;">
+                <i class="bi bi-search text-secondary"></i>
+                <input type="text" name="busca" value="{{ busca }}" placeholder="Buscar por nome do lote...">
+            </div>
+
+            <div class="form-check form-switch mb-0">
+                <input type="checkbox" name="mostrar_inativos" value="1" class="form-check-input" id="mostrarInativos" {% if mostrar_inativos %}checked{% endif %}>
+                <label class="form-check-label text-secondary" for="mostrarInativos" style="font-size:0.8rem;">
+                    Mostrar apenas inativos
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-sm px-3">
+                <i class="bi bi-funnel me-1"></i> Filtrar
+            </button>
+            {% if busca or mostrar_inativos %}
+            <a href="{% url 'lotes_lista' %}" class="btn btn-outline-secondary btn-sm px-3">
+                <i class="bi bi-x me-1"></i> Limpar
+            </a>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+{% if lotes_dados %}
+<div class="d-flex flex-column gap-3">
+    {% for item in lotes_dados %}
+    <div class="card">
+        <div class="card-body">
+
+            <div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-3">
+                <div>
+                    <h5 class="fw-bold mb-1">
+                        {{ item.obj.nome }}
+                        {% if not item.obj.ativo %}
+                        <span class="dito-status dito-status-descrevendo ms-1" style="font-size:0.7rem;">Inativo</span>
+                        {% endif %}
+                    </h5>
+                    {% if item.obj.descricao %}
+                    <p class="text-secondary mb-1" style="font-size:0.8rem;">{{ item.obj.descricao }}</p>
+                    {% endif %}
+                    <div class="d-flex flex-wrap gap-3 text-secondary" style="font-size:0.75rem;">
+                        <span><i class="bi bi-images me-1"></i>{{ item.total }} imagem{{ item.total|pluralize }}</span>
+                        <span><i class="bi bi-person me-1"></i>{{ item.obj.criado_por.get_full_name|default:item.obj.criado_por.username }}</span>
+                        <span><i class="bi bi-calendar-plus me-1"></i>{{ item.obj.criado_em|date:"d/m/Y" }}</span>
+                        {% if item.obj.prazo %}
+                        <span><i class="bi bi-calendar-check me-1"></i>Prazo: <strong>{{ item.obj.prazo|date:"d/m/Y" }}</strong></span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <a href="{% url 'imagens_lista' %}?lote={{ item.obj.nome|urlencode }}" class="btn btn-sm btn-outline-primary" title="Ver imagens do lote">
+                        <i class="bi bi-images me-1"></i> Ver imagens
+                    </a>
+                    <a href="{% url 'lote_editar' item.obj.pk %}" class="btn btn-sm btn-outline-secondary" title="Editar lote">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                </div>
+            </div>
+
+            {# ---- Barra de progresso por status ---- #}
+            {% if item.progresso %}
+            <div class="dito-progresso-barra mb-2">
+                {% for fase in item.progresso %}
+                <div class="dito-progresso-segmento dito-progresso-{{ fase.slug }}"
+                     style="width:{{ fase.percentual }}%;"
+                     title="{{ fase.nome }}: {{ fase.quantidade }} imagem(ns) ({{ fase.percentual }}%)">
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="d-flex flex-wrap gap-3">
+                {% for fase in item.progresso %}
+                <span class="dito-progresso-legenda">
+                    <span class="dito-progresso-ponto dito-progresso-{{ fase.slug }}"></span>
+                    {{ fase.nome }}
+                    <strong>{{ fase.quantidade }}</strong>
+                </span>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-secondary mb-0" style="font-size:0.8rem;">
+                <i class="bi bi-info-circle me-1"></i> Nenhuma imagem ativa neste lote.
+            </p>
+            {% endif %}
+
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <div class="dito-empty-state py-5">
+        <i class="bi bi-collection"></i>
+        <p>Nenhum lote encontrado{% if busca %} com esse nome{% endif %}.</p>
+        <a href="{% url 'organizar_lotes_geral' %}" class="btn btn-outline-primary mt-2">
+            <i class="bi bi-plus-lg me-1"></i> Criar primeiro lote
+        </a>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

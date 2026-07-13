@@ -640,3 +640,195 @@ a:hover {
 .dito-filtros-toggle:hover {
     background: #F3DEE1;
 }
+
+/* ------------------------------------------------------------
+   Tabela de dados (listagem de imagens)
+   ------------------------------------------------------------ */
+
+.dito-tabela {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.dito-tabela thead th {
+    text-align: center;
+    vertical-align: middle;
+    padding: 12px 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--dito-grafite);
+    background: #FFFFFF;
+    border-bottom: 0.5px solid var(--dito-bege);
+    white-space: nowrap;
+}
+
+.dito-tabela tbody td {
+    vertical-align: middle;
+    padding: 12px 8px;
+    font-size: 0.8rem;
+    height: 78px;
+}
+/* Larguras das colunas — soma 100% */
+.dito-tabela th:nth-child(1),
+.dito-tabela td:nth-child(1) { width: 13%; }   /* Retranca */
+
+.dito-tabela th:nth-child(2),
+.dito-tabela td:nth-child(2) { width: 11%; }   /* Obra/Comp. */
+
+.dito-tabela th:nth-child(3),
+.dito-tabela td:nth-child(3) { width: 11%; }   /* Responsáveis */
+
+.dito-tabela th:nth-child(4),
+.dito-tabela td:nth-child(4) { width: 7%; }    /* Arquivos */
+
+.dito-tabela th:nth-child(5),
+.dito-tabela td:nth-child(5) { width: 12%; }   /* Status */
+
+.dito-tabela th:nth-child(6),
+.dito-tabela td:nth-child(6) { width: 11%; }   /* Pagamento Desc. */
+
+.dito-tabela th:nth-child(7),
+.dito-tabela td:nth-child(7) { width: 11%; }   /* Pagamento Rev. */
+
+.dito-tabela th:nth-child(8),
+.dito-tabela td:nth-child(8) { width: 6%; }    /* Datas */
+
+.dito-tabela th:nth-child(9),
+.dito-tabela td:nth-child(9) { width: 11%; }   /* Ações */
+
+/* Colunas com conteúdo centralizado */
+.dito-tabela td:nth-child(1),   /* Retranca */
+.dito-tabela td:nth-child(4),   /* Arquivos */
+.dito-tabela td:nth-child(5),   /* Status */
+.dito-tabela td:nth-child(8),   /* Datas */
+.dito-tabela td:nth-child(9) {  /* Ações */
+    text-align: center;
+}
+
+/* Célula com duas linhas (Obra/Componente, Responsáveis) */
+.dito-celula-dupla {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    line-height: 1.3;
+}
+
+.dito-celula-dupla .principal {
+    font-weight: 700;
+    color: var(--dito-grafite);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dito-celula-dupla .secundaria {
+    font-size: 0.72rem;
+    color: #6B6A66;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Selects de pagamento — largura fluida dentro da célula */
+.dito-tabela .form-select-sm {
+    width: 100%;
+    font-size: 0.72rem;
+    min-width: 0;
+}
+
+/* Linhas de responsável (Descritor / Revisor) — mesmo peso e cor */
+.dito-responsavel-linha {
+    font-size: 0.75rem;
+    color: var(--dito-grafite);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dito-responsavel-linha .rotulo {
+    color: #6B6A66;
+    font-weight: 700;
+    margin-right: 3px;
+}
+
+/* ------------------------------------------------------------
+   Coluna de Ações (listagem de imagens)
+   ------------------------------------------------------------ */
+
+.dito-acoes-celula {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+}
+
+.dito-acoes-celula form {
+    width: auto;
+    margin: 0;
+}
+
+.dito-acoes-celula .form-select-sm {
+    width: 140px;
+    max-width: 100%;
+    font-size: 0.72rem;
+}
+
+.dito-acoes-botoes {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+}
+
+/* ------------------------------------------------------------
+   Barra de progresso por status (tela de Lotes)
+   ------------------------------------------------------------ */
+
+.dito-progresso-barra {
+    display: flex;
+    width: 100%;
+    height: 10px;
+    border-radius: 5px;
+    overflow: hidden;
+    background: #E8E0D6;
+}
+
+.dito-progresso-segmento {
+    height: 100%;
+    transition: opacity 0.15s ease;
+}
+
+.dito-progresso-segmento:hover {
+    opacity: 0.75;
+}
+
+.dito-progresso-legenda {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    color: #6B6A66;
+}
+
+.dito-progresso-legenda strong {
+    color: var(--dito-grafite);
+}
+
+.dito-progresso-ponto {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+}
+
+/* Cores por status — gradação do claro (início) ao escuro (fim) */
+.dito-progresso-liberado-descricao   { background: #D8CFC5; }
+.dito-progresso-descrevendo          { background: #E0A87A; }
+.dito-progresso-descrito             { background: #BF7D2C; }
+.dito-progresso-liberado-conferencia { background: #D99A9F; }
+.dito-progresso-em-conferencia       { background: #C56A73; }
+.dito-progresso-conferido            { background: #A62E38; }
+.dito-progresso-revisando            { background: #8A2530; }
+.dito-progresso-revisado             { background: #6E1B26; }
+.dito-progresso-finalizado           { background: #2E7D5B; }
