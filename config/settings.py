@@ -31,6 +31,11 @@ DEBUG = os.environ.get("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '172.16.13.66']
 
+# Hosts de produção vindos de variável de ambiente (ex: dito-vcbh.onrender.com)
+_hosts_extra = os.environ.get("ALLOWED_HOSTS", "")
+if _hosts_extra:
+    ALLOWED_HOSTS += [h.strip() for h in _hosts_extra.split(",") if h.strip()]
+
 
 # Application definition
 
@@ -44,6 +49,10 @@ INSTALLED_APPS = [
     # Apps do Dito!
     "core",
 ]
+
+# Debug Toolbar — só em desenvolvimento
+if DEBUG:
+    INSTALLED_APPS += ["debug_toolbar"]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -82,7 +91,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": dj_database_url.config(
         default=os.environ.get("DATABASE_URL"),
-        conn_max_age=600,
+        conn_max_age=0,
         ssl_require=True,
     )
 }
