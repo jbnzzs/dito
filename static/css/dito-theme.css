@@ -832,3 +832,17 @@ a:hover {
 .dito-progresso-revisando            { background: #8A2530; }
 .dito-progresso-revisado             { background: #6E1B26; }
 .dito-progresso-finalizado           { background: #2E7D5B; }
+
+
+/* ------------------------------------------------------------
+   Card clicável (imagens avulsas)
+   ------------------------------------------------------------ */
+
+.dito-card-link {
+    transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.dito-card-link:hover {
+    border-color: var(--dito-vinho);
+    transform: translateX(2px);
+}

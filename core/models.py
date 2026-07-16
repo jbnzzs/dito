@@ -530,6 +530,37 @@ class Lote(models.Model):
                 )
         return len(imagens)
 
+    def progresso_do_usuario(self, usuario):
+        """
+        Progresso pessoal de um descritor/revisor dentro do lote.
+        Retorna dict com o total de imagens dele no lote, quantas já concluiu
+        e o percentual — usado no card simplificado da tela de Lotes.
+        """
+        from .models import Usuario as U
+
+        if usuario.tipo == U.Tipo.DESCRITOR:
+            pendentes = ["liberado-descricao", "descrevendo"]
+        elif usuario.tipo == U.Tipo.REVISOR:
+            pendentes = ["liberado-conferencia", "em-conferencia"]
+        else:
+            return None
+
+        minhas = self.imagens.filter(ativo=True, responsavel=usuario)
+        total = minhas.count()
+
+        if total == 0:
+            return None
+
+        restantes = minhas.filter(status__slug__in=pendentes).count()
+        concluidas = total - restantes
+
+        return {
+            "total": total,
+            "concluidas": concluidas,
+            "restantes": restantes,
+            "percentual": round((concluidas / total) * 100, 1) if total else 0,
+        }
+
     class Meta:
         verbose_name = "Lote"
         verbose_name_plural = "Lotes"

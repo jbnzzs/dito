@@ -444,21 +444,38 @@
                 <strong><i class="bi bi-arrow-right-circle me-1"></i> Ações do workflow</strong>
                 <span>
                     Status atual: {{ imagem.status.nome }}
-                    {% if imagem.lote %} &nbsp;·&nbsp; Lote: {{ imagem.lote.nome }}{% endif %}
+                    {% if imagem.lote %}
+                        &nbsp;·&nbsp; Lote: {{ imagem.lote.nome }}
+                        {% if lote_posicao and lote_total %}
+                        &nbsp;·&nbsp; <strong>{{ lote_posicao }}/{{ lote_total }}</strong>
+                        {% endif %}
+                    {% endif %}
                 </span>
             </div>
             <div class="d-flex gap-2 flex-wrap">
+
                 <button class="btn-workflow-salvar" onclick="salvarTrechos()">
-                    <i class="bi bi-floppy"></i> Salvar e continuar
+                    <i class="bi bi-floppy"></i> Salvar
                 </button>
-                {% if imagem.lote %}
-                <a href="{% url 'proxima_imagem_lote' imagem.pk %}" class="btn-workflow-salvar" style="text-decoration:none;">
-                    <i class="bi bi-skip-forward"></i> Próxima do lote
-                </a>
+
+                {% if imagem.lote and not lote_eh_ultima %}
+                <button class="btn-workflow-avancar" onclick="salvarEAvancar()">
+                    <i class="bi bi-skip-forward"></i> Salvar e ir para próxima do lote
+                </button>
                 {% endif %}
+
+                {% if imagem.lote and lote_eh_ultima %}
+                <button class="btn-workflow-avancar" onclick="salvarEDevolver()">
+                    <i class="bi bi-send-check"></i> Salvar e devolver para o coordenador
+                </button>
+                {% endif %}
+
+                {% if not imagem.lote %}
                 <button class="btn-workflow-avancar" onclick="salvarEAvancar()">
                     <i class="bi bi-check2-circle"></i> Salvar e enviar para próxima etapa
                 </button>
+                {% endif %}
+
             </div>
         </div>
 
@@ -508,6 +525,8 @@
 <script>
 const SALVAR_URL = "{% url 'salvar_trecho' imagem.pk %}";
 const AVANCAR_URL = "{% url 'avancar_status' imagem.pk %}";
+const DEVOLVER_URL = "{% url 'devolver_lote' imagem.pk %}";
+const LOTES_URL = "{% url 'lotes_lista' %}";
 const CSRF = "{{ csrf_token }}";
 const IDIOMAS = {{ idiomas_json|safe }};
 const PRIORITARIOS = ["por","eng","spa","fra","deu","ita","jpn","zho","lat","ara","rus","hin","kor","grk"];
@@ -696,25 +715,40 @@ async function salvarEAvancar() {
     const badge = document.getElementById("badgeStatus");
     if (badge) { badge.textContent = d2.novo_status; badge.className = `dito-status dito-status-${d2.novo_slug}`; }
 
-    // Lote inteiro concluído: libera automaticamente para a próxima fase
-    if (d2.lote_liberado) {
-        mostrarToast(
-            `Lote "${d2.lote_nome}" concluído! ${d2.lote_total} imagem(ns) liberada(s) para conferência.`,
-            true
-        );
-        setTimeout(() => { window.location.href = "/minhas-tarefas/"; }, 2500);
-        return;
-    }
-
     // Ainda há imagens suas neste lote: segue para a próxima
     if (d2.proxima_url) {
-        mostrarToast(`Enviado: ${d2.novo_status}. Indo para a próxima imagem do lote...`, true);
-        setTimeout(() => { window.location.href = d2.proxima_url; }, 1500);
+        mostrarToast(`Salvo. Indo para a próxima imagem do lote...`, true);
+        setTimeout(() => { window.location.href = d2.proxima_url; }, 1200);
         return;
     }
 
     // Imagem avulsa ou sem próxima: comportamento normal
     mostrarToast(`Enviado: ${d2.novo_status}`, true);
+}
+
+async function salvarEDevolver() {
+    const trechos = coletarTrechos();
+    if (!trechos.length) { mostrarToast("Adicione ao menos um trecho.", false); return; }
+
+    if (!confirm("Esta é a última imagem do lote. Salvar e devolver o lote inteiro ao coordenador?")) {
+        return;
+    }
+
+    const r1 = await fetch(SALVAR_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+        body: JSON.stringify({ trechos }),
+    });
+    const d1 = await r1.json();
+    if (!d1.ok) { mostrarToast(d1.erro || "Erro ao salvar.", false); return; }
+
+    const r2 = await fetch(DEVOLVER_URL, { method: "POST", headers: { "X-CSRFToken": CSRF } });
+    const d2 = await r2.json();
+    if (!d2.ok) { mostrarToast(d2.erro || "Erro ao devolver o lote.", false); return; }
+
+    atualizarPreview(trechos);
+    mostrarToast(d2.mensagem, true);
+    setTimeout(() => { window.location.href = LOTES_URL; }, 2000);
 }
 
 function atualizarPreview(trechos) {

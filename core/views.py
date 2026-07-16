@@ -23,18 +23,19 @@ def _saudacao():
         return "Boa tarde"
     return "Boa noite"
 
-def _proxima_imagem_do_lote(imagem_atual, usuario):
+def _imagens_do_lote_para_usuario(lote, usuario):
     """
-    Retorna a próxima imagem pendente do mesmo lote, conforme o perfil:
-    - Coordenador/Administrador: qualquer imagem pendente do lote.
-    - Descritor/Revisor: apenas as imagens pendentes atribuídas a ele.
-    Retorna None se não houver próxima.
+    Escopo de imagens pendentes de um lote para um usuário, conforme o perfil:
+    - Coordenador/Administrador: todas as imagens do lote (exceto finalizadas).
+    - Descritor: apenas as atribuídas a ele, em status de descrição.
+    - Revisor: apenas as atribuídas a ele, em status de conferência.
+    Ordenado por retranca — a mesma ordem usada na navegação sequencial.
+    Retorna um queryset (possivelmente vazio).
     """
-    if not imagem_atual.lote:
-        return None
+    if not lote:
+        return Imagem.objects.none()
 
     if usuario.tipo in (Usuario.Tipo.COORDENADOR, Usuario.Tipo.ADMINISTRADOR):
-        # Coordenação enxerga todo o fluxo do lote, exceto o que já está finalizado
         slugs_pendentes = [
             "liberado-descricao", "descrevendo", "descrito",
             "liberado-conferencia", "em-conferencia", "conferido",
@@ -48,17 +49,30 @@ def _proxima_imagem_do_lote(imagem_atual, usuario):
         slugs_pendentes = ["liberado-conferencia", "em-conferencia"]
         filtro_responsavel = {"responsavel": usuario}
     else:
-        return None
+        return Imagem.objects.none()
 
     return (
         Imagem.objects.filter(
-            lote=imagem_atual.lote,
+            lote=lote,
             ativo=True,
             status__slug__in=slugs_pendentes,
             **filtro_responsavel,
         )
-        .exclude(pk=imagem_atual.pk)
         .order_by("retranca")
+    )
+
+
+def _proxima_imagem_do_lote(imagem_atual, usuario):
+    """
+    Retorna a próxima imagem pendente do mesmo lote (após a atual, na ordem
+    por retranca), ou None se a imagem atual for a última pendente.
+    """
+    if not imagem_atual.lote:
+        return None
+
+    return (
+        _imagens_do_lote_para_usuario(imagem_atual.lote, usuario)
+        .filter(retranca__gt=imagem_atual.retranca)
         .first()
     )
 
@@ -139,6 +153,8 @@ def minhas_tarefas(request):
     status_slug = request.GET.get("status", "")
     busca = request.GET.get("busca", "").strip()
     pagina = request.GET.get("pagina", 1)
+    lote_id = request.GET.get("lote", "")
+    sem_lote = request.GET.get("sem_lote") == "1"
 
     # Definir quais status e título conforme perfil
     if usuario.tipo == usuario.Tipo.DESCRITOR:
@@ -190,20 +206,34 @@ def minhas_tarefas(request):
     if busca:
         tarefas = tarefas.filter(retranca__icontains=busca)
 
-    tarefas = tarefas.select_related("status", "responsavel").order_by("-criado_em")
+    lote_atual = None
+    if sem_lote:
+        tarefas = tarefas.filter(lote__isnull=True)
+    elif lote_id:
+        from .models import Lote
+        lote_atual = Lote.objects.filter(pk=lote_id).first()
+        if lote_atual:
+            tarefas = tarefas.filter(lote=lote_atual)
+
+    tarefas = tarefas.select_related("status", "responsavel", "lote").order_by("-criado_em")
 
     # Contadores por status (para os cards de resumo)
-    from django.db.models import Count, Q
-    contadores = {}
-    for slug in slugs_visiveis:
-        if usuario.tipo in (usuario.Tipo.COORDENADOR, usuario.Tipo.ADMINISTRADOR):
-            contadores[slug] = Imagem.objects.filter(
-                ativo=True, status__slug=slug
-            ).count()
-        else:
-            contadores[slug] = Imagem.objects.filter(
-                ativo=True, responsavel=usuario, status__slug=slug
-            ).count()
+    # Contadores por status (uma única query)
+    from django.db.models import Count
+
+    base_contadores = Imagem.objects.filter(ativo=True, status__slug__in=slugs_visiveis)
+    if usuario.tipo not in (usuario.Tipo.COORDENADOR, usuario.Tipo.ADMINISTRADOR):
+        base_contadores = base_contadores.filter(responsavel=usuario)
+
+    if sem_lote:
+        base_contadores = base_contadores.filter(lote__isnull=True)
+    elif lote_atual:
+        base_contadores = base_contadores.filter(lote=lote_atual)
+
+    agregado = dict(
+        base_contadores.values_list("status__slug").annotate(qtd=Count("id"))
+    )
+    contadores = {slug: agregado.get(slug, 0) for slug in slugs_visiveis}
 
     total = tarefas.count()
     paginador = Paginator(tarefas, 50)
@@ -230,6 +260,8 @@ def minhas_tarefas(request):
         "mostrar_todos_status": usuario.tipo in (
             usuario.Tipo.COORDENADOR, usuario.Tipo.ADMINISTRADOR
         ),
+        "lote_atual": lote_atual,
+        "sem_lote": sem_lote,
     }
     return render(request, "core/minhas_tarefas.html", ctx)
 
@@ -701,6 +733,21 @@ def descricao_imagem(request, pk):
     todos.sort(key=lambda x: x["nome"])
     idiomas_json = json.dumps(prioritarios + todos, ensure_ascii=False)
 
+    # ---- Posição da imagem dentro do lote (contador "2/10") ----
+    lote_posicao = None
+    lote_total = None
+    lote_eh_ultima = False
+
+    if imagem.lote:
+        escopo = _imagens_do_lote_para_usuario(imagem.lote, usuario)
+        ids = list(escopo.values_list("pk", flat=True))
+        lote_total = len(ids)
+        if imagem.pk in ids:
+            lote_posicao = ids.index(imagem.pk) + 1
+
+        # Última imagem pendente: não há próxima para este usuário
+        lote_eh_ultima = _proxima_imagem_do_lote(imagem, usuario) is None
+
     ctx = {
         "imagem": imagem,
         "descricao": descricao,
@@ -708,6 +755,9 @@ def descricao_imagem(request, pk):
         "pode_editar": pode_editar,
         "motivo_bloqueio": motivo_bloqueio,
         "idiomas_json": idiomas_json,
+        "lote_posicao": lote_posicao,
+        "lote_total": lote_total,
+        "lote_eh_ultima": lote_eh_ultima,
     }
     return render(request, "core/descricao.html", ctx)
 
@@ -867,20 +917,11 @@ def avancar_status(request, pk):
             novo_status=proximo_status,
         )
 
-# ---- Auto-liberação do lote ----
-    lote_liberado = False
-    lote_nome = None
-    lote_total = 0
-
-    if imagem.lote and imagem.status.slug == "descrito":
-        if imagem.lote.esta_totalmente_descrito():
-            lote_total = imagem.lote.liberar_para_conferencia(usuario)
-            lote_liberado = True
-            lote_nome = imagem.lote.nome
-
     # ---- Próxima imagem pendente do mesmo lote ----
+    # A liberação do lote para a próxima fase é MANUAL: acontece pelo botão
+    # "Salvar e devolver para o coordenador", disponível na última imagem.
     proxima_url = None
-    if imagem.lote and not lote_liberado:
+    if imagem.lote:
         proxima = _proxima_imagem_do_lote(imagem, usuario)
         if proxima:
             proxima_url = reverse("descricao_imagem", kwargs={"pk": proxima.pk})
@@ -889,9 +930,6 @@ def avancar_status(request, pk):
         "ok": True,
         "novo_status": proximo_status.nome,
         "novo_slug": proximo_status.slug,
-        "lote_liberado": lote_liberado,
-        "lote_nome": lote_nome,
-        "lote_total": lote_total,
         "proxima_url": proxima_url,
     })
 
@@ -1379,44 +1417,80 @@ def lote_editar(request, pk):
 @login_required
 def lotes_lista(request):
     """
-    Tela de gestão de Lotes: listagem geral com progresso por status,
-    prazo, criador e ações. Restrita a Coordenador/Administrador.
+    Tela principal de Lotes. Comportamento por perfil:
+    - Coordenador/Administrador: todos os lotes, com progresso completo por status
+      e formulário de atribuição.
+    - Descritor/Revisor: apenas os lotes onde ele tem imagens atribuídas,
+      com progresso pessoal simplificado.
+    Ambos veem um card de "Imagens avulsas" (sem lote), quando houver.
     """
     from .models import Lote
 
-    if not _apenas_coordenador(request.user):
-        messages.error(request, "Você não tem permissão para acessar a gestão de lotes.")
-        return redirect("dashboard")
+    usuario = request.user
+    eh_coordenacao = _apenas_coordenador(usuario)
 
     busca = request.GET.get("busca", "").strip()
     mostrar_inativos = request.GET.get("mostrar_inativos") == "1"
 
-    lotes = Lote.objects.filter(ativo=not mostrar_inativos)
+    if eh_coordenacao:
+        lotes = Lote.objects.filter(ativo=not mostrar_inativos)
+    else:
+        # Só os lotes onde o usuário tem imagens atribuídas
+        lotes = Lote.objects.filter(
+            ativo=True,
+            imagens__ativo=True,
+            imagens__responsavel=usuario,
+        ).distinct()
 
     if busca:
         lotes = lotes.filter(nome__icontains=busca)
 
-    lotes = lotes.select_related("criado_por").prefetch_related(
-        "imagens__status"
-    ).order_by("-criado_em")
+    lotes = lotes.select_related("criado_por").order_by("-criado_em")
 
-    # Monta os dados de progresso de cada lote
     lotes_dados = []
     for lote in lotes:
-        lotes_dados.append({
-            "obj": lote,
-            "total": lote.total_imagens,
-            "progresso": lote.progresso_por_status(),
-        })
+        if eh_coordenacao:
+            lotes_dados.append({
+                "obj": lote,
+                "total": lote.total_imagens,
+                "progresso": lote.progresso_por_status(),
+                "meu_progresso": None,
+            })
+        else:
+            meu = lote.progresso_do_usuario(usuario)
+            if meu:
+                lotes_dados.append({
+                    "obj": lote,
+                    "total": meu["total"],
+                    "progresso": None,
+                    "meu_progresso": meu,
+                })
+
+    # ---- Card de imagens avulsas (sem lote) ----
+    avulsas_qs = Imagem.objects.filter(ativo=True, lote__isnull=True)
+    if not eh_coordenacao:
+        avulsas_qs = avulsas_qs.filter(responsavel=usuario)
+    total_avulsas = avulsas_qs.count()
+
+    descritores = Usuario.objects.filter(
+        tipo=Usuario.Tipo.DESCRITOR, is_active=True
+    ).order_by("first_name", "username")
+
+    revisores = Usuario.objects.filter(
+        tipo=Usuario.Tipo.REVISOR, is_active=True
+    ).order_by("first_name", "username")
 
     ctx = {
         "lotes_dados": lotes_dados,
         "busca": busca,
         "mostrar_inativos": mostrar_inativos,
         "total_lotes": len(lotes_dados),
+        "total_avulsas": total_avulsas,
+        "eh_coordenacao": eh_coordenacao,
+        "descritores": descritores,
+        "revisores": revisores,
     }
     return render(request, "core/lotes_lista.html", ctx)
-
 # ============================================================
 # NAVEGAÇÃO SEQUENCIAL DENTRO DO LOTE
 # ============================================================
@@ -1446,3 +1520,86 @@ def proxima_imagem_lote(request, pk):
     if _apenas_coordenador(request.user):
         return redirect(f"{reverse('imagens_lista')}?lote={imagem_atual.lote.nome}")
     return redirect("minhas_tarefas")
+
+# ============================================================
+# DEVOLUÇÃO DO LOTE AO COORDENADOR
+# ============================================================
+
+@login_required
+@require_POST
+def devolver_lote(request, pk):
+    """
+    Chamada na última imagem do lote: conclui a imagem atual e devolve o
+    lote inteiro ao coordenador, avançando todas as imagens da fase do
+    usuário de uma vez. A liberação do lote é sempre MANUAL, por esta view.
+    """
+    from .models import HistoricoItem
+
+    imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
+    usuario = request.user
+    lote = imagem.lote
+
+    if not lote:
+        return JsonResponse(
+            {"ok": False, "erro": "Esta imagem não pertence a um lote."}, status=400
+        )
+
+    # Fase do usuário: descrição ou conferência
+    if usuario.tipo == Usuario.Tipo.DESCRITOR:
+        slug_origem, slug_destino = "descrevendo", "descrito"
+        tipo_acao = HistoricoItem.TipoAcao.DESCRICAO_SALVA
+        rotulo = "descrição"
+    elif usuario.tipo == Usuario.Tipo.REVISOR:
+        slug_origem, slug_destino = "em-conferencia", "conferido"
+        tipo_acao = HistoricoItem.TipoAcao.CONFERENCIA_CONCLUIDA
+        rotulo = "conferência"
+    else:
+        return JsonResponse(
+            {"ok": False, "erro": "Apenas descritor ou revisor podem devolver um lote."},
+            status=403,
+        )
+
+    try:
+        proximo_status = StatusWorkflow.objects.get(slug=slug_destino)
+    except StatusWorkflow.DoesNotExist:
+        return JsonResponse({"ok": False, "erro": "Status não encontrado."}, status=400)
+
+    # Todas as imagens do lote que ainda estão na fase deste usuário
+    pendentes = list(
+        Imagem.objects.filter(
+            lote=lote,
+            ativo=True,
+            responsavel=usuario,
+            status__slug=slug_origem,
+        )
+    )
+
+    if not pendentes:
+        return JsonResponse(
+            {"ok": False, "erro": "Nenhuma imagem deste lote está pronta para devolução."},
+            status=400,
+        )
+
+    with transaction.atomic():
+        for img in pendentes:
+            status_anterior = img.status
+            img.status = proximo_status
+            img.responsavel = None  # volta para a fila do coordenador
+            img.save()
+            HistoricoItem.objects.create(
+                imagem=img,
+                descricao=getattr(img, "descricao", None),
+                usuario=usuario,
+                tipo_acao=tipo_acao,
+                status_anterior=status_anterior,
+                novo_status=proximo_status,
+                observacao=f"Lote '{lote.nome}' devolvido ao coordenador após {rotulo}.",
+            )
+
+    return JsonResponse({
+        "ok": True,
+        "mensagem": (
+            f"Lote '{lote.nome}' devolvido ao coordenador. "
+            f"{len(pendentes)} imagem(ns) concluída(s)."
+        ),
+    })
