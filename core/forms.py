@@ -52,3 +52,70 @@ class ImagemForm(forms.ModelForm):
                 "placeholder": "https://ensinolivre-my.sharepoint.com/",
             }),
         }
+
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+
+from .models import Usuario
+
+
+class SolicitacaoAcessoForm(forms.ModelForm):
+    """
+    Formulário público de solicitação de acesso ao Dito!.
+    O usuário é criado como PENDENTE e inativo, aguardando aprovação
+    do administrador, que define o perfil no momento da aprovação.
+    """
+    senha = forms.CharField(
+        label="Senha",
+        widget=forms.PasswordInput(attrs={"placeholder": "Mínimo de 8 caracteres"}),
+    )
+    senha_confirmacao = forms.CharField(
+        label="Confirmação de senha",
+        widget=forms.PasswordInput(attrs={"placeholder": "Digite a senha novamente"}),
+    )
+
+    class Meta:
+        model = Usuario
+        fields = ["first_name", "last_name", "email"]
+        labels = {
+            "first_name": "Nome",
+            "last_name": "Sobrenome",
+            "email": "E-mail",
+        }
+        widgets = {
+            "first_name": forms.TextInput(attrs={"placeholder": "Seu nome"}),
+            "last_name": forms.TextInput(attrs={"placeholder": "Seu sobrenome"}),
+            "email": forms.EmailInput(attrs={"placeholder": "seu.email@scriba.com.br"}),
+        }
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
+        if Usuario.objects.filter(email__iexact=email).exists():
+            raise ValidationError(
+                "Já existe uma conta ou solicitação com este e-mail. "
+                "Se você já solicitou acesso, aguarde a aprovação do administrador."
+            )
+        return email
+
+    def clean_senha(self):
+        senha = self.cleaned_data["senha"]
+        validate_password(senha)
+        return senha
+
+    def clean(self):
+        dados = super().clean()
+        senha = dados.get("senha")
+        confirmacao = dados.get("senha_confirmacao")
+        if senha and confirmacao and senha != confirmacao:
+            self.add_error("senha_confirmacao", "As senhas não coincidem.")
+        return dados
+
+    def save(self, commit=True):
+        usuario = super().save(commit=False)
+        usuario.set_password(self.cleaned_data["senha"])
+        usuario.situacao = Usuario.Situacao.PENDENTE
+        usuario.is_active = False          # não consegue logar até ser aprovado
+        usuario.username = Usuario.objects._gerar_username(usuario.email)
+        if commit:
+            usuario.save()
+        return usuario

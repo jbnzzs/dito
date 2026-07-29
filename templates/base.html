@@ -72,11 +72,13 @@
             {% endif %}
 
             <!-- Seção gestão (coordenador e administrador) -->
-            {% if request.user.tipo == 'coordenador' or request.user.tipo == 'administrador' %}
+            {% if request.user.tipo == 'administrador' %}
             <span class="dito-nav-section">Gestão</span>
+            {% endif %}
 
-            <a href="#" class="dito-nav-item {% block nav_usuarios %}{% endblock %}">
-                <i class="bi bi-people"></i>
+            {% if request.user.tipo == 'administrador' %}
+            <a href="{% url 'usuarios_lista' %}" class="dito-nav-item {% block nav_usuarios %}{% endblock %}">
+                <i class="bi bi-people-fill"></i>
                 <span class="dito-nav-label">Usuários</span>
             </a>
             {% endif %}
@@ -117,7 +119,7 @@
             <div class="dito-header-right">
                 <div class="dito-user-info">
                     <span class="dito-user-name">
-                        {{ request.user.get_full_name|default:request.user.username }}
+                        {{ request.user.get_full_name|default:request.user.email }}
                     </span>
                     <span class="dito-user-tipo">
                         {{ request.user.get_tipo_display }}

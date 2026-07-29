@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Usuários — Dito!{% endblock %}
+{% block page_title %}Usuários{% endblock %}
+{% block nav_usuarios %}active{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+    {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }} mb-3">{{ msg }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <h2 class="mb-1">Usuários</h2>
+        <p class="text-secondary mb-0" style="font-size:0.875rem;">
+            Gerencie solicitações de acesso e os usuários do sistema.
+        </p>
+    </div>
+</div>
+
+{# ---- Solicitações pendentes ---- #}
+{% if total_pendentes > 0 %}
+<div class="card mb-4" style="border-left: 3px solid var(--dito-dourado);">
+    <div class="card-body">
+        <div class="d-flex align-items-center gap-2 mb-3">
+            <i class="bi bi-hourglass-split" style="color:var(--dito-dourado); font-size:1.1rem;"></i>
+            <h5 class="fw-bold mb-0">Solicitações pendentes</h5>
+            <span class="dito-status dito-status-descrevendo">{{ total_pendentes }}</span>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>E-mail</th>
+                        <th>Solicitado em</th>
+                        <th style="width:420px;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in pendentes %}
+                    <tr>
+                        <td class="fw-bold">{{ u.get_full_name|default:"—" }}</td>
+                        <td style="font-size:0.85rem;">{{ u.email }}</td>
+                        <td class="text-secondary" style="font-size:0.8rem;">{{ u.date_joined|date:"d/m/Y H:i" }}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                {# Aprovar: escolhe o perfil e confirma #}
+                                <form method="post" action="{% url 'aprovar_solicitacao' u.pk %}" class="d-flex align-items-center gap-1">
+                                    {% csrf_token %}
+                                    <select name="tipo" class="form-select form-select-sm" style="width:150px;" required>
+                                        <option value="">Perfil...</option>
+                                        {% for valor, label in tipos %}
+                                            {% if valor != 'administrador' %}
+                                            <option value="{{ valor }}">{{ label }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-primary" title="Aprovar">
+                                        <i class="bi bi-check-lg"></i> Aprovar
+                                    </button>
+                                </form>
+
+                                {# Recusar: um clique (com confirmação) #}
+                                <form method="post" action="{% url 'recusar_solicitacao' u.pk %}"
+                                      onsubmit="return confirm('Recusar a solicitação de {{ u.email|escapejs }}?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Recusar">
+                                        <i class="bi bi-x-lg"></i> Recusar
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ---- Usuários ativos ---- #}
+<div class="card">
+    <div class="card-body">
+        <div class="d-flex align-items-center gap-2 mb-3">
+            <i class="bi bi-people text-secondary" style="font-size:1.1rem;"></i>
+            <h5 class="fw-bold mb-0">Usuários ativos</h5>
+        </div>
+
+        {% if usuarios %}
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>E-mail</th>
+                        <th>Perfil</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in usuarios %}
+                    <tr>
+                        <td class="fw-bold">{{ u.get_full_name|default:"—" }}</td>
+                        <td style="font-size:0.85rem;">{{ u.email }}</td>
+                        <td>
+                            <span class="dito-status dito-status-{{ u.tipo }}">{{ u.get_tipo_display }}</span>
+                        </td>
+                        <td>
+                            {% if u.is_active %}
+                            <span style="color:#2E7D5B; font-size:0.8rem;"><i class="bi bi-check-circle me-1"></i>Ativo</span>
+                            {% else %}
+                            <span class="text-secondary" style="font-size:0.8rem;"><i class="bi bi-slash-circle me-1"></i>Inativo</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="dito-empty-state py-4">
+            <i class="bi bi-people"></i>
+            <p>Nenhum usuário ativo ainda.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

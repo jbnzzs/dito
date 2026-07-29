@@ -5,19 +5,44 @@ from .models import Usuario, StatusWorkflow, Imagem, Descricao, Trecho, Historic
 
 @admin.register(Usuario)
 class UsuarioAdmin(UserAdmin):
-    list_display = ("username", "get_full_name", "email", "tipo", "is_active")
-    list_filter = ("tipo", "is_active", "is_staff")
-    search_fields = ("username", "first_name", "last_name", "email")
-    fieldsets = UserAdmin.fieldsets + (
-        ("Perfil Dito!", {
-            "fields": ("tipo", "contrato_inicio", "contrato_fim"),
+    # Login é por e-mail: o Admin precisa refletir isso
+    ordering = ("-date_joined",)
+    list_display = ("email", "get_full_name", "tipo", "situacao", "is_active", "date_joined")
+    list_filter = ("tipo", "situacao", "is_active", "is_staff")
+    search_fields = ("email", "first_name", "last_name")
+    list_editable = ("tipo", "is_active")
+
+    # Edição de um usuário existente
+    fieldsets = (
+        ("Acesso", {"fields": ("email", "password")}),
+        ("Dados pessoais", {"fields": ("first_name", "last_name")}),
+        ("Perfil no Dito!", {"fields": ("tipo", "situacao", "contrato_inicio", "contrato_fim")}),
+        ("Aprovação", {"fields": ("aprovado_por", "decidido_em", "observacao_decisao")}),
+        ("Permissões", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
+        ("Datas", {"fields": ("last_login", "date_joined")}),
+    )
+
+    # Criação de um novo usuário (o Admin pede e-mail + senha, não username)
+    add_fieldsets = (
+        (None, {
+            "classes": ("wide",),
+            "fields": ("email", "password1", "password2", "tipo"),
         }),
     )
-    add_fieldsets = UserAdmin.add_fieldsets + (
-        ("Perfil Dito!", {
-            "fields": ("tipo", "contrato_inicio", "contrato_fim"),
-        }),
-    )
+
+    readonly_fields = ("date_joined", "last_login", "decidido_em")
+
+    actions = ["ativar_usuarios", "desativar_usuarios"]
+
+    @admin.action(description="Ativar usuários selecionados")
+    def ativar_usuarios(self, request, queryset):
+        n = queryset.update(is_active=True)
+        self.message_user(request, f"{n} usuário(s) ativado(s).")
+
+    @admin.action(description="Desativar usuários selecionados")
+    def desativar_usuarios(self, request, queryset):
+        n = queryset.update(is_active=False)
+        self.message_user(request, f"{n} usuário(s) desativado(s).")
 
 
 @admin.register(StatusWorkflow)

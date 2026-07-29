@@ -10,7 +10,7 @@
 <div class="d-flex align-items-start justify-content-between mb-4 flex-wrap gap-3">
     <div>
         <h2 class="mb-1">
-            {{ saudacao }}, {{ request.user.first_name|default:request.user.username }}!
+            {{ saudacao }}, {{ request.user.first_name|default:request.user.email }}!
         </h2>
         <p class="text-secondary mb-0" style="font-size: 0.875rem;">
             <i class="bi bi-calendar3 me-1"></i>{{ hoje }}
@@ -134,7 +134,7 @@
                         <td>{{ item.get_tipo_acao_display }}</td>
                         <td><span class="dito-retranca">{{ item.imagem.retranca }}</span></td>
                         <td class="text-secondary">
-                            {{ item.usuario.get_full_name|default:item.usuario.username }}
+                            {% if item.usuario %}{{ item.usuario.get_full_name|default:item.usuario.email }}{% else %}—{% endif %}
                         </td>
                     </tr>
                     {% endfor %}

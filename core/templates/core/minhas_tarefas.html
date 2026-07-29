@@ -128,7 +128,7 @@
                         {% if request.user.tipo == 'coordenador' or request.user.tipo == 'administrador' %}
                         <td style="font-size:0.875rem;">
                             {% if img.responsavel %}
-                                {{ img.responsavel.get_full_name|default:img.responsavel.username }}
+                                {{ img.responsavel.get_full_name|default:img.responsavel.email }}
                             {% else %}
                                 <span class="text-secondary">—</span>
                             {% endif %}

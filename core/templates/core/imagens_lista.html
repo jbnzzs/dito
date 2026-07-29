@@ -102,7 +102,7 @@
                 <input type="text" name="resp_descricao" class="form-control" list="listaDescritores"
                        placeholder="Digite ou selecione..." value="{{ resp_descricao_f }}">
                 <datalist id="listaDescritores">
-                    {% for d in descritores %}<option value="{{ d.get_full_name|default:d.username }}">{% endfor %}
+                    {% for d in descritores %}<option value="{{ d.get_full_name|default:d.email }}">{% endfor %}
                 </datalist>
             </div>
 
@@ -111,7 +111,7 @@
                 <input type="text" name="resp_revisao" class="form-control" list="listaRevisores"
                        placeholder="Digite ou selecione..." value="{{ resp_revisao_f }}">
                 <datalist id="listaRevisores">
-                    {% for r in revisores %}<option value="{{ r.get_full_name|default:r.username }}">{% endfor %}
+                    {% for r in revisores %}<option value="{{ r.get_full_name|default:r.email }}">{% endfor %}
                 </datalist>
             </div>
 
@@ -201,11 +201,11 @@
                             <div class="dito-celula-dupla">
                                 <span class="dito-responsavel-linha">
                                     <span class="rotulo">Descritor:</span>
-                                    {% if img.descricao.descritor %}{{ img.descricao.descritor.get_full_name|default:img.descricao.descritor.username }}{% else %}—{% endif %}
+                                    {% if img.descricao.descritor %}{{ img.descricao.descritor.get_full_name|default:img.descricao.descritor.email }}{% else %}—{% endif %}
                                 </span>
                                 <span class="dito-responsavel-linha">
                                     <span class="rotulo">Revisor:</span>
-                                    {% if img.descricao.revisor %}{{ img.descricao.revisor.get_full_name|default:img.descricao.revisor.username }}{% else %}—{% endif %}
+                                    {% if img.descricao.revisor %}{{ img.descricao.revisor.get_full_name|default:img.descricao.revisor.email }}{% else %}—{% endif %}
                                 </span>
                             </div>
                         </td>
@@ -290,7 +290,7 @@
                                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
                                     <select name="descritor_id" class="form-select form-select-sm" required>
                                         <option value="">Descritor...</option>
-                                        {% for d in descritores %}<option value="{{ d.pk }}">{{ d.get_full_name|default:d.username }}</option>{% endfor %}
+                                        {% for d in descritores %}<option value="{{ d.pk }}">{{ d.get_full_name|default:d.email }}</option>{% endfor %}
                                     </select>
                                 </form>
 
@@ -300,7 +300,7 @@
                                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
                                     <select name="revisor_id" class="form-select form-select-sm" required>
                                         <option value="">Revisor...</option>
-                                        {% for r in revisores %}<option value="{{ r.pk }}">{{ r.get_full_name|default:r.username }}</option>{% endfor %}
+                                        {% for r in revisores %}<option value="{{ r.pk }}">{{ r.get_full_name|default:r.email }}</option>{% endfor %}
                                     </select>
                                 </form>
                                 {% endif %}

@@ -40,19 +40,14 @@ if _hosts_extra:
 # Application definition
 
 INSTALLED_APPS = [
+    "core",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    # Apps do Dito!
-    "core",
 ]
-
-# Debug Toolbar — só em desenvolvimento
-if DEBUG:
-    INSTALLED_APPS += ["debug_toolbar"]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

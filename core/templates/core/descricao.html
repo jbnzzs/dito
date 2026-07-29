@@ -330,14 +330,14 @@
                     {% if imagem.responsavel %}
                     <div>
                         <div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Responsável</div>
-                        <div>{{ imagem.responsavel.get_full_name|default:imagem.responsavel.username }}</div>
+                        <div>{{ imagem.responsavel.get_full_name|default:imagem.responsavel.email }}</div>
                         <div class="text-secondary" style="font-size:0.75rem;">{{ imagem.responsavel.get_tipo_display }}</div>
                     </div>
                     {% endif %}
                     {% if descricao and descricao.descritor %}
                     <div>
                         <div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Descritor</div>
-                        <div>{{ descricao.descritor.get_full_name|default:descricao.descritor.username }}</div>
+                        <div>{{ descricao.descritor.get_full_name|default:descricao.descritor.email }}</div>
                     </div>
                     {% endif %}
                 </div>

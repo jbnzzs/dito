@@ -1603,3 +1603,122 @@ def devolver_lote(request, pk):
             f"{len(pendentes)} imagem(ns) concluída(s)."
         ),
     })
+
+# ============================================================
+# SOLICITAÇÃO PÚBLICA DE ACESSO
+# ============================================================
+
+def solicitar_acesso(request):
+    """
+    Tela pública: qualquer pessoa pode solicitar acesso ao Dito!.
+    O usuário é criado como PENDENTE e inativo. O administrador
+    aprova e define o perfil posteriormente.
+    """
+    from .forms import SolicitacaoAcessoForm
+
+    if request.user.is_authenticated:
+        return redirect("dashboard")
+
+    if request.method == "POST":
+        form = SolicitacaoAcessoForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return render(request, "registration/solicitacao_enviada.html")
+    else:
+        form = SolicitacaoAcessoForm()
+
+    return render(request, "registration/solicitar_acesso.html", {"form": form})
+
+# ============================================================
+# GESTÃO DE USUÁRIOS (Administrador)
+# ============================================================
+
+def _apenas_admin(user):
+    return user.is_authenticated and user.tipo == Usuario.Tipo.ADMINISTRADOR
+
+
+@login_required
+def usuarios_lista(request):
+    """
+    Tela de gestão de usuários, restrita ao Administrador.
+    Mostra as solicitações pendentes no topo e os usuários ativos abaixo.
+    """
+    if not _apenas_admin(request.user):
+        messages.error(request, "Apenas administradores podem acessar a gestão de usuários.")
+        return redirect("dashboard")
+
+    pendentes = Usuario.objects.filter(
+        situacao=Usuario.Situacao.PENDENTE
+    ).order_by("date_joined")
+
+    usuarios = Usuario.objects.filter(
+        situacao=Usuario.Situacao.APROVADO
+    ).order_by("first_name", "email")
+
+    ctx = {
+        "pendentes": pendentes,
+        "usuarios": usuarios,
+        "total_pendentes": pendentes.count(),
+        "tipos": Usuario.Tipo.choices,
+    }
+    return render(request, "core/usuarios_lista.html", ctx)
+
+
+@login_required
+@require_POST
+def aprovar_solicitacao(request, pk):
+    """Aprova uma solicitação, definindo o perfil e ativando o acesso."""
+    from django.utils import timezone
+
+    if not _apenas_admin(request.user):
+        messages.error(request, "Apenas administradores podem aprovar solicitações.")
+        return redirect("dashboard")
+
+    solicitante = get_object_or_404(Usuario, pk=pk, situacao=Usuario.Situacao.PENDENTE)
+    tipo = request.POST.get("tipo")
+
+    tipos_validos = [t[0] for t in Usuario.Tipo.choices]
+    if tipo not in tipos_validos:
+        messages.error(request, "Selecione um perfil válido para aprovar.")
+        return redirect("usuarios_lista")
+
+    solicitante.tipo = tipo
+    solicitante.situacao = Usuario.Situacao.APROVADO
+    solicitante.is_active = True
+    solicitante.aprovado_por = request.user
+    solicitante.decidido_em = timezone.now()
+    solicitante.save()
+
+    messages.success(
+        request,
+        f"{solicitante.get_full_name() or solicitante.email} aprovado(a) como "
+        f"{solicitante.get_tipo_display()}."
+    )
+    return redirect("usuarios_lista")
+
+
+@login_required
+@require_POST
+def recusar_solicitacao(request, pk):
+    """Recusa uma solicitação. O registro é mantido, mas o acesso não é liberado."""
+    from django.utils import timezone
+
+    if not _apenas_admin(request.user):
+        messages.error(request, "Apenas administradores podem recusar solicitações.")
+        return redirect("dashboard")
+
+    solicitante = get_object_or_404(Usuario, pk=pk, situacao=Usuario.Situacao.PENDENTE)
+    observacao = request.POST.get("observacao", "").strip()
+
+    solicitante.situacao = Usuario.Situacao.RECUSADO
+    solicitante.is_active = False
+    solicitante.aprovado_por = request.user
+    solicitante.decidido_em = timezone.now()
+    solicitante.observacao_decisao = observacao
+    solicitante.save()
+
+    messages.success(
+        request,
+        f"Solicitação de {solicitante.get_full_name() or solicitante.email} recusada."
+    )
+    return redirect("usuarios_lista")

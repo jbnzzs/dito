@@ -294,19 +294,20 @@
             {% if form.errors %}
             <div class="login-erro">
                 <i class="bi bi-exclamation-circle me-1"></i>
-                Usuário ou senha inválidos. Tente novamente.
+                E-mail ou senha inválidos. Tente novamente.
             </div>
             {% endif %}
 
             <form method="post">
                 {% csrf_token %}
 
-                <label for="id_username">Usuário</label>
+                <label for="id_username">E-mail</label>
                 <input
-                    type="text"
+                    type="email"
                     id="id_username"
                     name="username"
-                    placeholder="Seu nome de usuário"
+                    placeholder="seu.email@scriba.com.br"
+                    autocomplete="email"
                     autofocus
                     value="{{ form.username.value|default:'' }}"
                 >
@@ -320,6 +321,7 @@
                     id="id_password"
                     name="password"
                     placeholder="Sua senha"
+                    autocomplete="current-password"
                 >
 
                 <button type="submit" class="btn-login">
@@ -330,7 +332,11 @@
 
             <div class="login-aviso">
                 <i class="bi bi-info-circle me-1"></i>
-                O acesso ao Dito! é restrito. Se você ainda não possui uma conta, entre em contato com o coordenador responsável.
+                O acesso ao Dito! é restrito e depende de aprovação.
+                Ainda não tem uma conta?
+                <a href="{% url 'solicitar_acesso' %}" style="color:#A62E38; font-weight:700; text-decoration:none;">
+                    Solicitar acesso
+                </a>.
             </div>
 
             <p class="login-rodape">Dito! · Scriba — Soluções Editoriais</p>

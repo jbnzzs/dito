@@ -104,7 +104,7 @@
                     <div class="d-flex flex-wrap gap-3 text-secondary" style="font-size:0.75rem;">
                         <span><i class="bi bi-images me-1"></i>{{ item.total }} imagem{{ item.total|pluralize }}</span>
                         {% if eh_coordenacao %}
-                        <span><i class="bi bi-person me-1"></i>{{ item.obj.criado_por.get_full_name|default:item.obj.criado_por.username }}</span>
+                        <span><i class="bi bi-person me-1"></i>{{ item.obj.criado_por.get_full_name|default:item.obj.criado_por.email }}</span>
                         <span><i class="bi bi-calendar-plus me-1"></i>{{ item.obj.criado_em|date:"d/m/Y" }}</span>
                         {% endif %}
                         {% if item.obj.prazo %}
@@ -196,7 +196,7 @@
                         <select name="usuario_id" class="form-select form-select-sm" style="width:180px;" required>
                             <option value="">Descritor...</option>
                             {% for d in descritores %}
-                            <option value="{{ d.pk }}">{{ d.get_full_name|default:d.username }}</option>
+                            <option value="{{ d.pk }}">{{ d.get_full_name|default:d.email }}</option>
                             {% endfor %}
                         </select>
                         <button type="submit" class="btn btn-sm btn-primary">
@@ -211,7 +211,7 @@
                         <select name="usuario_id" class="form-select form-select-sm" style="width:180px;" required>
                             <option value="">Revisor...</option>
                             {% for r in revisores %}
-                            <option value="{{ r.pk }}">{{ r.get_full_name|default:r.username }}</option>
+                            <option value="{{ r.pk }}">{{ r.get_full_name|default:r.email }}</option>
                             {% endfor %}
                         </select>
                         <button type="submit" class="btn btn-sm btn-primary">

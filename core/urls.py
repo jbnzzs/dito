@@ -20,6 +20,7 @@ urlpatterns = [
     path("imagens/<int:pk>/atualizar-pagamento/", views.atualizar_pagamento, name="atualizar_pagamento"),
     path("imagens/<int:pk>/proxima-do-lote/", views.proxima_imagem_lote, name="proxima_imagem_lote"),
     path("imagens/<int:pk>/devolver-lote/", views.devolver_lote, name="devolver_lote"),
+    path("solicitar-acesso/", views.solicitar_acesso, name="solicitar_acesso"),
 
     # ---- Lotes ----
     path("lotes/", views.lotes_lista, name="lotes_lista"),
@@ -27,5 +28,13 @@ urlpatterns = [
     path("lotes/<int:lote_id>/atribuir/", views.atribuir_lote, name="atribuir_lote"),
     path("lotes/<int:pk>/editar/", views.lote_editar, name="lote_editar"),
 
+
+    # ---- Usuários ----
+    path("usuarios/", views.usuarios_lista, name="usuarios_lista"),
+    path("usuarios/<int:pk>/aprovar/", views.aprovar_solicitacao, name="aprovar_solicitacao"),
+    path("usuarios/<int:pk>/recusar/", views.recusar_solicitacao, name="recusar_solicitacao"),
+
     path("teste/", views.teste, name="teste"),
+
+
 ]

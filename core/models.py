@@ -1,10 +1,45 @@
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 
 
 # ============================================================
 # USUÁRIO CUSTOMIZADO
 # ============================================================
+
+class UsuarioManager(BaseUserManager):
+    """Manager que cria usuários usando e-mail como identificador principal."""
+    use_in_migrations = True
+
+    def _gerar_username(self, email):
+        # username interno derivado do e-mail; o Django ainda o exige internamente
+        base = email.split("@")[0]
+        username = base
+        contador = 1
+        while self.model.objects.filter(username=username).exists():
+            username = f"{base}{contador}"
+            contador += 1
+        return username
+
+    def create_user(self, email, password=None, **extra_fields):
+        if not email:
+            raise ValueError("O e-mail é obrigatório.")
+        email = self.normalize_email(email)
+        extra_fields.setdefault("username", self._gerar_username(email))
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email, password=None, **extra_fields):
+        extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_superuser", True)
+        extra_fields.setdefault("tipo", "administrador")
+        if extra_fields.get("is_staff") is not True:
+            raise ValueError("Superusuário precisa de is_staff=True.")
+        if extra_fields.get("is_superuser") is not True:
+            raise ValueError("Superusuário precisa de is_superuser=True.")
+        return self.create_user(email, password, **extra_fields)
+
 
 class Usuario(AbstractUser):
 
@@ -13,6 +48,13 @@ class Usuario(AbstractUser):
         COORDENADOR = "coordenador", "Coordenador"
         DESCRITOR = "descritor", "Descritor"
         REVISOR = "revisor", "Revisor"
+
+    class Situacao(models.TextChoices):
+        PENDENTE = "pendente", "Pendente de aprovação"
+        APROVADO = "aprovado", "Aprovado"
+        RECUSADO = "recusado", "Recusado"
+
+    email = models.EmailField("E-mail", unique=True)
 
     tipo = models.CharField(
         max_length=20,
@@ -31,12 +73,43 @@ class Usuario(AbstractUser):
         verbose_name="Fim do contrato",
     )
 
+    situacao = models.CharField(
+        max_length=20,
+        choices=Situacao.choices,
+        default=Situacao.APROVADO,
+        verbose_name="Situação do cadastro",
+        help_text="Solicitações pela tela pública nascem como 'Pendente'.",
+    )
+    aprovado_por = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="usuarios_aprovados",
+        verbose_name="Aprovado/recusado por",
+    )
+    decidido_em = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Data da decisão",
+    )
+    observacao_decisao = models.TextField(
+        blank=True,
+        verbose_name="Observação da decisão",
+        help_text="Motivo da recusa ou observação do administrador.",
+    )
+
+    objects = UsuarioManager()
+
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = []
+
     class Meta:
         verbose_name = "Usuário"
         verbose_name_plural = "Usuários"
 
     def __str__(self):
-        return f"{self.get_full_name() or self.username} ({self.get_tipo_display()})"
+        return f"{self.get_full_name() or self.email} ({self.get_tipo_display()})"
 
     @property
     def contrato_ativo(self):
@@ -47,6 +120,13 @@ class Usuario(AbstractUser):
             return self.contrato_inicio <= hoje <= self.contrato_fim
         return True
 
+    @property
+    def esta_pendente(self):
+        return self.situacao == self.Situacao.PENDENTE
+
+    @property
+    def foi_recusado(self):
+        return self.situacao == self.Situacao.RECUSADO
 
 # ============================================================
 # WORKFLOW
