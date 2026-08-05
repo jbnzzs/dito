@@ -44,10 +44,10 @@ def _imagens_do_lote_para_usuario(lote, usuario):
         filtro_responsavel = {}
     elif usuario.tipo == Usuario.Tipo.DESCRITOR:
         slugs_pendentes = ["liberado-descricao", "descrevendo"]
-        filtro_responsavel = {"responsavel": usuario}
+        filtro_responsavel = {"responsavel": usuario, "pronto_para_lote": False}
     elif usuario.tipo == Usuario.Tipo.REVISOR:
         slugs_pendentes = ["liberado-conferencia", "em-conferencia"]
-        filtro_responsavel = {"responsavel": usuario}
+        filtro_responsavel = {"responsavel": usuario, "pronto_para_lote": False}
     else:
         return Imagem.objects.none()
 
@@ -61,20 +61,52 @@ def _imagens_do_lote_para_usuario(lote, usuario):
         .order_by("retranca")
     )
 
-
 def _proxima_imagem_do_lote(imagem_atual, usuario):
     """
-    Retorna a próxima imagem pendente do mesmo lote (após a atual, na ordem
-    por retranca), ou None se a imagem atual for a última pendente.
+    Próxima imagem NÃO marcada como pronta no mesmo lote. Primeiro tenta
+    a próxima na ordem (retranca maior); se não houver mais à frente,
+    volta para o começo da fila — permite começar pelo meio do lote sem
+    deixar imagens anteriores de fora.
     """
     if not imagem_atual.lote:
         return None
 
-    return (
-        _imagens_do_lote_para_usuario(imagem_atual.lote, usuario)
-        .filter(retranca__gt=imagem_atual.retranca)
-        .first()
-    )
+    escopo = _imagens_do_lote_para_usuario(imagem_atual.lote, usuario).exclude(pk=imagem_atual.pk)
+
+    proxima = escopo.filter(retranca__gt=imagem_atual.retranca).order_by("retranca").first()
+    if proxima:
+        return proxima
+
+    return escopo.order_by("retranca").first()
+
+def _escopo_fixo_do_lote(lote, usuario):
+    """
+    Todas as imagens do lote que pertencem à fase deste usuário,
+    independente do status atual — usado só para numerar a posição fixa
+    'X/Y' na tela de descrição, sem encolher conforme o lote é concluído.
+    """
+    from django.db.models import Q
+
+    if usuario.tipo in (Usuario.Tipo.COORDENADOR, Usuario.Tipo.ADMINISTRADOR):
+        return Imagem.objects.filter(lote=lote, ativo=True).order_by("retranca")
+
+    if usuario.tipo == Usuario.Tipo.DESCRITOR:
+        return (
+            Imagem.objects.filter(lote=lote, ativo=True)
+            .filter(Q(responsavel=usuario) | Q(descricao__descritor=usuario))
+            .distinct()
+            .order_by("retranca")
+        )
+
+    if usuario.tipo == Usuario.Tipo.REVISOR:
+        return (
+            Imagem.objects.filter(lote=lote, ativo=True)
+            .filter(Q(responsavel=usuario) | Q(descricao__revisor=usuario))
+            .distinct()
+            .order_by("retranca")
+        )
+
+    return Imagem.objects.none()
 
 def _apenas_coordenador(usuario):
     return usuario.tipo in (usuario.Tipo.ADMINISTRADOR, usuario.Tipo.COORDENADOR)
@@ -148,6 +180,7 @@ def dashboard(request):
 @login_required
 def minhas_tarefas(request):
     from django.core.paginator import Paginator
+    from .models import filtro_autoria_imagem
 
     usuario = request.user
     status_slug = request.GET.get("status", "")
@@ -196,9 +229,8 @@ def minhas_tarefas(request):
     else:
         tarefas = Imagem.objects.filter(
             ativo=True,
-            responsavel=usuario,
             status__slug__in=slugs_visiveis,
-        )
+        ).filter(filtro_autoria_imagem(usuario)).distinct()
 
     # Filtros
     if status_slug:
@@ -223,7 +255,7 @@ def minhas_tarefas(request):
 
     base_contadores = Imagem.objects.filter(ativo=True, status__slug__in=slugs_visiveis)
     if usuario.tipo not in (usuario.Tipo.COORDENADOR, usuario.Tipo.ADMINISTRADOR):
-        base_contadores = base_contadores.filter(responsavel=usuario)
+        base_contadores = base_contadores.filter(filtro_autoria_imagem(usuario)).distinct()
 
     if sem_lote:
         base_contadores = base_contadores.filter(lote__isnull=True)
@@ -653,28 +685,46 @@ def descricao_imagem(request, pk):
 
     # ---- Verificar permissão de acesso ----
     pode_editar = False
+    pode_visualizar = False
+    somente_leitura = False
     motivo_bloqueio = None
+
+    def _era_dono(campo_bloqueio, campo_dono):
+        return descricao and getattr(descricao, campo_dono + "_id", None) == usuario.id and getattr(descricao, campo_bloqueio)
 
     if usuario.tipo in (usuario.Tipo.ADMINISTRADOR, usuario.Tipo.COORDENADOR):
         pode_editar = True
+        pode_visualizar = True
 
     elif usuario.tipo == usuario.Tipo.DESCRITOR:
-        if imagem.status.slug not in ("liberado-descricao", "descrevendo"):
-            motivo_bloqueio = "Esta imagem não está disponível para descrição."
-        elif descricao and descricao.descritor_bloqueado:
-            motivo_bloqueio = "Seu acesso a esta descrição foi bloqueado após o salvamento. Somente o coordenador pode liberar novamente."
-        elif imagem.responsavel and imagem.responsavel != usuario:
-            motivo_bloqueio = "Esta tarefa está atribuída a outro descritor."
-        else:
+        if _era_dono("descritor_bloqueado", "descritor"):
+            pode_visualizar = True
+            somente_leitura = True
+            motivo_bloqueio = "Você já enviou esta descrição. Somente o coordenador pode liberar novamente para edição."
+        elif (imagem.status.slug in ("liberado-descricao", "descrevendo")
+              and (not imagem.responsavel or imagem.responsavel == usuario)):
             pode_editar = True
+            pode_visualizar = True
+        elif descricao and descricao.descritor_id == usuario.id:
+            pode_visualizar = True
+            somente_leitura = True
+        else:
+            motivo_bloqueio = "Esta imagem não está disponível para você."
 
     elif usuario.tipo == usuario.Tipo.REVISOR:
-        if imagem.status.slug not in ("liberado-conferencia", "em-conferencia"):
-            motivo_bloqueio = "Esta imagem não está disponível para conferência."
-        elif imagem.responsavel and imagem.responsavel != usuario:
-            motivo_bloqueio = "Esta tarefa está atribuída a outro revisor."
-        else:
+        if _era_dono("revisor_bloqueado", "revisor"):
+            pode_visualizar = True
+            somente_leitura = True
+            motivo_bloqueio = "Você já concluiu a conferência. Somente o coordenador pode liberar novamente para edição."
+        elif (imagem.status.slug in ("liberado-conferencia", "em-conferencia")
+              and (not imagem.responsavel or imagem.responsavel == usuario)):
             pode_editar = True
+            pode_visualizar = True
+        elif descricao and descricao.revisor_id == usuario.id:
+            pode_visualizar = True
+            somente_leitura = True
+        else:
+            motivo_bloqueio = "Esta imagem não está disponível para você."
 
     else:
         motivo_bloqueio = "Você não tem permissão para acessar esta tela."
@@ -692,6 +742,10 @@ def descricao_imagem(request, pk):
         elif usuario.tipo == usuario.Tipo.REVISOR and imagem.status.slug == "liberado-conferencia":
             novo_slug = "em-conferencia"
             tipo_acao = HistoricoItem.TipoAcao.CONFERENCIA_INICIADA
+            # Registra quem é o revisor desta descrição (campo antes nunca preenchido).
+            if descricao and not descricao.revisor:
+                descricao.revisor = usuario
+                descricao.save()
 
         if novo_slug:
             novo_status = StatusWorkflow.objects.get(slug=novo_slug)
@@ -733,19 +787,18 @@ def descricao_imagem(request, pk):
     todos.sort(key=lambda x: x["nome"])
     idiomas_json = json.dumps(prioritarios + todos, ensure_ascii=False)
 
-    # ---- Posição da imagem dentro do lote (contador "2/10") ----
+    # ---- Posição fixa da imagem dentro do lote (contador "2/10") ----
     lote_posicao = None
     lote_total = None
     lote_eh_ultima = False
 
     if imagem.lote:
-        escopo = _imagens_do_lote_para_usuario(imagem.lote, usuario)
-        ids = list(escopo.values_list("pk", flat=True))
-        lote_total = len(ids)
-        if imagem.pk in ids:
-            lote_posicao = ids.index(imagem.pk) + 1
+        fixo = _escopo_fixo_do_lote(imagem.lote, usuario)
+        ids_fixos = list(fixo.values_list("pk", flat=True))
+        lote_total = len(ids_fixos)
+        if imagem.pk in ids_fixos:
+            lote_posicao = ids_fixos.index(imagem.pk) + 1
 
-        # Última imagem pendente: não há próxima para este usuário
         lote_eh_ultima = _proxima_imagem_do_lote(imagem, usuario) is None
 
     ctx = {
@@ -753,6 +806,8 @@ def descricao_imagem(request, pk):
         "descricao": descricao,
         "trechos": trechos,
         "pode_editar": pode_editar,
+        "pode_visualizar": pode_visualizar,
+        "somente_leitura": somente_leitura,
         "motivo_bloqueio": motivo_bloqueio,
         "idiomas_json": idiomas_json,
         "lote_posicao": lote_posicao,
@@ -808,6 +863,7 @@ def salvar_trecho(request, pk):
     )
 
     trechos_data = body.get("trechos", [])
+    marcar_pronto = body.get("marcar_pronto_lote", False)   # <<< LINHA NOVA
 
     with transaction.atomic():
         descricao.trechos.all().delete()
@@ -828,6 +884,12 @@ def salvar_trecho(request, pk):
 
         Trecho.objects.bulk_create(novos)
 
+        # <<< BLOCO NOVO — vai aqui, depois do bulk_create >>>
+        if marcar_pronto and imagem.lote:
+            imagem.pronto_para_lote = True
+            imagem.save(update_fields=["pronto_para_lote"])
+        # <<< FIM DO BLOCO NOVO >>>
+
         # ---- Registrar histórico: início da descrição pelo Descritor ----
         if usuario.tipo == usuario.Tipo.DESCRITOR and criada:
             HistoricoItem.objects.create(
@@ -843,83 +905,114 @@ def salvar_trecho(request, pk):
 @login_required
 @require_POST
 def avancar_status(request, pk):
-    """Avança o status da imagem no workflow, registrando o tipo_acao específico."""
+    """
+    Avança o status da imagem no workflow. Motor genérico baseado nos campos
+    do StatusWorkflow (perfil_responsavel, exige_atribuicao, is_final).
+    Quando o próximo status pertence a um perfil diferente (handoff de
+    fase), tranca o acesso de quem está saindo — preservando quem fez
+    o quê nos campos descricao.descritor/.revisor, que nunca mudam.
+    """
     from django.shortcuts import get_object_or_404
     from .models import HistoricoItem
 
     imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
     usuario = request.user
+    status_atual = imagem.status
 
-    # Transições bloqueadas: exigem ação específica do Coordenador, não o botão genérico
-    BLOQUEADOS = {
-        "liberado-descricao": "Atribua um descritor antes de avançar (ação 'Atribuir' na listagem de imagens).",
-        "descrito": "Libere a tarefa para um revisor antes de avançar (ação 'Liberar para revisor' na listagem de imagens).",
-        "liberado-conferencia": "Aguardando o revisor abrir a tarefa para iniciar a conferência.",
-    }
-    if imagem.status.slug in BLOQUEADOS:
-        return JsonResponse({"ok": False, "erro": BLOQUEADOS[imagem.status.slug]}, status=400)
-
-    # Mapa de transição: slug atual -> (próximo slug, tipo_acao)
-    FLUXO = {
-        "descrevendo":     ("descrito",   HistoricoItem.TipoAcao.DESCRICAO_SALVA),
-        "em-conferencia":  ("conferido",  HistoricoItem.TipoAcao.CONFERENCIA_CONCLUIDA),
-        "conferido":       ("revisando",  HistoricoItem.TipoAcao.REVISAO_INICIADA),
-        "revisando":       ("revisado",   HistoricoItem.TipoAcao.REVISAO_CONCLUIDA),
-        "revisado":        ("finalizado", HistoricoItem.TipoAcao.DESCRICAO_FINALIZADA),
+    TIPO_ACAO_POR_DESTINO = {
+        "descrito":   HistoricoItem.TipoAcao.DESCRICAO_SALVA,
+        "conferido":  HistoricoItem.TipoAcao.CONFERENCIA_CONCLUIDA,
+        "revisando":  HistoricoItem.TipoAcao.REVISAO_INICIADA,
+        "revisado":   HistoricoItem.TipoAcao.REVISAO_CONCLUIDA,
+        "finalizado": HistoricoItem.TipoAcao.DESCRICAO_FINALIZADA,
     }
 
-    transicao = FLUXO.get(imagem.status.slug)
-    if not transicao:
-        return JsonResponse({"ok": False, "erro": "Status final atingido."}, status=400)
+    if status_atual.is_final:
+        return JsonResponse({"ok": False, "erro": "Esta imagem já está finalizada."}, status=400)
 
-    proximo_slug, tipo_acao = transicao
+    if status_atual.exige_atribuicao and not imagem.responsavel:
+        return JsonResponse({
+            "ok": False,
+            "erro": (
+                f"Atribua um(a) {status_atual.get_perfil_responsavel_display().lower()} "
+                "antes de avançar (ação de atribuição na listagem de imagens)."
+            ),
+        }, status=400)
 
-    try:
-        proximo_status = StatusWorkflow.objects.get(slug=proximo_slug)
-    except StatusWorkflow.DoesNotExist:
-        return JsonResponse({"ok": False, "erro": "Status não encontrado."}, status=400)
+    if usuario.tipo != Usuario.Tipo.ADMINISTRADOR and usuario.tipo != status_atual.perfil_responsavel:
+        return JsonResponse(
+            {"ok": False, "erro": "Você não tem permissão para avançar esta tarefa."},
+            status=403,
+        )
 
-    status_anterior = imagem.status
+    proximo_status = status_atual.proximo()
+    if not proximo_status:
+        return JsonResponse(
+            {"ok": False, "erro": "Não há próximo status configurado após este."}, status=400
+        )
+
+    tipo_acao = TIPO_ACAO_POR_DESTINO.get(proximo_status.slug, HistoricoItem.TipoAcao.STATUS_ALTERADO)
     descricao = getattr(imagem, "descricao", None)
+    mudou_perfil = proximo_status.perfil_responsavel != status_atual.perfil_responsavel
 
     with transaction.atomic():
+        autoatribuido = False
+
+        # ---- INÍCIO DO TRECHO NOVO (bloqueio simétrico) ----
+        if mudou_perfil:
+            if descricao and status_atual.perfil_responsavel == Usuario.Tipo.DESCRITOR:
+                descricao.descritor_bloqueado = True
+                descricao.save()
+                HistoricoItem.objects.create(
+                    imagem=imagem,
+                    descricao=descricao,
+                    usuario=usuario,
+                    tipo_acao=HistoricoItem.TipoAcao.DESCRITOR_BLOQUEADO,
+                    status_anterior=status_atual,
+                    novo_status=proximo_status,
+                    observacao="Acesso do descritor bloqueado automaticamente após o envio.",
+                )
+            elif descricao and status_atual.perfil_responsavel == Usuario.Tipo.REVISOR:
+                descricao.revisor_bloqueado = True
+                descricao.save()
+                HistoricoItem.objects.create(
+                    imagem=imagem,
+                    descricao=descricao,
+                    usuario=usuario,
+                    tipo_acao=HistoricoItem.TipoAcao.REVISOR_BLOQUEADO,
+                    status_anterior=status_atual,
+                    novo_status=proximo_status,
+                    observacao="Acesso do revisor bloqueado automaticamente após a conferência.",
+                )
+
+            if usuario.tipo == proximo_status.perfil_responsavel:
+                imagem.responsavel = usuario
+                autoatribuido = True
+            else:
+                imagem.responsavel = None
+        # ---- FIM DO TRECHO NOVO ----
+        # se o perfil não mudou, o responsável permanece o mesmo
+
         imagem.status = proximo_status
-
-        # ---- Regra de responsável por transição ----
-        if proximo_slug == "descrito":
-            # Volta para a fila do coordenador — sem dono específico
-            imagem.responsavel = None
-
-        elif proximo_slug == "conferido":
-            # Volta para a fila do coordenador — sem dono específico
-            imagem.responsavel = None
-
-        elif proximo_slug == "revisando":
-            # Coordenador que clicou assume a revisão final
-            imagem.responsavel = usuario
-            if descricao and not descricao.coordenador:
-                descricao.coordenador = usuario
-                descricao.save()
-
-        elif proximo_slug == "finalizado":
-            if descricao:
-                descricao.finalizado = True
-                descricao.save()
-
         imagem.save()
+
+        if autoatribuido and usuario.tipo == Usuario.Tipo.COORDENADOR and descricao and not descricao.coordenador:
+            descricao.coordenador = usuario
+            descricao.save()
+
+        if proximo_status.is_final and descricao:
+            descricao.finalizado = True
+            descricao.save()
 
         HistoricoItem.objects.create(
             imagem=imagem,
             descricao=descricao,
             usuario=usuario,
             tipo_acao=tipo_acao,
-            status_anterior=status_anterior,
+            status_anterior=status_atual,
             novo_status=proximo_status,
         )
 
-    # ---- Próxima imagem pendente do mesmo lote ----
-    # A liberação do lote para a próxima fase é MANUAL: acontece pelo botão
-    # "Salvar e devolver para o coordenador", disponível na última imagem.
     proxima_url = None
     if imagem.lote:
         proxima = _proxima_imagem_do_lote(imagem, usuario)
@@ -1118,6 +1211,94 @@ def liberar_conferencia(request, pk):
     )
 
     messages.success(request, f"Tarefa liberada para {revisor}.")
+    return redirect(request.POST.get("next", "imagens_lista"))
+
+
+@login_required
+@require_POST
+def devolver_descritor(request, pk):
+    """Coordenador devolve a tarefa para o Descritor corrigir."""
+    from .models import HistoricoItem
+
+    if not _apenas_coordenador(request.user):
+        messages.error(request, "Você não tem permissão para liberar tarefas.")
+        return redirect("imagens_lista")
+
+    imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
+    descricao = getattr(imagem, "descricao", None)
+
+    if not descricao or not descricao.descritor:
+        messages.error(request, "Esta imagem ainda não possui um descritor definido.")
+        return redirect(request.POST.get("next", "imagens_lista"))
+
+    observacao = request.POST.get("observacao", "").strip()
+    status_liberado = StatusWorkflow.objects.get(slug="liberado-descricao")
+    status_anterior = imagem.status
+
+    with transaction.atomic():
+        descricao.descritor_bloqueado = False
+        descricao.save()
+
+        imagem.status = status_liberado
+        imagem.responsavel = descricao.descritor
+        imagem.pronto_para_lote = False
+        imagem.save()
+
+        HistoricoItem.objects.create(
+            imagem=imagem,
+            descricao=descricao,
+            usuario=request.user,
+            tipo_acao=HistoricoItem.TipoAcao.DESCRITOR_LIBERADO,
+            status_anterior=status_anterior,
+            novo_status=status_liberado,
+            observacao=observacao or f"Devolvido ao descritor {descricao.descritor} para correção.",
+        )
+
+    messages.success(request, f"Tarefa devolvida para o descritor {descricao.descritor}.")
+    return redirect(request.POST.get("next", "imagens_lista"))
+
+
+@login_required
+@require_POST
+def devolver_revisor(request, pk):
+    """Coordenador devolve a tarefa para o Revisor corrigir."""
+    from .models import HistoricoItem
+
+    if not _apenas_coordenador(request.user):
+        messages.error(request, "Você não tem permissão para liberar tarefas.")
+        return redirect("imagens_lista")
+
+    imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
+    descricao = getattr(imagem, "descricao", None)
+
+    if not descricao or not descricao.revisor:
+        messages.error(request, "Esta imagem ainda não possui um revisor definido.")
+        return redirect(request.POST.get("next", "imagens_lista"))
+
+    observacao = request.POST.get("observacao", "").strip()
+    status_liberado = StatusWorkflow.objects.get(slug="liberado-conferencia")
+    status_anterior = imagem.status
+
+    with transaction.atomic():
+        descricao.revisor_bloqueado = False
+        descricao.save()
+
+        imagem.status = status_liberado
+        imagem.responsavel = descricao.revisor
+        imagem.pronto_para_lote = False
+        imagem.save()
+
+        HistoricoItem.objects.create(
+            imagem=imagem,
+            descricao=descricao,
+            usuario=request.user,
+            tipo_acao=HistoricoItem.TipoAcao.REVISOR_LIBERADO,
+            status_anterior=status_anterior,
+            novo_status=status_liberado,
+            observacao=observacao or f"Devolvido ao revisor {descricao.revisor} para correção.",
+        )
+
+    messages.success(request, f"Tarefa devolvida para o revisor {descricao.revisor}.")
     return redirect(request.POST.get("next", "imagens_lista"))
 
 
@@ -1424,7 +1605,7 @@ def lotes_lista(request):
       com progresso pessoal simplificado.
     Ambos veem um card de "Imagens avulsas" (sem lote), quando houver.
     """
-    from .models import Lote
+    from .models import Lote, filtro_autoria_imagem
 
     usuario = request.user
     eh_coordenacao = _apenas_coordenador(usuario)
@@ -1435,11 +1616,14 @@ def lotes_lista(request):
     if eh_coordenacao:
         lotes = Lote.objects.filter(ativo=not mostrar_inativos)
     else:
-        # Só os lotes onde o usuário tem imagens atribuídas
+        # Lotes onde o usuário é responsável atual OU foi autor da fase dele
+        # (mesmo depois de já ter entregue — para o lote continuar visível
+        # em modo consulta após o handoff).
         lotes = Lote.objects.filter(
             ativo=True,
             imagens__ativo=True,
-            imagens__responsavel=usuario,
+        ).filter(
+            imagens__in=Imagem.objects.filter(filtro_autoria_imagem(usuario))
         ).distinct()
 
     if busca:
@@ -1469,7 +1653,7 @@ def lotes_lista(request):
     # ---- Card de imagens avulsas (sem lote) ----
     avulsas_qs = Imagem.objects.filter(ativo=True, lote__isnull=True)
     if not eh_coordenacao:
-        avulsas_qs = avulsas_qs.filter(responsavel=usuario)
+        avulsas_qs = avulsas_qs.filter(filtro_autoria_imagem(usuario)).distinct()
     total_avulsas = avulsas_qs.count()
 
     descritores = Usuario.objects.filter(
@@ -1529,9 +1713,9 @@ def proxima_imagem_lote(request, pk):
 @require_POST
 def devolver_lote(request, pk):
     """
-    Chamada na última imagem do lote: conclui a imagem atual e devolve o
-    lote inteiro ao coordenador, avançando todas as imagens da fase do
-    usuário de uma vez. A liberação do lote é sempre MANUAL, por esta view.
+    Salva e envia o LOTE INTEIRO de uma vez para a próxima fase — nenhuma
+    imagem avança individualmente durante a navegação; só esta view move
+    o status, aplicando o mesmo bloqueio simétrico do avancar_status.
     """
     from .models import HistoricoItem
 
@@ -1540,23 +1724,23 @@ def devolver_lote(request, pk):
     lote = imagem.lote
 
     if not lote:
-        return JsonResponse(
-            {"ok": False, "erro": "Esta imagem não pertence a um lote."}, status=400
-        )
+        return JsonResponse({"ok": False, "erro": "Esta imagem não pertence a um lote."}, status=400)
 
-    # Fase do usuário: descrição ou conferência
     if usuario.tipo == Usuario.Tipo.DESCRITOR:
         slug_origem, slug_destino = "descrevendo", "descrito"
         tipo_acao = HistoricoItem.TipoAcao.DESCRICAO_SALVA
+        tipo_bloqueio = HistoricoItem.TipoAcao.DESCRITOR_BLOQUEADO
+        campo_bloqueio = "descritor_bloqueado"
         rotulo = "descrição"
     elif usuario.tipo == Usuario.Tipo.REVISOR:
         slug_origem, slug_destino = "em-conferencia", "conferido"
         tipo_acao = HistoricoItem.TipoAcao.CONFERENCIA_CONCLUIDA
+        tipo_bloqueio = HistoricoItem.TipoAcao.REVISOR_BLOQUEADO
+        campo_bloqueio = "revisor_bloqueado"
         rotulo = "conferência"
     else:
         return JsonResponse(
-            {"ok": False, "erro": "Apenas descritor ou revisor podem devolver um lote."},
-            status=403,
+            {"ok": False, "erro": "Apenas descritor ou revisor podem devolver um lote."}, status=403,
         )
 
     try:
@@ -1564,45 +1748,45 @@ def devolver_lote(request, pk):
     except StatusWorkflow.DoesNotExist:
         return JsonResponse({"ok": False, "erro": "Status não encontrado."}, status=400)
 
-    # Todas as imagens do lote que ainda estão na fase deste usuário
     pendentes = list(
-        Imagem.objects.filter(
-            lote=lote,
-            ativo=True,
-            responsavel=usuario,
-            status__slug=slug_origem,
-        )
+        Imagem.objects.filter(lote=lote, ativo=True, responsavel=usuario, status__slug=slug_origem)
     )
 
     if not pendentes:
         return JsonResponse(
-            {"ok": False, "erro": "Nenhuma imagem deste lote está pronta para devolução."},
-            status=400,
+            {"ok": False, "erro": "Nenhuma imagem deste lote está pronta para devolução."}, status=400,
         )
 
     with transaction.atomic():
         for img in pendentes:
             status_anterior = img.status
             img.status = proximo_status
-            img.responsavel = None  # volta para a fila do coordenador
+            img.responsavel = None
+            img.pronto_para_lote = False
             img.save()
+
+            descricao = getattr(img, "descricao", None)
+            if descricao:
+                setattr(descricao, campo_bloqueio, True)
+                descricao.save()
+
             HistoricoItem.objects.create(
-                imagem=img,
-                descricao=getattr(img, "descricao", None),
-                usuario=usuario,
-                tipo_acao=tipo_acao,
-                status_anterior=status_anterior,
-                novo_status=proximo_status,
+                imagem=img, descricao=descricao, usuario=usuario, tipo_acao=tipo_acao,
+                status_anterior=status_anterior, novo_status=proximo_status,
                 observacao=f"Lote '{lote.nome}' devolvido ao coordenador após {rotulo}.",
             )
+            if descricao:
+                HistoricoItem.objects.create(
+                    imagem=img, descricao=descricao, usuario=usuario, tipo_acao=tipo_bloqueio,
+                    status_anterior=status_anterior, novo_status=proximo_status,
+                    observacao=f"Acesso bloqueado automaticamente ao devolver o lote '{lote.nome}'.",
+                )
 
     return JsonResponse({
         "ok": True,
-        "mensagem": (
-            f"Lote '{lote.nome}' devolvido ao coordenador. "
-            f"{len(pendentes)} imagem(ns) concluída(s)."
-        ),
+        "mensagem": f"Lote '{lote.nome}' devolvido ao coordenador. {len(pendentes)} imagem(ns) concluída(s).",
     })
+
 
 # ============================================================
 # SOLICITAÇÃO PÚBLICA DE ACESSO

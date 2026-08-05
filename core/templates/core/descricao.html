@@ -224,6 +224,12 @@
     </div>
 </div>
 {% endif %}
+{% if somente_leitura %}
+<div class="alert alert-secondary d-flex align-items-center gap-2 mb-4" style="font-size:0.875rem;">
+    <i class="bi bi-eye"></i>
+    Você está vendo esta descrição em modo somente leitura — o trabalho já foi enviado para a próxima etapa.
+</div>
+{% endif %}
 
 {# ---- Toast ---- #}
 <div id="toastFeedback" style="
@@ -340,8 +346,39 @@
                         <div>{{ descricao.descritor.get_full_name|default:descricao.descritor.email }}</div>
                     </div>
                     {% endif %}
+                    {% if descricao and descricao.revisor %}
+                    <div>
+                        <div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Revisor</div>
+                        <div>{{ descricao.revisor.get_full_name|default:descricao.revisor.email }}</div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
+            {% if request.user.tipo == 'coordenador' or request.user.tipo == 'administrador' %}
+                {% if descricao and descricao.descritor_bloqueado %}
+                <form method="post" action="{% url 'devolver_descritor' imagem.pk %}" class="mt-3 pt-3" style="border-top:0.5px solid #D8CFC5;">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <label class="text-secondary mb-1 d-block" style="font-size:0.7rem; font-weight:700; text-transform:uppercase;">Devolver ao descritor</label>
+                    <textarea name="observacao" class="form-control form-control-sm mb-2" rows="2" placeholder="Observação (opcional)"></textarea>
+                    <button type="submit" class="btn btn-sm btn-outline-danger w-100">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i> Devolver para correção
+                    </button>
+                </form>
+                {% endif %}
+
+                {% if descricao and descricao.revisor_bloqueado %}
+                <form method="post" action="{% url 'devolver_revisor' imagem.pk %}" class="mt-3 pt-3" style="border-top:0.5px solid #D8CFC5;">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <label class="text-secondary mb-1 d-block" style="font-size:0.7rem; font-weight:700; text-transform:uppercase;">Devolver ao revisor</label>
+                    <textarea name="observacao" class="form-control form-control-sm mb-2" rows="2" placeholder="Observação (opcional)"></textarea>
+                    <button type="submit" class="btn btn-sm btn-outline-danger w-100">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i> Devolver para correção
+                    </button>
+                </form>
+                {% endif %}
+                {% endif %}
         </div>
 
     </div>
@@ -416,24 +453,17 @@
                     Atualizada automaticamente ao salvar. Trechos em idioma estrangeiro aparecem em itálico.
                 </p>
 
-                <div id="previewDescricao" class="d-flex flex-column gap-0">
-                    {% for trecho in trechos %}
-                    <div class="trecho-preview-item">
-                        <div class="d-flex align-items-center gap-2 mb-1">
-                            <span class="text-secondary" style="font-size:0.75rem; font-weight:700;">Trecho {{ trecho.ordem }}</span>
-                            <span class="dito-retranca" style="font-size:0.7rem;">{{ trecho.idioma_nome }}</span>
-                        </div>
-                        <p class="mb-0" style="font-size:0.9375rem; line-height:1.7;
-                            {% if trecho.idioma_codigo != 'por' %}font-style:italic;{% endif %}">
-                            {{ trecho.texto }}
-                        </p>
-                    </div>
-                    {% empty %}
+                <div id="previewDescricao">
+                    {% if trechos %}
+                    <p class="mb-0" style="font-size:0.9375rem; line-height:1.8;">
+                        {% for trecho in trechos %}<span{% if trecho.idioma_codigo != 'por' %} style="font-style:italic;"{% endif %}>{{ trecho.texto }}</span>{% if not forloop.last %}                 {% endif %}{% endfor %}
+                    </p>
+                    {% else %}
                     <div class="dito-empty-state py-3">
                         <i class="bi bi-file-text"></i>
                         <p>Nenhuma descrição registrada ainda.</p>
                     </div>
-                    {% endfor %}
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -459,7 +489,7 @@
                 </button>
 
                 {% if imagem.lote and not lote_eh_ultima %}
-                <button class="btn-workflow-avancar" onclick="salvarEAvancar()">
+                <button class="btn-workflow-avancar" onclick="salvarEIrParaProxima()">
                     <i class="bi bi-skip-forward"></i> Salvar e ir para próxima do lote
                 </button>
                 {% endif %}
@@ -479,7 +509,7 @@
             </div>
         </div>
 
-        {% else %}
+        {% elif pode_visualizar %}
 
         {# ---- Somente visualização ---- #}
         <div class="card">
@@ -494,28 +524,27 @@
                 <p class="text-secondary mb-3" style="font-size:0.8rem;">
                     Trechos em idioma estrangeiro aparecem em itálico.
                 </p>
-                <div class="d-flex flex-column gap-0">
-                    {% for trecho in trechos %}
-                    <div class="trecho-preview-item">
-                        <div class="d-flex align-items-center gap-2 mb-1">
-                            <span class="text-secondary" style="font-size:0.75rem; font-weight:700;">Trecho {{ trecho.ordem }}</span>
-                            <span class="dito-retranca" style="font-size:0.7rem;">{{ trecho.idioma_nome }}</span>
-                        </div>
-                        <p class="mb-0" style="font-size:0.9375rem; line-height:1.7;
-                            {% if trecho.idioma_codigo != 'por' %}font-style:italic;{% endif %}">
-                            {{ trecho.texto }}
-                        </p>
-                    </div>
-                    {% empty %}
+                <div>
+                    {% if trechos %}
+                    <p class="mb-0" style="font-size:0.9375rem; line-height:1.8;">
+                        {% for trecho in trechos %}<span{% if trecho.idioma_codigo != 'por' %} style="font-style:italic;"{% endif %}>{{ trecho.texto }}</span>{% if not forloop.last %}                 {% endif %}{% endfor %}
+                    </p>
+                    {% else %}
                     <div class="dito-empty-state py-3">
                         <i class="bi bi-file-text"></i>
                         <p>Nenhuma descrição registrada ainda.</p>
                     </div>
-                    {% endfor %}
+                    {% endif %}
                 </div>
             </div>
         </div>
 
+        {% endif %}
+        {% if not pode_editar and not pode_visualizar %}
+        <div class="dito-empty-state py-5">
+            <i class="bi bi-slash-circle"></i>
+            <p>Você não tem acesso a esta tarefa.</p>
+        </div>
         {% endif %}
 
     </div>
@@ -525,6 +554,7 @@
 <script>
 const SALVAR_URL = "{% url 'salvar_trecho' imagem.pk %}";
 const AVANCAR_URL = "{% url 'avancar_status' imagem.pk %}";
+const PROXIMA_LOTE_URL = "{% url 'proxima_imagem_lote' imagem.pk %}";
 const DEVOLVER_URL = "{% url 'devolver_lote' imagem.pk %}";
 const LOTES_URL = "{% url 'lotes_lista' %}";
 const CSRF = "{{ csrf_token }}";
@@ -694,36 +724,21 @@ async function salvarTrechos() {
     else mostrarToast(data.erro || "Erro ao salvar.", false);
 }
 
-async function salvarEAvancar() {
+async function salvarEIrParaProxima() {
     const trechos = coletarTrechos();
     if (!trechos.length) { mostrarToast("Adicione ao menos um trecho.", false); return; }
 
     const r1 = await fetch(SALVAR_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
-        body: JSON.stringify({ trechos }),
+        body: JSON.stringify({ trechos, marcar_pronto_lote: true }),
     });
     const d1 = await r1.json();
     if (!d1.ok) { mostrarToast(d1.erro || "Erro ao salvar.", false); return; }
 
-    const r2 = await fetch(AVANCAR_URL, { method: "POST", headers: { "X-CSRFToken": CSRF } });
-    const d2 = await r2.json();
-
-    if (!d2.ok) { mostrarToast(d2.erro || "Erro ao avançar.", false); return; }
-
     atualizarPreview(trechos);
-    const badge = document.getElementById("badgeStatus");
-    if (badge) { badge.textContent = d2.novo_status; badge.className = `dito-status dito-status-${d2.novo_slug}`; }
-
-    // Ainda há imagens suas neste lote: segue para a próxima
-    if (d2.proxima_url) {
-        mostrarToast(`Salvo. Indo para a próxima imagem do lote...`, true);
-        setTimeout(() => { window.location.href = d2.proxima_url; }, 1200);
-        return;
-    }
-
-    // Imagem avulsa ou sem próxima: comportamento normal
-    mostrarToast(`Enviado: ${d2.novo_status}`, true);
+    mostrarToast("Salvo. Indo para a próxima imagem do lote...", true);
+    setTimeout(() => { window.location.href = PROXIMA_LOTE_URL; }, 800);
 }
 
 async function salvarEDevolver() {
@@ -737,7 +752,7 @@ async function salvarEDevolver() {
     const r1 = await fetch(SALVAR_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
-        body: JSON.stringify({ trechos }),
+        body: JSON.stringify({ trechos, marcar_pronto_lote: true }),
     });
     const d1 = await r1.json();
     if (!d1.ok) { mostrarToast(d1.erro || "Erro ao salvar.", false); return; }
@@ -759,16 +774,10 @@ function atualizarPreview(trechos) {
         preview.innerHTML = `<div class="dito-empty-state py-3"><i class="bi bi-file-text"></i><p>Nenhuma descrição.</p></div>`;
         return;
     }
-    preview.innerHTML = trechos.map((t, i) => `
-        <div class="trecho-preview-item">
-            <div class="d-flex align-items-center gap-2 mb-1">
-                <span class="text-secondary" style="font-size:0.75rem; font-weight:700;">Trecho ${i + 1}</span>
-                <span class="dito-retranca" style="font-size:0.7rem;">${t.idioma_nome}</span>
-            </div>
-            <p class="mb-0" style="font-size:0.9375rem; line-height:1.7;${t.idioma_codigo !== 'por' ? 'font-style:italic;' : ''}">
-                ${t.texto}
-            </p>
-        </div>`).join("");
+    const partes = trechos.map(t =>
+        `<span${t.idioma_codigo !== 'por' ? ' style="font-style:italic;"' : ''}>${t.texto}</span>`
+    );
+    preview.innerHTML = `<p class="mb-0" style="font-size:0.9375rem; line-height:1.8;">${partes.join(" ")}</p>`;
 }
 
 function mostrarToast(msg, ok) {

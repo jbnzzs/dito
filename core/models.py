@@ -2,6 +2,24 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 
 
+def filtro_autoria_imagem(usuario):
+    """
+    Q() que identifica imagens que "pertencem" ao usuário — seja porque ele
+    é o responsável atual (tarefa em andamento) ou porque ele foi o autor
+    daquela fase no passado (descricao.descritor/.revisor), mesmo depois
+    do handoff para a próxima fase. Sem isso, tarefas e lotes "somem" da
+    visão da pessoa assim que ela entrega o trabalho — que é o sintoma
+    que este helper corrige.
+    """
+    from django.db.models import Q
+
+    if usuario.tipo == Usuario.Tipo.DESCRITOR:
+        return Q(responsavel=usuario) | Q(descricao__descritor=usuario)
+    elif usuario.tipo == Usuario.Tipo.REVISOR:
+        return Q(responsavel=usuario) | Q(descricao__revisor=usuario)
+    return Q(responsavel=usuario)
+
+
 # ============================================================
 # USUÁRIO CUSTOMIZADO
 # ============================================================
@@ -137,11 +155,40 @@ class StatusWorkflow(models.Model):
     Status do fluxo editorial. Gerenciável via Django Admin.
     Populado automaticamente pelo management command seed_status.
     """
+
+    class PerfilResponsavel(models.TextChoices):
+        DESCRITOR = "descritor", "Descritor"
+        REVISOR = "revisor", "Revisor"
+        COORDENADOR = "coordenador", "Coordenador"
+
     nome = models.CharField(max_length=60, unique=True, verbose_name="Nome")
     slug = models.SlugField(max_length=60, unique=True, verbose_name="Identificador interno")
     ordem = models.PositiveSmallIntegerField(verbose_name="Ordem de exibição")
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
     descricao = models.TextField(blank=True, verbose_name="Descrição")
+
+    perfil_responsavel = models.CharField(
+        max_length=20,
+        choices=PerfilResponsavel.choices,
+        default=PerfilResponsavel.DESCRITOR,
+        verbose_name="Perfil responsável",
+        help_text="Qual perfil trabalha neste status.",
+    )
+    exige_atribuicao = models.BooleanField(
+        default=False,
+        verbose_name="Exige atribuição do coordenador",
+        help_text="Se marcado, o coordenador precisa escolher um responsável antes de avançar.",
+    )
+    is_inicial = models.BooleanField(
+        default=False,
+        verbose_name="Status inicial",
+        help_text="O status em que as imagens entram ao serem importadas.",
+    )
+    is_final = models.BooleanField(
+        default=False,
+        verbose_name="Status final",
+        help_text="O status que encerra o fluxo (nada avança a partir dele).",
+    )
 
     class Meta:
         verbose_name = "Status do workflow"
@@ -150,6 +197,25 @@ class StatusWorkflow(models.Model):
 
     def __str__(self):
         return f"{self.ordem}. {self.nome}"
+
+    def proximo(self):
+        """
+        Retorna o próximo status ativo na fila (maior ordem que a atual),
+        ou None se este for o último. Base do fluxo configurável.
+        """
+        return (
+            StatusWorkflow.objects.filter(ativo=True, ordem__gt=self.ordem)
+            .order_by("ordem")
+            .first()
+        )
+
+    def anterior(self):
+        """Retorna o status ativo imediatamente anterior na fila, ou None."""
+        return (
+            StatusWorkflow.objects.filter(ativo=True, ordem__lt=self.ordem)
+            .order_by("-ordem")
+            .first()
+        )
 
 
 # ============================================================
@@ -312,6 +378,12 @@ class Imagem(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Cadastrado em")
     atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
+    pronto_para_lote = models.BooleanField(
+        default=False,
+        verbose_name="Pronto para envio em lote",
+        help_text="Marca que o usuário já concluiu esta imagem e está aguardando "
+                   "o envio do lote inteiro, sem avançar o status individualmente.",
+    )
 
     class Meta:
         verbose_name = "Imagem"
@@ -333,7 +405,6 @@ class Descricao(models.Model):
         related_name="descricao",
         verbose_name="Imagem",
     )
-
     descritor = models.ForeignKey(
         Usuario, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="descricoes_produzidas", verbose_name="Descritor",
@@ -346,11 +417,15 @@ class Descricao(models.Model):
         Usuario, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="descricoes_coordenadas", verbose_name="Coordenador",
     )
-
     descritor_bloqueado = models.BooleanField(
         default=False,
         verbose_name="Descritor bloqueado",
         help_text="Bloqueado automaticamente após o primeiro salvamento.",
+    )
+    revisor_bloqueado = models.BooleanField(
+        default=False,
+        verbose_name="Revisor bloqueado",
+        help_text="Bloqueado automaticamente após a conferência ser concluída.",
     )
 
     observacoes = models.TextField(blank=True, verbose_name="Observações internas")
@@ -462,11 +537,13 @@ class HistoricoItem(models.Model):
         DESCRICAO_INICIADA       = "descricao_iniciada",       "Descrição iniciada"
         DESCRICAO_SALVA          = "descricao_salva",          "Descrição salva"
         DESCRITOR_BLOQUEADO      = "descritor_bloqueado",      "Descritor bloqueado"
+        REVISOR_BLOQUEADO        = "revisor_bloqueado",        "Acesso do revisor bloqueado"
         LIBERADO_CONFERENCIA     = "liberado_conferencia",     "Liberado para conferência"
         CONFERENCIA_INICIADA     = "conferencia_iniciada",     "Conferência iniciada"
         CONFERENCIA_CONCLUIDA    = "conferencia_concluida",    "Conferência concluída"
         DEVOLVIDO_CORRECAO       = "devolvido_correcao",       "Devolvido para correção"
         DESCRITOR_LIBERADO       = "descritor_liberado",       "Acesso do descritor liberado"
+        REVISOR_LIBERADO         = "revisor_liberado",          "Acesso do revisor liberado"
         REVISAO_INICIADA         = "revisao_iniciada",         "Revisão final iniciada"
         REVISAO_CONCLUIDA        = "revisao_concluida",        "Revisão final concluída"
         DESCRICAO_FINALIZADA     = "descricao_finalizada",     "Descrição finalizada"
@@ -545,7 +622,7 @@ class Lote(models.Model):
         max_length=100,
         unique=True,
         verbose_name="Nome do lote",
-        help_text="Ex: 'Matemática V2 2026'.",
+        help_text="Ex: 'MAT V2'.",
     )
     descricao = models.CharField(
         max_length=255,
@@ -612,9 +689,10 @@ class Lote(models.Model):
 
     def progresso_do_usuario(self, usuario):
         """
-        Progresso pessoal de um descritor/revisor dentro do lote.
-        Retorna dict com o total de imagens dele no lote, quantas já concluiu
-        e o percentual — usado no card simplificado da tela de Lotes.
+        Progresso pessoal de um descritor/revisor dentro do lote. Considera
+        tanto as imagens atualmente atribuídas quanto as que ele já entregou
+        (autoria preservada em descricao.descritor/.revisor), para que o
+        lote continue visível — em modo consulta — depois do envio.
         """
         from .models import Usuario as U
 
@@ -625,7 +703,7 @@ class Lote(models.Model):
         else:
             return None
 
-        minhas = self.imagens.filter(ativo=True, responsavel=usuario)
+        minhas = self.imagens.filter(ativo=True).filter(filtro_autoria_imagem(usuario)).distinct()
         total = minhas.count()
 
         if total == 0:
