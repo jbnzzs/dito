@@ -189,27 +189,31 @@ def minhas_tarefas(request):
     lote_id = request.GET.get("lote", "")
     sem_lote = request.GET.get("sem_lote") == "1"
 
+    # Lista completa dos 9 status — usada para Coordenador/Admin (visão total)
+    # e agora também para Descritor/Revisor, para que a tarefa continue
+    # visível (em modo "Ver") até o final do fluxo, como prova do que a
+    # pessoa produziu — em vez de sumir assim que sai da janela ativa dela.
+    TODOS_OS_SLUGS = [
+        "liberado-descricao", "descrevendo", "descrito",
+        "liberado-conferencia", "em-conferencia", "conferido",
+        "revisando", "revisado", "finalizado",
+    ]
+
     # Definir quais status e título conforme perfil
     if usuario.tipo == usuario.Tipo.DESCRITOR:
-        slugs_visiveis = ["liberado-descricao", "descrevendo", "descrito"]
+        slugs_visiveis = TODOS_OS_SLUGS
         titulo_secao = "Minhas tarefas de descrição"
         acao_label = "Descrever"
         acao_icon = "bi-pencil-square"
 
     elif usuario.tipo == usuario.Tipo.REVISOR:
-        slugs_visiveis = [
-            "liberado-conferencia", "em-conferencia", "conferido"
-        ]
+        slugs_visiveis = TODOS_OS_SLUGS
         titulo_secao = "Minhas tarefas de conferência"
         acao_label = "Conferir"
         acao_icon = "bi-eye"
 
     elif usuario.tipo in (usuario.Tipo.COORDENADOR, usuario.Tipo.ADMINISTRADOR):
-        slugs_visiveis = [
-            "liberado-descricao", "descrevendo", "descrito",
-            "liberado-conferencia", "em-conferencia", "conferido",
-            "revisando", "revisado", "finalizado",
-        ]
+        slugs_visiveis = TODOS_OS_SLUGS
         titulo_secao = "Todas as tarefas"
         acao_label = "Abrir"
         acao_icon = "bi-arrow-right-circle"
@@ -1906,3 +1910,210 @@ def recusar_solicitacao(request, pk):
         f"Solicitação de {solicitante.get_full_name() or solicitante.email} recusada."
     )
     return redirect("usuarios_lista")
+
+# ============================================================
+# GESTÃO DE STATUS DO WORKFLOW (Admin/Coordenador criam e editam,
+# todos os perfis podem visualizar a fila completa)
+# ============================================================
+
+@login_required
+def status_lista(request):
+    """
+    Lista todos os status do workflow, na ordem da fila. Visível para
+    qualquer perfil autenticado (transparência do fluxo); criar, editar,
+    reordenar e (des)ativar é restrito a Coordenador/Administrador — a
+    view valida isso de novo em cada ação, o template só esconde os
+    controles visualmente.
+    """
+    status_list = StatusWorkflow.objects.all().order_by("ordem")
+    return render(request, "core/status_lista.html", {
+        "status_list": status_list,
+        "pode_gerenciar": _apenas_coordenador(request.user),
+    })
+
+
+def _aplicar_exclusividade_inicial_final(status_obj):
+    """
+    Garante no máximo um status com is_inicial=True e um com is_final=True
+    na fila inteira — desmarca qualquer outro que já tivesse a mesma marca,
+    para o motor de workflow (avancar_status) nunca ficar ambíguo sobre
+    onde a fila começa ou termina.
+    """
+    if status_obj.is_inicial:
+        StatusWorkflow.objects.filter(is_inicial=True).exclude(pk=status_obj.pk).update(is_inicial=False)
+    if status_obj.is_final:
+        StatusWorkflow.objects.filter(is_final=True).exclude(pk=status_obj.pk).update(is_final=False)
+
+
+@login_required
+def status_criar(request):
+    """Cria um novo status. Somente Coordenador/Administrador."""
+    if not _apenas_coordenador(request.user):
+        messages.error(request, "Você não tem permissão para gerenciar status.")
+        return redirect("status_lista")
+
+    if request.method == "POST":
+        from django.db.models import Max
+
+        nome = request.POST.get("nome", "").strip()
+        slug = request.POST.get("slug", "").strip()
+        descricao_txt = request.POST.get("descricao", "").strip()
+        perfil_responsavel = request.POST.get("perfil_responsavel")
+        exige_atribuicao = request.POST.get("exige_atribuicao") == "on"
+        is_inicial = request.POST.get("is_inicial") == "on"
+        is_final = request.POST.get("is_final") == "on"
+
+        if not nome or not slug:
+            messages.error(request, "Nome e identificador interno são obrigatórios.")
+            return redirect("status_criar")
+
+        if StatusWorkflow.objects.filter(slug=slug).exists():
+            messages.error(request, f"Já existe um status com o identificador '{slug}'.")
+            return redirect("status_criar")
+
+        maior_ordem = StatusWorkflow.objects.aggregate(m=Max("ordem"))["m"] or 0
+
+        novo = StatusWorkflow.objects.create(
+            nome=nome,
+            slug=slug,
+            descricao=descricao_txt,
+            perfil_responsavel=perfil_responsavel,
+            exige_atribuicao=exige_atribuicao,
+            is_inicial=is_inicial,
+            is_final=is_final,
+            ordem=maior_ordem + 1,
+            ativo=True,
+        )
+        _aplicar_exclusividade_inicial_final(novo)
+
+        messages.success(request, f"Status '{novo.nome}' criado.")
+        return redirect("status_lista")
+
+    return render(request, "core/status_form.html", {
+        "status": None,
+        "perfis": StatusWorkflow.PerfilResponsavel.choices,
+    })
+
+
+@login_required
+def status_editar(request, pk):
+    """Edita um status existente. Somente Coordenador/Administrador."""
+    if not _apenas_coordenador(request.user):
+        messages.error(request, "Você não tem permissão para gerenciar status.")
+        return redirect("status_lista")
+
+    status_obj = get_object_or_404(StatusWorkflow, pk=pk)
+
+    if request.method == "POST":
+        nome = request.POST.get("nome", "").strip()
+        descricao_txt = request.POST.get("descricao", "").strip()
+        perfil_responsavel = request.POST.get("perfil_responsavel")
+        exige_atribuicao = request.POST.get("exige_atribuicao") == "on"
+        is_inicial = request.POST.get("is_inicial") == "on"
+        is_final = request.POST.get("is_final") == "on"
+
+        if not nome:
+            messages.error(request, "O nome é obrigatório.")
+            return redirect("status_editar", pk=pk)
+
+        status_obj.nome = nome
+        status_obj.descricao = descricao_txt
+        status_obj.perfil_responsavel = perfil_responsavel
+        status_obj.exige_atribuicao = exige_atribuicao
+        status_obj.is_inicial = is_inicial
+        status_obj.is_final = is_final
+        status_obj.save()
+        _aplicar_exclusividade_inicial_final(status_obj)
+
+        messages.success(request, f"Status '{status_obj.nome}' atualizado.")
+        return redirect("status_lista")
+
+    return render(request, "core/status_form.html", {
+        "status": status_obj,
+        "perfis": StatusWorkflow.PerfilResponsavel.choices,
+    })
+
+
+@login_required
+@require_POST
+def status_toggle_ativo(request, pk):
+    """
+    Ativa/desativa um status. Desativação é bloqueada se existir alguma
+    imagem ativa parada nele agora — evita "órfãos" no workflow.
+    """
+    if not _apenas_coordenador(request.user):
+        return JsonResponse({"ok": False, "erro": "Sem permissão."}, status=403)
+
+    status_obj = get_object_or_404(StatusWorkflow, pk=pk)
+
+    if status_obj.ativo:
+        em_uso = Imagem.objects.filter(status=status_obj, ativo=True).count()
+        if em_uso > 0:
+            return JsonResponse({
+                "ok": False,
+                "erro": f"Não é possível desativar: {em_uso} imagem(ns) está(ão) neste status agora.",
+            }, status=400)
+        status_obj.ativo = False
+    else:
+        status_obj.ativo = True
+
+    status_obj.save()
+    return JsonResponse({"ok": True, "ativo": status_obj.ativo})
+
+
+@login_required
+@require_POST
+def status_reordenar(request):
+    """
+    Recebe a nova ordem (lista de IDs) via JSON e reatribui o campo
+    'ordem' de cada status conforme a posição na lista — usado pelo
+    drag-and-drop da tela de gestão.
+    """
+    if not _apenas_coordenador(request.user):
+        return JsonResponse({"ok": False, "erro": "Sem permissão."}, status=403)
+
+    try:
+        body = json.loads(request.body)
+        ids_em_ordem = body.get("ids", [])
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({"ok": False, "erro": "JSON inválido."}, status=400)
+
+    if not ids_em_ordem:
+        return JsonResponse({"ok": False, "erro": "Lista vazia."}, status=400)
+
+    with transaction.atomic():
+        for posicao, status_id in enumerate(ids_em_ordem, start=1):
+            StatusWorkflow.objects.filter(pk=status_id).update(ordem=posicao)
+
+    return JsonResponse({"ok": True})
+
+
+# ============================================================
+# MINHA CONTA (autoatendimento — qualquer perfil logado)
+# ============================================================
+
+@login_required
+def minha_conta(request):
+    """
+    Tela de autoatendimento: cada usuário edita o próprio nome/sobrenome.
+    E-mail, perfil e situação ficam somente leitura — e-mail é o login
+    (USERNAME_FIELD) e perfil/situação são geridos pelo Administrador na
+    tela de Usuários, não aqui.
+    """
+    usuario = request.user
+
+    if request.method == "POST":
+        first_name = request.POST.get("first_name", "").strip()
+        last_name = request.POST.get("last_name", "").strip()
+
+        if not first_name:
+            messages.error(request, "O nome é obrigatório.")
+            return redirect("minha_conta")
+
+        usuario.first_name = first_name
+        usuario.last_name = last_name
+        usuario.save(update_fields=["first_name", "last_name"])
+        messages.success(request, "Dados atualizados.")
+        return redirect("minha_conta")
+
+    return render(request, "core/minha_conta.html", {"usuario": usuario})

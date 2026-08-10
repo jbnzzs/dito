@@ -724,6 +724,29 @@ async function salvarTrechos() {
     else mostrarToast(data.erro || "Erro ao salvar.", false);
 }
 
+async function salvarEAvancar() {
+    const trechos = coletarTrechos();
+    if (!trechos.length) { mostrarToast("Adicione ao menos um trecho.", false); return; }
+
+    const r1 = await fetch(SALVAR_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+        body: JSON.stringify({ trechos }),
+    });
+    const d1 = await r1.json();
+    if (!d1.ok) { mostrarToast(d1.erro || "Erro ao salvar.", false); return; }
+
+    const r2 = await fetch(AVANCAR_URL, { method: "POST", headers: { "X-CSRFToken": CSRF } });
+    const d2 = await r2.json();
+    if (!d2.ok) { mostrarToast(d2.erro || "Erro ao avançar de status.", false); return; }
+
+    atualizarPreview(trechos);
+    mostrarToast(`Enviado! Novo status: ${d2.novo_status}`, true);
+    setTimeout(() => {
+        window.location.href = d2.proxima_url || "{% url 'minhas_tarefas' %}";
+    }, 1200);
+}
+
 async function salvarEIrParaProxima() {
     const trechos = coletarTrechos();
     if (!trechos.length) { mostrarToast("Adicione ao menos um trecho.", false); return; }
