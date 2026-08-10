@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Minha conta — Dito!{% endblock %}
+{% block page_title %}Minha conta{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+    {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }} mb-3">{{ msg }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="row g-4" style="max-width:820px;">
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-body p-4">
+                <h5 class="mb-3">Meus dados</h5>
+                <form method="post">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label class="form-label">Nome</label>
+                        <input type="text" name="first_name" class="form-control" required
+                               value="{{ usuario.first_name }}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Sobrenome</label>
+                        <input type="text" name="last_name" class="form-control"
+                               value="{{ usuario.last_name }}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">E-mail</label>
+                        <input type="email" class="form-control" value="{{ usuario.email }}" disabled>
+                        <div class="form-text">
+                            O e-mail é o seu login e não pode ser alterado aqui. Se precisar trocar,
+                            fale com o administrador.
+                        </div>
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-6">
+                            <label class="form-label">Perfil</label>
+                            <input type="text" class="form-control" value="{{ usuario.get_tipo_display }}" disabled>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Situação</label>
+                            <input type="text" class="form-control" value="{{ usuario.get_situacao_display }}" disabled>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i> Salvar alterações
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-body p-4">
+                <h5 class="mb-2">Senha</h5>
+                <p class="text-secondary mb-3" style="font-size:0.875rem;">
+                    Recomendamos usar uma senha que você não usa em outros sites.
+                </p>
+                <a href="{% url 'password_change' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-key me-1"></i> Trocar senha
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
