@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}{% if status %}Editar status{% else %}Novo status{% endif %} — Dito!{% endblock %}
+{% block page_title %}{% if status %}Editar status{% else %}Novo status{% endif %}{% endblock %}
+{% block nav_status %}active{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+    {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }} mb-3">{{ msg }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="mb-4">
+    <a href="{% url 'status_lista' %}" class="text-secondary text-decoration-none" style="font-size:0.875rem;">
+        <i class="bi bi-arrow-left me-1"></i> Voltar para Status do fluxo
+    </a>
+</div>
+
+<div class="card" style="max-width:640px;">
+    <div class="card-body p-4">
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="mb-3">
+                <label class="form-label">Nome</label>
+                <input type="text" name="nome" class="form-control" required
+                       value="{{ status.nome|default:'' }}" placeholder="Ex: Em conferência">
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Identificador interno (slug)</label>
+                {% if status %}
+                <input type="text" class="form-control" value="{{ status.slug }}" disabled>
+                <div class="form-text">O identificador não pode ser alterado depois de criado — ele é referenciado internamente pelo motor de workflow.</div>
+                {% else %}
+                <input type="text" name="slug" class="form-control" required
+                       placeholder="Ex: em-conferencia" pattern="[a-z0-9-]+"
+                       title="Apenas letras minúsculas, números e hífen">
+                <div class="form-text">Usado internamente pelo sistema — apenas letras minúsculas, números e hífen. Não pode ser alterado depois.</div>
+                {% endif %}
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Descrição (opcional)</label>
+                <textarea name="descricao" class="form-control" rows="2">{{ status.descricao|default:'' }}</textarea>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Perfil responsável</label>
+                <select name="perfil_responsavel" class="form-select" required>
+                    {% for valor, rotulo in perfis %}
+                    <option value="{{ valor }}" {% if status and status.perfil_responsavel == valor %}selected{% endif %}>
+                        {{ rotulo }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">Quem precisa agir para a tarefa sair deste status.</div>
+            </div>
+
+            <div class="form-check mb-2">
+                <input type="checkbox" name="exige_atribuicao" class="form-check-input" id="exigeAtribuicao"
+                       {% if status.exige_atribuicao %}checked{% endif %}>
+                <label class="form-check-label" for="exigeAtribuicao">
+                    Exige atribuição do coordenador antes de avançar
+                </label>
+            </div>
+
+            <div class="form-check mb-2">
+                <input type="checkbox" name="is_inicial" class="form-check-input" id="isInicial"
+                       {% if status.is_inicial %}checked{% endif %}>
+                <label class="form-check-label" for="isInicial">
+                    Este é o status inicial da fila
+                </label>
+                <div class="form-text">Só pode haver um. Marcar aqui desmarca automaticamente de qualquer outro status.</div>
+            </div>
+
+            <div class="form-check mb-4">
+                <input type="checkbox" name="is_final" class="form-check-input" id="isFinal"
+                       {% if status.is_final %}checked{% endif %}>
+                <label class="form-check-label" for="isFinal">
+                    Este é o status final da fila
+                </label>
+                <div class="form-text">Só pode haver um. Marcar aqui desmarca automaticamente de qualquer outro status.</div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i> {% if status %}Salvar alterações{% else %}Criar status{% endif %}
+                </button>
+                <a href="{% url 'status_lista' %}" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

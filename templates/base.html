@@ -51,6 +51,11 @@
                 <span class="dito-nav-label">Buscar retranca</span>
             </a>
 
+            <a href="{% url 'status_lista' %}" class="dito-nav-item {% block nav_status %}{% endblock %}">
+                <i class="bi bi-signpost-split"></i>
+                <span class="dito-nav-label">Status do fluxo</span>
+            </a>
+
             <!-- Seção editorial (coordenador e administrador) -->
             {% if request.user.tipo == 'coordenador' or request.user.tipo == 'administrador' %}
             <span class="dito-nav-section">Editorial</span>
@@ -117,14 +122,14 @@
             </div>
 
             <div class="dito-header-right">
-                <div class="dito-user-info">
+                <a href="{% url 'minha_conta' %}" class="dito-user-info" style="text-decoration:none; color:inherit;">
                     <span class="dito-user-name">
                         {{ request.user.get_full_name|default:request.user.email }}
                     </span>
                     <span class="dito-user-tipo">
                         {{ request.user.get_tipo_display }}
                     </span>
-                </div>
+                </a>
 
                 <!-- Logout via POST (obrigatório no Django 5.x) -->
                 <form method="post" action="{% url 'logout' %}">

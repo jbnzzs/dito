@@ -20,7 +20,10 @@ urlpatterns = [
     path("imagens/<int:pk>/atualizar-pagamento/", views.atualizar_pagamento, name="atualizar_pagamento"),
     path("imagens/<int:pk>/proxima-do-lote/", views.proxima_imagem_lote, name="proxima_imagem_lote"),
     path("imagens/<int:pk>/devolver-lote/", views.devolver_lote, name="devolver_lote"),
+    path("imagens/<int:pk>/devolver-descritor/", views.devolver_descritor, name="devolver_descritor"),
+    path("imagens/<int:pk>/devolver-revisor/", views.devolver_revisor, name="devolver_revisor"),
     path("solicitar-acesso/", views.solicitar_acesso, name="solicitar_acesso"),
+    path("minha-conta/", views.minha_conta, name="minha_conta"),
 
     # ---- Lotes ----
     path("lotes/", views.lotes_lista, name="lotes_lista"),
@@ -33,6 +36,13 @@ urlpatterns = [
     path("usuarios/", views.usuarios_lista, name="usuarios_lista"),
     path("usuarios/<int:pk>/aprovar/", views.aprovar_solicitacao, name="aprovar_solicitacao"),
     path("usuarios/<int:pk>/recusar/", views.recusar_solicitacao, name="recusar_solicitacao"),
+
+    # ---- Status do workflow ----
+    path("status/", views.status_lista, name="status_lista"),
+    path("status/novo/", views.status_criar, name="status_criar"),
+    path("status/<int:pk>/editar/", views.status_editar, name="status_editar"),
+    path("status/<int:pk>/toggle-ativo/", views.status_toggle_ativo, name="status_toggle_ativo"),
+    path("status/reordenar/", views.status_reordenar, name="status_reordenar"),
 
     path("teste/", views.teste, name="teste"),
 

@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}Status do fluxo — Dito!{% endblock %}
+{% block page_title %}Status do fluxo{% endblock %}
+{% block nav_status %}active{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+    {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }} mb-3">{{ msg }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <h2 class="mb-1">Status do fluxo</h2>
+        <p class="text-secondary mb-0" style="font-size:0.8125rem;">
+            {{ status_list|length }} status
+            {% if pode_gerenciar %}&nbsp;·&nbsp; arraste <i class="bi bi-arrows-move"></i> para reordenar{% endif %}
+        </p>
+    </div>
+    {% if pode_gerenciar %}
+    <a href="{% url 'status_criar' %}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-lg me-1"></i> Adicionar status
+    </a>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle" style="font-size:0.875rem;">
+            <thead>
+                <tr class="text-secondary" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em;">
+                    {% if pode_gerenciar %}<th style="width:32px;"></th>{% endif %}
+                    <th style="width:32px;">#</th>
+                    <th>Status</th>
+                    <th>Perfil</th>
+                    <th>Regras</th>
+                    <th style="width:70px;">Ativo</th>
+                    {% if pode_gerenciar %}<th style="width:40px;"></th>{% endif %}
+                </tr>
+            </thead>
+            <tbody id="corpoStatus">
+                {% for s in status_list %}
+                <tr data-status-id="{{ s.pk }}" class="{% if not s.ativo %}text-muted{% endif %}">
+                    {% if pode_gerenciar %}
+                    <td class="drag-handle text-secondary" style="cursor:grab;">
+                        <i class="bi bi-grip-vertical"></i>
+                    </td>
+                    {% endif %}
+                    <td class="text-secondary">{{ s.ordem }}</td>
+                    <td class="py-2">
+                        <div style="font-weight:600;">{{ s.nome }}</div>
+                        <div class="text-secondary" style="font-size:0.75rem; font-family:'JetBrains Mono','Fira Code',Consolas,monospace;">{{ s.slug }}</div>
+                    </td>
+                    <td class="text-secondary">{{ s.get_perfil_responsavel_display }}</td>
+                    <td>
+                        {% if s.exige_atribuicao %}<span class="dito-kbd me-1">exige atribuição</span>{% endif %}
+                        {% if s.is_inicial %}<span class="dito-kbd me-1">inicial</span>{% endif %}
+                        {% if s.is_final %}<span class="dito-kbd">final</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if pode_gerenciar %}
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input btn-toggle-ativo" type="checkbox" role="switch"
+                                   data-status-id="{{ s.pk }}" {% if s.ativo %}checked{% endif %}
+                                   style="cursor:pointer;">
+                        </div>
+                        {% else %}
+                            {% if s.ativo %}
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            {% else %}
+                            <i class="bi bi-x-circle text-secondary"></i>
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                    {% if pode_gerenciar %}
+                    <td>
+                        <a href="{% url 'status_editar' s.pk %}" class="btn btn-sm btn-outline-secondary border-0" title="Editar">
+                            <i class="bi bi-pencil-square"></i>
+                        </a>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if pode_gerenciar %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+<script>
+(function () {
+    const CSRF = "{{ csrf_token }}";
+    const corpo = document.getElementById("corpoStatus");
+
+    new Sortable(corpo, {
+        handle: ".drag-handle",
+        animation: 150,
+        onEnd: async function () {
+            const ids = Array.from(corpo.querySelectorAll("tr")).map(tr => tr.dataset.statusId);
+            try {
+                const r = await fetch("{% url 'status_reordenar' %}", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+                    body: JSON.stringify({ ids }),
+                });
+                const d = await r.json();
+                if (!d.ok) alert(d.erro || "Erro ao reordenar.");
+                window.location.reload();
+            } catch (e) {
+                alert("Erro de conexão ao reordenar.");
+                window.location.reload();
+            }
+        },
+    });
+
+    document.querySelectorAll(".btn-toggle-ativo").forEach(function (chk) {
+        chk.addEventListener("change", async function () {
+            const id = chk.dataset.statusId;
+            const estadoAnterior = !chk.checked;
+            try {
+                const r = await fetch(`/status/${id}/toggle-ativo/`, {
+                    method: "POST",
+                    headers: { "X-CSRFToken": CSRF },
+                });
+                const d = await r.json();
+                if (!d.ok) {
+                    alert(d.erro || "Não foi possível alterar.");
+                    chk.checked = estadoAnterior;
+                    return;
+                }
+                window.location.reload();
+            } catch (e) {
+                alert("Erro de conexão.");
+                chk.checked = estadoAnterior;
+            }
+        });
+    });
+})();
+</script>
+{% endif %}
+
+{% endblock %}
