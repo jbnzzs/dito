@@ -41,7 +41,10 @@ def _imagens_do_lote_para_usuario(lote, usuario):
             "liberado-conferencia", "em-conferencia", "conferido",
             "revisando", "revisado",
         ]
-        filtro_responsavel = {}
+        # Igual aos demais perfis: imagens já marcadas como prontas saem da
+        # fila de navegação, para o contador andar e o botão de concluir o
+        # lote aparecer na última pendente.
+        filtro_responsavel = {"pronto_para_lote": False}
     elif usuario.tipo == Usuario.Tipo.DESCRITOR:
         slugs_pendentes = ["liberado-descricao", "descrevendo"]
         filtro_responsavel = {"responsavel": usuario, "pronto_para_lote": False}
@@ -751,6 +754,17 @@ def descricao_imagem(request, pk):
                 descricao.revisor = usuario
                 descricao.save()
 
+        elif usuario.tipo == usuario.Tipo.COORDENADOR and imagem.status.slug == "conferido":
+            # Conferência concluída pelo revisor: ao abrir a tarefa, o
+            # coordenador assume a revisão final automaticamente.
+            novo_slug = "revisando"
+            tipo_acao = HistoricoItem.TipoAcao.REVISAO_INICIADA
+            if descricao and not descricao.coordenador:
+                descricao.coordenador = usuario
+                descricao.save()
+            if not imagem.responsavel:
+                imagem.responsavel = usuario
+
         if novo_slug:
             novo_status = StatusWorkflow.objects.get(slug=novo_slug)
             imagem.status = novo_status
@@ -1029,15 +1043,6 @@ def avancar_status(request, pk):
         "novo_slug": proximo_status.slug,
         "proxima_url": proxima_url,
     })
-
-
-# ============================================================
-# TESTE
-# ============================================================
-
-@login_required
-def teste(request):
-    return render(request, "core/teste.html")
 
 
 # ============================================================
@@ -1668,6 +1673,8 @@ def lotes_lista(request):
         tipo=Usuario.Tipo.REVISOR, is_active=True
     ).order_by("first_name", "username")
 
+    status_disponiveis = StatusWorkflow.objects.filter(ativo=True).order_by("ordem")
+
     ctx = {
         "lotes_dados": lotes_dados,
         "busca": busca,
@@ -1677,6 +1684,7 @@ def lotes_lista(request):
         "eh_coordenacao": eh_coordenacao,
         "descritores": descritores,
         "revisores": revisores,
+        "status_disponiveis": status_disponiveis,
     }
     return render(request, "core/lotes_lista.html", ctx)
 # ============================================================
@@ -1742,9 +1750,18 @@ def devolver_lote(request, pk):
         tipo_bloqueio = HistoricoItem.TipoAcao.REVISOR_BLOQUEADO
         campo_bloqueio = "revisor_bloqueado"
         rotulo = "conferência"
+    elif usuario.tipo == Usuario.Tipo.COORDENADOR:
+        # Revisão final do lote: o coordenador conclui e o lote inteiro
+        # passa para "Revisado". Não há bloqueio de acesso nesta fase —
+        # o coordenador continua com permissão para reabrir e finalizar.
+        slug_origem, slug_destino = "revisando", "revisado"
+        tipo_acao = HistoricoItem.TipoAcao.REVISAO_CONCLUIDA
+        tipo_bloqueio = None
+        campo_bloqueio = None
+        rotulo = "revisão final"
     else:
         return JsonResponse(
-            {"ok": False, "erro": "Apenas descritor ou revisor podem devolver um lote."}, status=403,
+            {"ok": False, "erro": "Seu perfil não pode concluir um lote nesta etapa."}, status=403,
         )
 
     try:
@@ -1765,12 +1782,13 @@ def devolver_lote(request, pk):
         for img in pendentes:
             status_anterior = img.status
             img.status = proximo_status
-            img.responsavel = None
             img.pronto_para_lote = False
+            if campo_bloqueio:
+                img.responsavel = None
             img.save()
 
             descricao = getattr(img, "descricao", None)
-            if descricao:
+            if descricao and campo_bloqueio:
                 setattr(descricao, campo_bloqueio, True)
                 descricao.save()
 
@@ -1779,7 +1797,7 @@ def devolver_lote(request, pk):
                 status_anterior=status_anterior, novo_status=proximo_status,
                 observacao=f"Lote '{lote.nome}' devolvido ao coordenador após {rotulo}.",
             )
-            if descricao:
+            if descricao and tipo_bloqueio:
                 HistoricoItem.objects.create(
                     imagem=img, descricao=descricao, usuario=usuario, tipo_acao=tipo_bloqueio,
                     status_anterior=status_anterior, novo_status=proximo_status,
@@ -1788,7 +1806,9 @@ def devolver_lote(request, pk):
 
     return JsonResponse({
         "ok": True,
-        "mensagem": f"Lote '{lote.nome}' devolvido ao coordenador. {len(pendentes)} imagem(ns) concluída(s).",
+        "mensagem": (
+            f"Lote '{lote.nome}': {len(pendentes)} imagem(ns) concluída(s) após {rotulo}."
+        ),
     })
 
 
@@ -2117,3 +2137,276 @@ def minha_conta(request):
         return redirect("minha_conta")
 
     return render(request, "core/minha_conta.html", {"usuario": usuario})
+
+# ============================================================
+# RELATÓRIOS
+# ============================================================
+# Exportação no formato compatível com o FotoWeb, gerada só a partir
+# de imagens com a descrição finalizada (fluxo completo: descrita,
+# conferida e revisada). Enquanto não estiver finalizada, a imagem
+# não aparece aqui — o relatório é sempre o "resultado pronto".
+
+import json as _json
+
+
+def _lang_tag(idioma_codigo):
+    """
+    Converte o código ISO 639-3 salvo no Trecho (ex: 'por') pra uma tag
+    tipo BCP-47 (ex: 'pt-BR'), no mesmo estilo usado pelo FotoWeb.
+    Português vira especificamente 'pt-BR'; os demais idiomas usam
+    só o código de 2 letras (ex: 'en', 'es').
+    """
+    try:
+        lang = pycountry.languages.get(alpha_3=idioma_codigo)
+        alpha_2 = lang.alpha_2 if lang and hasattr(lang, "alpha_2") else None
+    except Exception:
+        alpha_2 = None
+
+    if not alpha_2:
+        return idioma_codigo or "und"
+    if alpha_2 == "pt":
+        return "pt-BR"
+    return alpha_2
+
+
+def _imagens_finalizadas(request):
+    """Queryset base do relatório, com os filtros opcionais da tela."""
+    imagens = (
+        Imagem.objects.filter(descricao__finalizado=True, ativo=True)
+        .select_related("status", "descricao", "descricao__descritor")
+        .prefetch_related("descricao__trechos")
+        .order_by("nome_obra", "retranca")
+    )
+
+    obra_f = request.GET.get("obra", "").strip()
+    if obra_f:
+        imagens = imagens.filter(nome_obra__icontains=obra_f)
+
+    lote_f = request.GET.get("lote", "").strip()
+    if lote_f:
+        imagens = imagens.filter(lote_id=lote_f)
+
+    return imagens
+
+
+@login_required
+def relatorios_lista(request):
+    from .models import Lote
+
+    imagens = _imagens_finalizadas(request)
+
+    contexto = {
+        "total": imagens.count(),
+        "obras": (
+            Imagem.objects.filter(descricao__finalizado=True, ativo=True)
+            .values_list("nome_obra", flat=True)
+            .distinct()
+            .order_by("nome_obra")
+        ),
+        "lotes": Lote.objects.all().order_by("nome"),
+        "obra_selecionada": request.GET.get("obra", ""),
+        "lote_selecionado": request.GET.get("lote", ""),
+    }
+    return render(request, "core/relatorios.html", contexto)
+
+
+@login_required
+def relatorios_exportar(request):
+    from django.http import HttpResponse
+    from openpyxl import Workbook
+
+    imagens = _imagens_finalizadas(request)
+
+    wb = Workbook()
+    aba = wb.active
+    aba.title = "Relatório"
+
+    colunas = [
+        "obra", "componente", "volume", "capitulo", "keywords", "status",
+        "retranca", "img_file", "descricao", "usuario", "etapa",
+        "retranca_lower", "descricao_flat",
+    ]
+    aba.append(colunas)
+
+    for imagem in imagens:
+        descricao = imagem.descricao
+        trechos = list(descricao.trechos.filter(ativo=True).order_by("ordem"))
+
+        trechos_json = [
+            {"lang": _lang_tag(t.idioma_codigo), "text": t.texto}
+            for t in trechos
+        ]
+        descricao_flat = " ".join(t.texto for t in trechos)
+
+        usuario = descricao.descritor or imagem.responsavel
+        usuario_login = usuario.username if usuario else ""
+
+        aba.append([
+            imagem.nome_obra,
+            imagem.componente_curricular,
+            imagem.volume_ano_modulo,
+            imagem.capitulo_unidade,
+            "",  # keywords — o Dito! ainda não tem esse campo (TODO se for necessário)
+            imagem.status.nome if imagem.status else "",
+            imagem.retranca,
+            imagem.url_fotoweb,
+            _json.dumps(trechos_json, ensure_ascii=False) if trechos_json else None,
+            usuario_login,
+            f"Etapa: {imagem.etapa}",
+            imagem.retranca.lower(),
+            descricao_flat or None,
+        ])
+
+    for i, largura in enumerate([16, 14, 8, 10, 10, 14, 24, 40, 40, 14, 12, 24, 40], start=1):
+        aba.column_dimensions[aba.cell(row=1, column=i).column_letter].width = largura
+
+    resposta = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    resposta["Content-Disposition"] = 'attachment; filename="relatorio_dito.xlsx"'
+    wb.save(resposta)
+    return resposta
+
+
+# ============================================================
+# BUSCAR RETRANCA
+# ============================================================
+
+@login_required
+def buscar_retranca(request):
+    from .models import filtro_autoria_imagem
+
+    termo = request.GET.get("q", "").strip()
+    resultados = []
+
+    if termo:
+        imagens = Imagem.objects.filter(ativo=True).select_related("status", "lote")
+
+        # Descritor/revisor só vê o que é responsabilidade dele; coordenação/admin vê tudo.
+        if not _apenas_coordenador(request.user):
+            imagens = imagens.filter(filtro_autoria_imagem(request.user)).distinct()
+
+        resultados = imagens.filter(retranca__icontains=termo).order_by("nome_obra", "retranca")[:100]
+
+    return render(request, "core/buscar_retranca.html", {
+        "termo": termo,
+        "resultados": resultados,
+    })
+
+
+# ============================================================
+# HISTÓRICO
+# ============================================================
+
+@login_required
+def historico_lista(request):
+    from django.core.paginator import Paginator
+    from .models import HistoricoItem
+
+    if not _apenas_coordenador(request.user):
+        messages.error(request, "Você não tem acesso ao histórico geral.")
+        return redirect("dashboard")
+
+    itens = HistoricoItem.objects.select_related(
+        "imagem", "usuario", "status_anterior", "novo_status"
+    ).order_by("-criado_em")
+
+    busca = request.GET.get("busca", "").strip()
+    if busca:
+        itens = itens.filter(imagem__retranca__icontains=busca)
+
+    tipo_acao_f = request.GET.get("tipo_acao", "").strip()
+    if tipo_acao_f:
+        itens = itens.filter(tipo_acao=tipo_acao_f)
+
+    usuario_f = request.GET.get("usuario", "").strip()
+    if usuario_f:
+        itens = itens.filter(usuario_id=usuario_f)
+
+    paginator = Paginator(itens, 40)
+    pagina_obj = paginator.get_page(request.GET.get("pagina", 1))
+
+    return render(request, "core/historico_lista.html", {
+        "pagina_obj": pagina_obj,
+        "busca": busca,
+        "tipo_acao_f": tipo_acao_f,
+        "usuario_f": usuario_f,
+        "tipos_acao": HistoricoItem.TipoAcao.choices,
+        "usuarios": Usuario.objects.filter(acoes__isnull=False).distinct().order_by("first_name"),
+    })
+
+@login_required
+@require_POST
+def lote_alterar_status(request, lote_id):
+    """
+    Altera manualmente o status de TODAS as imagens de um lote.
+
+    Atalho operacional para coordenação/administração — não passa pelas
+    regras do motor de workflow (avancar_status). Serve para corrigir um
+    lote que ficou preso na etapa errada ou para demonstrar o fluxo.
+    Cada imagem gera registro no histórico, preservando a rastreabilidade.
+    """
+    from .models import HistoricoItem, Lote
+
+    if not _apenas_coordenador(request.user):
+        messages.error(request, "Você não tem permissão para alterar o status de um lote.")
+        return redirect("lotes_lista")
+
+    lote = get_object_or_404(Lote, pk=lote_id)
+    destino_id = request.POST.get("status_id")
+
+    if not destino_id:
+        messages.error(request, "Selecione o status de destino.")
+        return redirect(request.POST.get("next", "lotes_lista"))
+
+    try:
+        novo_status = StatusWorkflow.objects.get(pk=destino_id, ativo=True)
+    except StatusWorkflow.DoesNotExist:
+        messages.error(request, "Status inválido.")
+        return redirect(request.POST.get("next", "lotes_lista"))
+
+    imagens = list(Imagem.objects.filter(lote=lote, ativo=True).exclude(status=novo_status))
+
+    if not imagens:
+        messages.info(request, f"Nenhuma imagem do lote '{lote.nome}' precisou ser alterada.")
+        return redirect(request.POST.get("next", "lotes_lista"))
+
+    with transaction.atomic():
+        for img in imagens:
+            status_anterior = img.status
+            img.status = novo_status
+            img.pronto_para_lote = False
+            img.save()
+
+            descricao = getattr(img, "descricao", None)
+            if descricao:
+                # Ao voltar o lote para uma etapa anterior, reabre o acesso
+                # de quem precisa atuar nela de novo.
+                if novo_status.perfil_responsavel == Usuario.Tipo.DESCRITOR:
+                    descricao.descritor_bloqueado = False
+                elif novo_status.perfil_responsavel == Usuario.Tipo.REVISOR:
+                    descricao.revisor_bloqueado = False
+
+                # Mantém o marcador de finalização coerente com o status —
+                # é ele que alimenta os relatórios.
+                descricao.finalizado = bool(novo_status.is_final)
+                descricao.save()
+
+            HistoricoItem.objects.create(
+                imagem=img,
+                descricao=descricao,
+                usuario=request.user,
+                tipo_acao=HistoricoItem.TipoAcao.STATUS_ALTERADO,
+                status_anterior=status_anterior,
+                novo_status=novo_status,
+                observacao=(
+                    f"Alteração manual de status do lote '{lote.nome}' "
+                    f"por {request.user.get_full_name() or request.user.email}."
+                ),
+            )
+
+    messages.success(
+        request,
+        f"{len(imagens)} imagem(ns) do lote '{lote.nome}' alterada(s) para '{novo_status.nome}'.",
+    )
+    return redirect(request.POST.get("next", "lotes_lista"))

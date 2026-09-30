@@ -10,14 +10,14 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@200..1000&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@600;700&family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'css/dito-theme.css' %}">
 
     <style>
-        html, body { height: 100%; margin: 0; background: #F8F3EE; }
+        html, body { height: 100%; margin: 0; background: #FAFAFA; }
 
         .acesso-topo {
-            background: #590515;
+            background: #16304D;
             padding: 1.5rem 2rem;
             display: flex;
             align-items: center;
@@ -27,7 +27,7 @@
         .acesso-topo img { height: 30px; }
 
         .acesso-topo a {
-            color: #F3DEE1;
+            color: #B8C6D6;
             font-size: 0.875rem;
             font-weight: 700;
             text-decoration: none;
@@ -50,7 +50,7 @@
 
         .acesso-card {
             background: #FFFFFF;
-            border: 0.5px solid #D8CFC5;
+            border: 0.5px solid #DAD6CD;
             border-radius: 12px;
             padding: 2.5rem;
             width: 100%;
@@ -58,15 +58,16 @@
         }
 
         .acesso-card h1 {
+            font-family: 'Lora', serif;
             font-size: 1.35rem;
-            font-weight: 800;
-            color: #1C1C1A;
+            font-weight: 600;
+            color: #1A1A1A;
             text-align: center;
             margin-bottom: 0.35rem;
         }
 
         .acesso-card p.subtitulo {
-            color: #6B6A66;
+            color: #6E6E6E;
             font-size: 0.875rem;
             font-weight: 500;
             text-align: center;
@@ -76,7 +77,7 @@
         .acesso-card label {
             font-weight: 700;
             font-size: 0.8rem;
-            color: #1C1C1A;
+            color: #1A1A1A;
             margin-bottom: 0.35rem;
             display: block;
         }
@@ -84,20 +85,20 @@
         .acesso-card input {
             width: 100%;
             padding: 0.65rem 0.9rem;
-            border: 0.5px solid #D8CFC5;
+            border: 0.5px solid #DAD6CD;
             border-radius: 8px;
             background: #FFFFFF;
-            font-family: 'Cairo', system-ui, sans-serif;
+            font-family: 'Manrope', system-ui, sans-serif;
             font-size: 0.9375rem;
             font-weight: 600;
-            color: #1C1C1A;
+            color: #1A1A1A;
             outline: none;
             transition: border-color 0.15s ease, box-shadow 0.15s ease;
             margin-bottom: 1.1rem;
         }
 
         .acesso-card input:focus {
-            border-color: #A62E38;
+            border-color: #1B3A5C;
             box-shadow: 0 0 0 3px rgba(166, 46, 56, 0.12);
         }
 
@@ -106,11 +107,11 @@
         .btn-acesso {
             width: 100%;
             padding: 0.75rem;
-            background-color: #A62E38;
+            background-color: #1B3A5C;
             color: #FFFFFF;
             border: none;
             border-radius: 8px;
-            font-family: 'Cairo', system-ui, sans-serif;
+            font-family: 'Manrope', system-ui, sans-serif;
             font-size: 1rem;
             font-weight: 700;
             cursor: pointer;
@@ -118,7 +119,7 @@
             margin-top: 0.5rem;
         }
 
-        .btn-acesso:hover { background-color: #590515; }
+        .btn-acesso:hover { background-color: #16304D; }
 
         .campo-erro {
             color: #9B5050;
@@ -145,10 +146,10 @@
             text-align: center;
             margin-top: 1.5rem;
             font-size: 0.85rem;
-            color: #6B6A66;
+            color: #6E6E6E;
         }
 
-        .acesso-rodape a { color: #A62E38; font-weight: 700; text-decoration: none; }
+        .acesso-rodape a { color: #1B3A5C; font-weight: 700; text-decoration: none; }
         .acesso-rodape a:hover { text-decoration: underline; }
     </style>
 </head>

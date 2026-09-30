@@ -211,15 +211,15 @@
                         </td>
 
                         <td>
-                            {% if img.url_fotoweb %}
-                            <a href="{{ img.url_fotoweb }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary" title="Ver imagem no FotoWeb">
+                            {% if img.link_fotoweb %}
+                            <a href="{{ img.link_fotoweb }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary dito-btn-acao" title="Ver imagem no FotoWeb">
                                 <i class="bi bi-image"></i>
                             </a>
                             {% else %}
                             <span class="btn btn-sm btn-outline-secondary disabled"><i class="bi bi-image"></i></span>
                             {% endif %}
                             {% if img.url_pdf %}
-                            <a href="{{ img.url_pdf }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary" title="Ver PDF">
+                            <a href="{{ img.url_pdf }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary dito-btn-acao" title="Ver PDF">
                                 <i class="bi bi-file-earmark-pdf"></i>
                             </a>
                             {% else %}
@@ -268,7 +268,7 @@
                         </td>
 
                         <td class="position-relative">
-                            <button type="button" class="btn btn-sm btn-outline-secondary dito-datas-btn" data-target="datas-{{ img.pk }}" title="Ver datas">
+                            <button type="button" class="btn btn-sm btn-outline-secondary dito-datas-btn dito-btn-acao" data-target="datas-{{ img.pk }}" title="Ver datas">
                                 <i class="bi bi-clock-history"></i>
                             </button>
                             <div id="datas-{{ img.pk }}" class="dito-datas-popover">
@@ -316,7 +316,7 @@
                                     </button>
                                     {% endif %}
 
-                                    <a href="{% url 'imagem_editar' img.pk %}" class="btn btn-sm btn-outline-secondary" title="Editar">
+                                    <a href="{% url 'imagem_editar' img.pk %}" class="btn btn-sm btn-outline-secondary dito-btn-acao" title="Editar">
                                         <i class="bi bi-pencil"></i>
                                     </a>
                                     <a href="{% url 'imagem_excluir' img.pk %}" class="btn btn-sm btn-outline-danger" title="Excluir">

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Relatórios — Dito!{% endblock %}
+{% block page_title %}Relatórios{% endblock %}
+{% block nav_relatorios %}active{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <h2 class="mb-1">Relatórios</h2>
+        <p class="text-secondary mb-0" style="font-size:0.875rem;">
+            {{ total }} imagem{{ total|pluralize }} com descrição finalizada
+        </p>
+    </div>
+    <a href="{% url 'relatorios_exportar' %}?obra={{ obra_selecionada }}&lote={{ lote_selecionado }}"
+       class="btn btn-primary">
+        <i class="bi bi-download me-1"></i> Exportar .xlsx
+    </a>
+</div>
+
+<div class="card dito-card-flush mb-3">
+    <div class="card-body py-3 px-3">
+        <form method="get" class="d-flex align-items-center gap-3 flex-wrap">
+            <select name="obra" class="form-select form-select-sm" style="max-width:220px;" onchange="this.form.submit()">
+                <option value="">Todas as obras</option>
+                {% for obra in obras %}
+                <option value="{{ obra }}" {% if obra == obra_selecionada %}selected{% endif %}>{{ obra }}</option>
+                {% endfor %}
+            </select>
+
+            <select name="lote" class="form-select form-select-sm" style="max-width:220px;" onchange="this.form.submit()">
+                <option value="">Todos os lotes</option>
+                {% for lote in lotes %}
+                <option value="{{ lote.pk }}" {% if lote.pk|stringformat:"s" == lote_selecionado %}selected{% endif %}>{{ lote.nome }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <p class="mb-2" style="font-size:0.875rem;">
+            <strong>O que entra no relatório:</strong> só imagens cuja descrição já está
+            <span class="badge" style="background:#2F7D4F;">finalizada</span> — ou seja, passou
+            pelo fluxo completo (descrita, conferida e revisada). Enquanto o fluxo não terminar,
+            a imagem não aparece aqui.
+        </p>
+        <p class="mb-0 text-secondary" style="font-size:0.8rem;">
+            O arquivo exportado segue o mesmo formato de colunas usado pelo FotoWeb
+            (obra, componente, volume, capítulo, keywords, status, retranca, img_file,
+            descricao, usuario, etapa, retranca_lower, descricao_flat), pronto pra
+            reimportar no sistema de origem.
+        </p>
+    </div>
+</div>
+
+{% endblock %}

@@ -390,6 +390,34 @@ class Imagem(models.Model):
         verbose_name_plural = "Imagens"
         ordering = ["-criado_em"]
 
+    # Base do acervo no FotoWeb. O caminho de rede do arquivo
+    # (//arara/ACERVO/_UPLOADS_FOTOWEB/<resto>) tem exatamente o mesmo
+    # "resto" que a URL do FotoWeb, então dá para montar o link sem
+    # precisar cadastrá-lo imagem por imagem.
+    FOTOWEB_BASE = "http://fotoweb.ensinolivre.com.br:9090/fotoweb/archives/5087-G27-EF1-AUDIODESC/"
+    FOTOWEB_PREFIXO_REDE = "_UPLOADS_FOTOWEB/"
+
+    @property
+    def link_fotoweb(self):
+        """
+        Link para a imagem no FotoWeb. Usa a URL cadastrada manualmente
+        se houver; senão, monta a partir do caminho de rede do arquivo.
+        Retorna "" quando não há caminho suficiente para montar.
+        """
+        if self.url_fotoweb:
+            return self.url_fotoweb
+
+        caminho = (self.caminho_arquivo or "").replace("\\", "/")
+        marcador = self.FOTOWEB_PREFIXO_REDE
+        if marcador not in caminho:
+            return ""
+
+        relativo = caminho.split(marcador, 1)[1].strip("/")
+        if not relativo:
+            return ""
+
+        return f"{self.FOTOWEB_BASE}{relativo}.info"
+
     def __str__(self):
         return f"{self.retranca} — {self.nome_obra}"
 

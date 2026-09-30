@@ -8,58 +8,64 @@
    ------------------------------------------------------------ */
 :root {
     /* Cor principal */
-    --bs-primary: #A62E38;
-    --bs-primary-rgb: 166, 46, 56;
+    --bs-primary: #183B5C;
+    --bs-primary-rgb: 24, 59, 92;
 
     /* Fundo e texto */
-    --bs-body-bg: #F8F3EE;
-    --bs-body-color: #1C1C1A;
-    --bs-body-font-family: 'Cairo', system-ui, -apple-system, sans-serif;
+    --bs-body-bg: #FAFAFA;
+    --bs-body-color: #1A1A1A;
+    --bs-body-font-family: 'Manrope', system-ui, -apple-system, sans-serif;
     --bs-body-font-size: 0.9375rem;
     --bs-body-line-height: 1.6;
     --bs-body-font-weight: 500;
 
     /* Bordas */
-    --bs-border-color: #D8CFC5;
+    --bs-border-color: #DAD6CD;
     --bs-border-width: 0.5px;
     --bs-border-radius: 8px;
     --bs-border-radius-sm: 6px;
     --bs-border-radius-lg: 10px;
 
     /* Links */
-    --bs-link-color: #A62E38;
-    --bs-link-hover-color: #590515;
+    --bs-link-color: #183B5C;
+    --bs-link-hover-color: #16304D;
 
     /* Superfícies */
-    --bs-card-bg: #F2F2F2;
-    --bs-modal-bg: #F2F2F2;
+    --bs-card-bg: #FFFFFF;
+    --bs-modal-bg: #FFFFFF;
 
     /* Secundária */
-    --bs-secondary-color: #6B6A66;
-    --bs-secondary-bg: #F8F3EE;
+    --bs-secondary-color: #6E6E6E;
+    --bs-secondary-bg: #FAFAFA;
 
     /* Estados semânticos */
-    --bs-success: #3B6D11;
-    --bs-danger: #A62E38;
-    --bs-warning: #BF7D2C;
+    --bs-success: #2F7D4F;
+    --bs-danger: #C0392B;
+    --bs-warning: #B8860B;
 
     /* Tipografia */
-    --bs-headings-font-family: 'Cairo', system-ui, -apple-system, sans-serif;
-    --bs-headings-font-weight: 800;
-    --bs-headings-color: #1C1C1A;
+    --bs-headings-font-family: 'Lora', serif;
+    --bs-headings-font-weight: 700;
+    --bs-headings-color: #1A1A1A;
 }
 
 /* ------------------------------------------------------------
    2. Variáveis internas do Dito!
    ------------------------------------------------------------ */
 :root {
-    --dito-vinho: #A62E38;
-    --dito-vinho-escuro: #590515;
-    --dito-vinho-claro: #F3DEE1;
-    --dito-dourado: #BF7D2C;
-    --dito-dourado-claro: #F2D0A7;
-    --dito-bege: #D8CFC5;
-    --dito-grafite: #1C1C1A;
+    /* Âmbar — reservado para BOTÕES e contornos de ação */
+    --dito-ambar: #B8860B;
+    --dito-ambar-escuro: #8C6408;
+    --dito-ambar-claro: #FBF3DF;
+
+    /* Azul da logo — links, ícones, textos de apoio e painéis */
+    --dito-vinho: #183B5C;
+    --dito-vinho-escuro: #16304D;
+    --dito-vinho-claro: #EEF2F6;
+    --dito-dourado: #B8860B;
+    --dito-dourado-claro: #FBF3DF;
+    --dito-bege: #DAD6CD;
+    --dito-grafite: #1A1A1A;
 }
 
 /* ------------------------------------------------------------
@@ -70,7 +76,10 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+    font-family: 'Lora', serif;
+    font-weight: 700;
     letter-spacing: -0.01em;
 }
 
@@ -146,7 +155,7 @@ a:hover {
     height: 100vh;
     position: sticky;
     top: 0;
-    background: #590515;
+    background: #0F2338;
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
@@ -197,7 +206,7 @@ a:hover {
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #F3DEE1;
+    color: #B8C6D6;
     opacity: 0.4;
     padding: 0.75rem 0.75rem 0.25rem;
     white-space: nowrap;
@@ -213,7 +222,7 @@ a:hover {
     gap: 0.75rem;
     padding: 0.6rem 0.75rem;
     border-radius: 6px;
-    color: #F3DEE1;
+    color: #B8C6D6;
     text-decoration: none;
     font-size: 0.875rem;
     font-weight: 600;
@@ -227,6 +236,10 @@ a:hover {
     background: rgba(255, 255, 255, 0.1);
     opacity: 1;
     color: #FFFFFF;
+}
+
+.dito-nav-item.active {
+    box-shadow: inset 3px 0 0 #E1C4A1;
 }
 
 .dito-nav-item i {
@@ -260,11 +273,11 @@ a:hover {
     gap: 0.75rem;
     padding: 0.6rem 0.75rem;
     border-radius: 6px;
-    color: #F3DEE1;
+    color: #B8C6D6;
     background: none;
     border: none;
     cursor: pointer;
-    font-family: 'Cairo', system-ui, sans-serif;
+    font-family: 'Manrope', system-ui, sans-serif;
     font-size: 0.875rem;
     font-weight: 600;
     opacity: 0.65;
@@ -307,14 +320,14 @@ a:hover {
     min-width: 0;
     display: flex;
     flex-direction: column;
-    background: #F8F3EE;
+    background: #FAFAFA;
 }
 
 /* ---- Header ---- */
 .dito-header {
     height: 64px;
     background: #FFFFFF;
-    border-bottom: 0.5px solid #D8CFC5;
+    border-bottom: 0.5px solid #DAD6CD;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -332,9 +345,10 @@ a:hover {
 }
 
 .dito-header-title {
-    font-size: 1rem;
-    font-weight: 700;
-    color: #1C1C1A;
+    font-family: 'Lora', serif;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #1A1A1A;
 }
 
 .dito-header-right {
@@ -352,14 +366,14 @@ a:hover {
 .dito-user-name {
     font-size: 0.875rem;
     font-weight: 700;
-    color: #1C1C1A;
+    color: #1A1A1A;
     line-height: 1.2;
 }
 
 .dito-user-tipo {
     font-size: 0.7rem;
     font-weight: 600;
-    color: #6B6A66;
+    color: #6E6E6E;
     line-height: 1.2;
 }
 
@@ -369,10 +383,10 @@ a:hover {
     gap: 0.4rem;
     padding: 0.4rem 0.85rem;
     background: none;
-    border: 0.5px solid #D8CFC5;
+    border: 0.5px solid #DAD6CD;
     border-radius: 6px;
-    color: #6B6A66;
-    font-family: 'Cairo', system-ui, sans-serif;
+    color: #6E6E6E;
+    font-family: 'Manrope', system-ui, sans-serif;
     font-size: 0.8rem;
     font-weight: 700;
     cursor: pointer;
@@ -380,8 +394,8 @@ a:hover {
 }
 
 .dito-logout-btn:hover {
-    border-color: #A62E38;
-    color: #A62E38;
+    border-color: #183B5C;
+    color: #183B5C;
 }
 
 /* ---- Conteúdo ---- */
@@ -408,14 +422,14 @@ a:hover {
 
 .dito-search:focus-within {
     border-color: var(--dito-vinho);
-    box-shadow: 0 0 0 3px rgba(166, 46, 56, 0.12);
+    box-shadow: 0 0 0 3px rgba(27, 58, 92, 0.12);
 }
 
 .dito-search input {
     border: none;
     outline: none;
     background: transparent;
-    font-family: 'Cairo', system-ui, sans-serif;
+    font-family: 'Manrope', system-ui, sans-serif;
     font-size: 14px;
     color: var(--dito-grafite);
     flex: 1;
@@ -430,8 +444,8 @@ a:hover {
     font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
     font-size: 12px;
     font-weight: 500;
-    color: var(--dito-vinho-escuro);
-    background: var(--dito-vinho-claro);
+    color: var(--dito-ambar-escuro);
+    background: var(--dito-ambar-claro);
     padding: 3px 8px;
     border-radius: 4px;
     letter-spacing: 0.02em;
@@ -452,7 +466,7 @@ a:hover {
 }
 
 .dito-search-lg:focus-within {
-    box-shadow: 0 0 0 4px rgba(166, 46, 56, 0.14);
+    box-shadow: 0 0 0 4px rgba(27, 58, 92, 0.14);
 }
 
 /* ------------------------------------------------------------
@@ -479,9 +493,10 @@ a:hover {
 }
 
 .dito-stat-number {
+    font-family: 'Lora', serif;
     font-size: 2rem;
-    font-weight: 800;
-    color: #1C1C1A;
+    font-weight: 700;
+    color: #1A1A1A;
     line-height: 1;
     margin-bottom: 0.15rem;
 }
@@ -489,7 +504,7 @@ a:hover {
 .dito-stat-label {
     font-size: 0.8rem;
     font-weight: 600;
-    color: #6B6A66;
+    color: #6E6E6E;
 }
 
 /* Cards de status (visão coordenação) */
@@ -499,21 +514,22 @@ a:hover {
     justify-content: space-between;
     padding: 0.65rem 0.85rem;
     background: #FFFFFF;
-    border: 0.5px solid #D8CFC5;
+    border: 0.5px solid #DAD6CD;
     border-radius: 8px;
 }
 
 .dito-status-count {
+    font-family: 'Lora', serif;
     font-size: 1.25rem;
-    font-weight: 800;
-    color: #1C1C1A;
+    font-weight: 700;
+    color: #1A1A1A;
 }
 
 /* Estado vazio */
 .dito-empty-state {
     text-align: center;
     padding: 2.5rem 1rem;
-    color: #6B6A66;
+    color: #6E6E6E;
 }
 
 .dito-empty-state i {
@@ -546,7 +562,7 @@ a:hover {
     transform: translateX(-50%);
     z-index: 1000;
     background: #FFFFFF;
-    border: 0.5px solid #D8CFC5;
+    border: 0.5px solid #DAD6CD;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(28, 28, 26, 0.15);
     padding: 10px 12px;
@@ -565,7 +581,7 @@ a:hover {
     gap: 12px;
     font-size: 0.75rem;
     padding: 3px 0;
-    border-bottom: 0.5px solid #D8CFC5;
+    border-bottom: 0.5px solid #DAD6CD;
 }
 
 .dito-datas-popover-item:last-child {
@@ -573,11 +589,11 @@ a:hover {
 }
 
 .dito-datas-popover-item span {
-    color: #6B6A66;
+    color: #6E6E6E;
 }
 
 .dito-datas-popover-item strong {
-    color: #1C1C1A;
+    color: #1A1A1A;
     white-space: nowrap;
 }
 
@@ -591,7 +607,7 @@ a:hover {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    color: #6B6A66;
+    color: #6E6E6E;
     margin-bottom: 4px;
 }
 
@@ -626,19 +642,19 @@ a:hover {
     width: 100%;
     display: flex;
     align-items: center;
-    background: #F2F2F2;
+    background: #FFFFFF;
     border: none;
-    border-top: 0.5px solid #D8CFC5;
+    border-top: 0.5px solid #DAD6CD;
     padding: 8px 16px;
     font-size: 0.8rem;
     font-weight: 700;
-    color: #590515;
+    color: #183B5C;
     cursor: pointer;
     transition: background 0.15s ease;
 }
 
 .dito-filtros-toggle:hover {
-    background: #F3DEE1;
+    background: #FBF3DF;
 }
 
 /* ------------------------------------------------------------
@@ -723,7 +739,7 @@ a:hover {
 
 .dito-celula-dupla .secundaria {
     font-size: 0.72rem;
-    color: #6B6A66;
+    color: #6E6E6E;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -746,7 +762,7 @@ a:hover {
 }
 
 .dito-responsavel-linha .rotulo {
-    color: #6B6A66;
+    color: #6E6E6E;
     font-weight: 700;
     margin-right: 3px;
 }
@@ -791,7 +807,7 @@ a:hover {
     height: 10px;
     border-radius: 5px;
     overflow: hidden;
-    background: #E8E0D6;
+    background: #EFF2F6;
 }
 
 .dito-progresso-segmento {
@@ -808,7 +824,7 @@ a:hover {
     align-items: center;
     gap: 5px;
     font-size: 0.72rem;
-    color: #6B6A66;
+    color: #6E6E6E;
 }
 
 .dito-progresso-legenda strong {
@@ -822,16 +838,17 @@ a:hover {
     border-radius: 50%;
 }
 
-/* Cores por status — gradação do claro (início) ao escuro (fim) */
-.dito-progresso-liberado-descricao   { background: #D8CFC5; }
-.dito-progresso-descrevendo          { background: #E0A87A; }
-.dito-progresso-descrito             { background: #BF7D2C; }
-.dito-progresso-liberado-conferencia { background: #D99A9F; }
-.dito-progresso-em-conferencia       { background: #C56A73; }
-.dito-progresso-conferido            { background: #A62E38; }
-.dito-progresso-revisando            { background: #8A2530; }
-.dito-progresso-revisado             { background: #6E1B26; }
-.dito-progresso-finalizado           { background: #2E7D5B; }
+/* Cores por status — só as 2 primeiras etapas ficam em azul; o âmbar
+   entra a partir de "Descrito" e o verde fica reservado pro final. */
+.dito-progresso-liberado-descricao   { background: #6E96BC; }
+.dito-progresso-descrevendo          { background: #2A5CAD; }
+.dito-progresso-descrito             { background: #F0D48A; }
+.dito-progresso-liberado-conferencia { background: #E0B84D; }
+.dito-progresso-em-conferencia       { background: #D9A521; }
+.dito-progresso-conferido            { background: #C9941A; }
+.dito-progresso-revisando            { background: #B8860B; }
+.dito-progresso-revisado             { background: #8C6408; }
+.dito-progresso-finalizado           { background: #2F7D4F; }
 
 
 /* ------------------------------------------------------------
@@ -845,4 +862,23 @@ a:hover {
 .dito-card-link:hover {
     border-color: var(--dito-vinho);
     transform: translateX(2px);
+}
+/* ============================================================
+   Reforço de âmbar nos pontos de interação (botões-ícone de ação
+   e cards em destaque), pra ele aparecer mais espalhado pela tela
+   em vez de só nos botões primários.
+   ============================================================ */
+
+.dito-btn-acao {
+    color: #B8860B;
+    border-color: rgba(184, 134, 11, 0.35);
+}
+.dito-btn-acao:hover {
+    background: #B8860B;
+    color: #FFFFFF;
+    border-color: #B8860B;
+}
+
+.dito-card-destaque {
+    border-left: 3px solid #B8860B;
 }

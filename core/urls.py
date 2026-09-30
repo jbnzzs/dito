@@ -29,8 +29,8 @@ urlpatterns = [
     path("lotes/", views.lotes_lista, name="lotes_lista"),
     path("lotes/organizar/", views.organizar_lotes, name="organizar_lotes_geral"),
     path("lotes/<int:lote_id>/atribuir/", views.atribuir_lote, name="atribuir_lote"),
+    path("lotes/<int:lote_id>/alterar-status/", views.lote_alterar_status, name="lote_alterar_status"),
     path("lotes/<int:pk>/editar/", views.lote_editar, name="lote_editar"),
-
 
     # ---- Usuários ----
     path("usuarios/", views.usuarios_lista, name="usuarios_lista"),
@@ -44,7 +44,15 @@ urlpatterns = [
     path("status/<int:pk>/toggle-ativo/", views.status_toggle_ativo, name="status_toggle_ativo"),
     path("status/reordenar/", views.status_reordenar, name="status_reordenar"),
 
-    path("teste/", views.teste, name="teste"),
+    # ---- Relatórios ----
+    path("relatorios/", views.relatorios_lista, name="relatorios_lista"),
+    path("relatorios/exportar/", views.relatorios_exportar, name="relatorios_exportar"),
+
+    # ---- Buscar retranca ----
+    path("buscar/", views.buscar_retranca, name="buscar_retranca"),
+
+    # ---- Histórico ----
+    path("historico/", views.historico_lista, name="historico_lista"),
 
 
 ]

@@ -18,20 +18,20 @@
     align-items: center;
     gap: 0.4rem;
     padding: 0.3rem 0.75rem;
-    border: 0.5px solid #D8CFC5;
+    border: 0.5px solid #DAD6CD;
     border-radius: 6px;
-    background: #F8F3EE;
-    font-family: 'Cairo', sans-serif;
+    background: #FAFAFA;
+    font-family: 'Manrope', sans-serif;
     font-size: 0.8rem;
     font-weight: 700;
-    color: #1C1C1A;
+    color: #1A1A1A;
     cursor: pointer;
     white-space: nowrap;
     transition: border-color 0.15s;
     min-width: 140px;
 }
 
-.idioma-btn:hover { border-color: #A62E38; }
+.idioma-btn:hover { border-color: #1B3A5C; }
 .idioma-btn i { font-size: 0.7rem; margin-left: auto; }
 
 .idioma-dropdown {
@@ -40,7 +40,7 @@
     left: 0;
     z-index: 500;
     background: #FFFFFF;
-    border: 0.5px solid #D8CFC5;
+    border: 0.5px solid #DAD6CD;
     border-radius: 8px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.12);
     width: 260px;
@@ -52,15 +52,15 @@
 
 .idioma-search {
     border: none;
-    border-bottom: 0.5px solid #D8CFC5;
+    border-bottom: 0.5px solid #DAD6CD;
     border-radius: 8px 8px 0 0;
     padding: 0.6rem 0.85rem;
-    font-family: 'Cairo', sans-serif;
+    font-family: 'Manrope', sans-serif;
     font-size: 0.875rem;
     font-weight: 600;
-    color: #1C1C1A;
+    color: #1A1A1A;
     outline: none;
-    background: #F8F3EE;
+    background: #FAFAFA;
 }
 
 .idioma-lista {
@@ -73,18 +73,18 @@
     padding: 0.45rem 0.85rem;
     font-size: 0.875rem;
     font-weight: 600;
-    color: #1C1C1A;
+    color: #1A1A1A;
     cursor: pointer;
     transition: background 0.1s;
 }
 
 .idioma-opcao:hover,
-.idioma-opcao.destacado { background: #F3DEE1; color: #590515; }
+.idioma-opcao.destacado { background: #FBF3DF; color: #16304D; }
 
 .idioma-opcao .idioma-cod {
     font-size: 0.7rem;
     font-weight: 700;
-    color: #6B6A66;
+    color: #6E6E6E;
     margin-left: 0.4rem;
 }
 
@@ -95,22 +95,22 @@
     text-transform: uppercase;
     letter-spacing: 0.07em;
     color: #B4B2A9;
-    background: #F8F3EE;
+    background: #FAFAFA;
 }
 
 /* ---- Trecho item ---- */
 .trecho-item {
     background: #FFFFFF;
-    border: 0.5px solid #D8CFC5;
+    border: 0.5px solid #DAD6CD;
     border-radius: 8px;
     padding: 1rem;
     transition: border-color 0.15s;
 }
-.trecho-item:focus-within { border-color: #A62E38; }
+.trecho-item:focus-within { border-color: #1B3A5C; }
 
 /* ---- Workflow card ---- */
 .dito-workflow-card {
-    background: #BF7D2C;
+    background: #B8860B;
     border-radius: 10px;
     padding: 1.25rem 1.5rem;
     display: flex;
@@ -129,18 +129,18 @@
 }
 
 .dito-workflow-info span {
-    color: #F2D0A7;
+    color: #FBF3DF;
     font-size: 0.8rem;
     opacity: 0.85;
 }
 
 .btn-workflow-avancar {
     background: #FFFFFF;
-    color: #BF7D2C;
+    color: #B8860B;
     border: none;
     border-radius: 8px;
     padding: 0.6rem 1.25rem;
-    font-family: 'Cairo', sans-serif;
+    font-family: 'Manrope', sans-serif;
     font-size: 0.9rem;
     font-weight: 800;
     cursor: pointer;
@@ -152,7 +152,7 @@
 }
 
 .btn-workflow-avancar:hover {
-    background: #F2D0A7;
+    background: #FBF3DF;
     transform: translateY(-1px);
 }
 
@@ -162,7 +162,7 @@
     border: 0.5px solid rgba(255,255,255,0.3);
     border-radius: 8px;
     padding: 0.6rem 1.25rem;
-    font-family: 'Cairo', sans-serif;
+    font-family: 'Manrope', sans-serif;
     font-size: 0.9rem;
     font-weight: 700;
     cursor: pointer;
@@ -180,14 +180,14 @@
 /* ---- Preview ---- */
 .descricao-preview-box {
     background: #FFFFFF;
-    border: 0.5px solid #D8CFC5;
+    border: 0.5px solid #DAD6CD;
     border-radius: 8px;
     padding: 1rem 1.25rem;
 }
 
 .trecho-preview-item {
     padding: 0.75rem 0;
-    border-bottom: 0.5px solid #F2F2F2;
+    border-bottom: 0.5px solid #FFFFFF;
 }
 
 .trecho-preview-item:last-child { border-bottom: none; }
@@ -234,7 +234,7 @@
 {# ---- Toast ---- #}
 <div id="toastFeedback" style="
     position:fixed; bottom:1.5rem; right:1.5rem; z-index:9999;
-    background:#1C1C1A; color:#fff; border-radius:8px;
+    background:#1A1A1A; color:#fff; border-radius:8px;
     padding:0.75rem 1.25rem; font-size:0.875rem; font-weight:600;
     display:none; align-items:center; gap:0.5rem;
     box-shadow:0 4px 16px rgba(0,0,0,0.2);
@@ -250,7 +250,7 @@
 
         <div class="card mb-3">
             <div class="card-body">
-                <h6 class="fw-bold mb-3" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:#6B6A66;">
+                <h6 class="fw-bold mb-3" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:#6E6E6E;">
                     <i class="bi bi-tag me-1"></i> Metadados editoriais
                 </h6>
                 <div class="d-flex flex-column gap-3" style="font-size:0.875rem;">
@@ -293,10 +293,10 @@
                 </div>
             </div>
         </div>
-        {% if imagem.url_fotoweb or imagem.url_pdf %}
+        {% if imagem.link_fotoweb or imagem.url_pdf %}
         <div class="d-flex gap-2 mb-3">
-            {% if imagem.url_fotoweb %}
-            <a href="{{ imagem.url_fotoweb }}" target="_blank" rel="noopener noreferrer"
+            {% if imagem.link_fotoweb %}
+            <a href="{{ imagem.link_fotoweb }}" target="_blank" rel="noopener noreferrer"
                class="btn btn-outline-primary btn-sm flex-fill d-flex align-items-center justify-content-center gap-1">
                 <i class="bi bi-image"></i> Ver imagem
             </a>
@@ -312,7 +312,7 @@
         {% if imagem.nome_arquivo %}
         <div class="card mb-3">
             <div class="card-body">
-                <h6 class="fw-bold mb-3" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:#6B6A66;">
+                <h6 class="fw-bold mb-3" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:#6E6E6E;">
                     <i class="bi bi-file-earmark-image me-1"></i> Informações técnicas
                 </h6>
                 <div class="d-flex flex-column gap-3" style="font-size:0.875rem;">
@@ -329,7 +329,7 @@
 
         <div class="card">
             <div class="card-body">
-                <h6 class="fw-bold mb-3" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:#6B6A66;">
+                <h6 class="fw-bold mb-3" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:#6E6E6E;">
                     <i class="bi bi-people me-1"></i> Equipe
                 </h6>
                 <div class="d-flex flex-column gap-3" style="font-size:0.875rem;">
@@ -356,7 +356,7 @@
             </div>
             {% if request.user.tipo == 'coordenador' or request.user.tipo == 'administrador' %}
                 {% if descricao and descricao.descritor_bloqueado %}
-                <form method="post" action="{% url 'devolver_descritor' imagem.pk %}" class="mt-3 pt-3" style="border-top:0.5px solid #D8CFC5;">
+                <form method="post" action="{% url 'devolver_descritor' imagem.pk %}" class="mt-3 pt-3" style="border-top:0.5px solid #DAD6CD;">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
                     <label class="text-secondary mb-1 d-block" style="font-size:0.7rem; font-weight:700; text-transform:uppercase;">Devolver ao descritor</label>
@@ -368,7 +368,7 @@
                 {% endif %}
 
                 {% if descricao and descricao.revisor_bloqueado %}
-                <form method="post" action="{% url 'devolver_revisor' imagem.pk %}" class="mt-3 pt-3" style="border-top:0.5px solid #D8CFC5;">
+                <form method="post" action="{% url 'devolver_revisor' imagem.pk %}" class="mt-3 pt-3" style="border-top:0.5px solid #DAD6CD;">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
                     <label class="text-secondary mb-1 d-block" style="font-size:0.7rem; font-weight:700; text-transform:uppercase;">Devolver ao revisor</label>
@@ -427,7 +427,7 @@
                         </div>
                         <textarea class="form-control trecho-texto" rows="4"
                                   placeholder="Digite a descrição deste trecho..."
-                                  style="font-size:0.9375rem; line-height:1.7; resize:vertical; border:0.5px solid #D8CFC5;">{{ trecho.texto }}</textarea>
+                                  style="font-size:0.9375rem; line-height:1.7; resize:vertical; border:0.5px solid #DAD6CD;">{{ trecho.texto }}</textarea>
                     </div>
                     {% endfor %}
                 </div>
@@ -673,7 +673,7 @@ function adicionarTrecho() {
         </div>
         <textarea class="form-control trecho-texto" rows="4"
                   placeholder="Digite a descrição deste trecho..."
-                  style="font-size:0.9375rem; line-height:1.7; resize:vertical; border:0.5px solid #D8CFC5;"></textarea>
+                  style="font-size:0.9375rem; line-height:1.7; resize:vertical; border:0.5px solid #DAD6CD;"></textarea>
     `;
     lista.appendChild(div);
     div.querySelector("textarea").focus();
@@ -805,7 +805,7 @@ function atualizarPreview(trechos) {
 
 function mostrarToast(msg, ok) {
     const t = document.getElementById("toastFeedback");
-    t.style.background = ok ? "#1C1C1A" : "#9B5050";
+    t.style.background = ok ? "#1A1A1A" : "#9B5050";
     document.getElementById("toastIcon").className = ok ? "bi bi-check-circle" : "bi bi-exclamation-circle";
     document.getElementById("toastMsg").textContent = msg;
     t.style.display = "flex";

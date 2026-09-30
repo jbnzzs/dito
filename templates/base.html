@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@200..1000&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@600;700&family=Manrope:wght@400;500;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'css/dito-theme.css' %}">
 </head>
 <body>
@@ -46,40 +46,36 @@
                 <span class="dito-nav-label">Lotes</span>
             </a>
 
-            <a href="#" class="dito-nav-item {% block nav_busca %}{% endblock %}">
+            <a href="{% url 'buscar_retranca' %}" class="dito-nav-item {% block nav_busca %}{% endblock %}">
                 <i class="bi bi-search"></i>
                 <span class="dito-nav-label">Buscar retranca</span>
             </a>
 
-            <a href="{% url 'status_lista' %}" class="dito-nav-item {% block nav_status %}{% endblock %}">
-                <i class="bi bi-signpost-split"></i>
-                <span class="dito-nav-label">Status do fluxo</span>
-            </a>
-
-            <!-- Seção editorial (coordenador e administrador) -->
+            <!-- Itens que antes ficavam na seção "Editorial" (coordenador e administrador) -->
             {% if request.user.tipo == 'coordenador' or request.user.tipo == 'administrador' %}
-            <span class="dito-nav-section">Editorial</span>
-
             <a href="{% url 'imagens_lista' %}" class="dito-nav-item {% block nav_imagens %}{% endblock %}">
                 <i class="bi bi-images"></i>
                 <span class="dito-nav-label">Imagens</span>
             </a>
 
-            <a href="#" class="dito-nav-item {% block nav_historico %}{% endblock %}">
+            <a href="{% url 'historico_lista' %}" class="dito-nav-item {% block nav_historico %}{% endblock %}">
                 <i class="bi bi-clock-history"></i>
                 <span class="dito-nav-label">Histórico</span>
             </a>
 
-            <a href="#" class="dito-nav-item {% block nav_relatorios %}{% endblock %}">
+            <a href="{% url 'relatorios_lista' %}" class="dito-nav-item {% block nav_relatorios %}{% endblock %}">
                 <i class="bi bi-bar-chart"></i>
                 <span class="dito-nav-label">Relatórios</span>
             </a>
             {% endif %}
 
-            <!-- Seção gestão (coordenador e administrador) -->
-            {% if request.user.tipo == 'administrador' %}
+            <!-- Seção gestão (Status do fluxo é livre pra todos; Usuários só administrador) -->
             <span class="dito-nav-section">Gestão</span>
-            {% endif %}
+
+            <a href="{% url 'status_lista' %}" class="dito-nav-item {% block nav_status %}{% endblock %}">
+                <i class="bi bi-signpost-split"></i>
+                <span class="dito-nav-label">Gerenciador de Status</span>
+            </a>
 
             {% if request.user.tipo == 'administrador' %}
             <a href="{% url 'usuarios_lista' %}" class="dito-nav-item {% block nav_usuarios %}{% endblock %}">

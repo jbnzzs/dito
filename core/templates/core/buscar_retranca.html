@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Buscar retranca — Dito!{% endblock %}
+{% block page_title %}Buscar retranca{% endblock %}
+{% block nav_busca %}active{% endblock %}
+
+{% block content %}
+
+<div class="mb-4">
+    <h2 class="mb-1">Buscar retranca</h2>
+    <p class="text-secondary mb-0" style="font-size:0.875rem;">
+        Encontra qualquer imagem rapidamente pelo código da retranca.
+    </p>
+</div>
+
+<div class="card dito-card-flush mb-3">
+    <div class="card-body py-3 px-3">
+        <form method="get" class="d-flex align-items-center gap-2">
+            <div class="dito-search flex-grow-1" style="max-width:420px;">
+                <i class="bi bi-search text-secondary"></i>
+                <input type="text" name="q" value="{{ termo }}"
+                       class="form-control form-control-sm" placeholder="Ex: f0149_3p012c_g27_e002"
+                       autofocus>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Buscar</button>
+        </form>
+    </div>
+</div>
+
+{% if termo %}
+    {% if resultados %}
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table dito-tabela mb-0 text-center">
+                <thead>
+                    <tr>
+                        <th>Retranca</th>
+                        <th>Obra</th>
+                        <th>Status</th>
+                        <th>Lote</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for imagem in resultados %}
+                    <tr>
+                        <td><span class="dito-mono">{{ imagem.retranca }}</span></td>
+                        <td>{{ imagem.nome_obra }}</td>
+                        <td>{{ imagem.status.nome }}</td>
+                        <td>{{ imagem.lote.nome|default:"—" }}</td>
+                        <td>
+                            <a href="{% url 'descricao_imagem' imagem.pk %}" class="btn btn-sm btn-outline-primary">
+                                Abrir
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="dito-empty-state">
+        <i class="bi bi-search"></i>
+        <p>Nenhuma imagem encontrada com "{{ termo }}".</p>
+    </div>
+    {% endif %}
+{% endif %}
+
+{% endblock %}

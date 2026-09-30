@@ -84,7 +84,7 @@
 {% if lotes_dados %}
 <div class="d-flex flex-column gap-3">
     {% for item in lotes_dados %}
-    <div class="card">
+    <div class="card dito-card-destaque">
         <div class="card-body">
 
             <div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-3">
@@ -118,7 +118,7 @@
                         <i class="bi bi-arrow-right-circle me-1"></i> Abrir lote
                     </a>
                     {% if eh_coordenacao %}
-                    <a href="{% url 'lote_editar' item.obj.pk %}" class="btn btn-sm btn-outline-secondary" title="Editar lote">
+                    <a href="{% url 'lote_editar' item.obj.pk %}" class="btn btn-sm btn-outline-secondary dito-btn-acao" title="Editar lote">
                         <i class="bi bi-pencil"></i>
                     </a>
                     {% endif %}
@@ -223,6 +223,37 @@
                 <p class="text-secondary mt-2 mb-0" style="font-size:0.72rem;">
                     A ação é aplicada apenas às imagens no status elegível
                     (Liberado para descrição → descritor; Descrito → revisor). As demais são ignoradas.
+                </p>
+            </div>
+
+            {# ---- Alteração manual de status (atalho da coordenação) ---- #}
+            <div class="dito-lote-atribuir mt-3">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-arrow-repeat" style="color:var(--dito-vinho);"></i>
+                    <span class="fw-bold" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.03em; color:var(--dito-vinho-escuro);">
+                        Alterar status do lote
+                    </span>
+                </div>
+
+                <form method="post" action="{% url 'lote_alterar_status' item.obj.pk %}"
+                      class="d-flex align-items-center gap-2 flex-wrap"
+                      onsubmit="return confirm('Alterar o status de TODAS as imagens deste lote? Esta ação ignora as regras normais do fluxo.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <select name="status_id" class="form-select form-select-sm" style="width:220px;" required>
+                        <option value="">Novo status...</option>
+                        {% for s in status_disponiveis %}
+                        <option value="{{ s.pk }}">{{ s.ordem }}. {{ s.nome }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-arrow-repeat me-1"></i> Aplicar a todas
+                    </button>
+                </form>
+
+                <p class="text-secondary mt-2 mb-0" style="font-size:0.72rem;">
+                    Atalho manual: move todas as imagens do lote para o status escolhido, sem passar
+                    pelas regras do fluxo. Cada alteração fica registrada no histórico.
                 </p>
             </div>
             {% endif %}

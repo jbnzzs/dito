@@ -12,43 +12,43 @@
     :root,
     html[data-theme="light"],
     html[data-theme="dark"] {
-        --primary: #A62E38;
-        --secondary: #590515;
-        --accent: #BF7D2C;
+        --primary: #1B3A5C;
+        --secondary: #16304D;
+        --accent: #B8860B;
 
-        --link-fg: #A62E38;
-        --link-hover-color: #590515;
-        --link-selected-fg: #590515;
+        --link-fg: #1B3A5C;
+        --link-hover-color: #16304D;
+        --link-selected-fg: #16304D;
 
-        --header-color: #F3DEE1;
+        --header-color: #B8C6D6;
         --header-branding-color: #FFFFFF;
-        --header-bg: #590515;
-        --header-link-color: #F3DEE1;
+        --header-bg: #16304D;
+        --header-link-color: #B8C6D6;
 
-        --breadcrumbs-fg: #F8F3EE;
+        --breadcrumbs-fg: #FAFAFA;
         --breadcrumbs-link-fg: #FFFFFF;
-        --breadcrumbs-bg: #A62E38;
+        --breadcrumbs-bg: #1B3A5C;
 
         --button-fg: #FFFFFF;
-        --button-bg: #A62E38;
-        --button-hover-bg: #590515;
-        --default-button-bg: #590515;
+        --button-bg: #1B3A5C;
+        --button-hover-bg: #16304D;
+        --default-button-bg: #16304D;
         --default-button-hover-bg: #3d0310;
 
         --object-tools-fg: #FFFFFF;
-        --object-tools-bg: #590515;
+        --object-tools-bg: #16304D;
         --object-tools-hover-bg: #3d0310;
     }
 
     @media (prefers-color-scheme: dark) {
         :root {
-            --primary: #A62E38;
-            --secondary: #590515;
-            --header-bg: #590515;
-            --breadcrumbs-bg: #A62E38;
+            --primary: #1B3A5C;
+            --secondary: #16304D;
+            --header-bg: #16304D;
+            --breadcrumbs-bg: #1B3A5C;
             --link-fg: #E08A92;
-            --link-hover-color: #F3DEE1;
-            --button-bg: #A62E38;
+            --link-hover-color: #B8C6D6;
+            --button-bg: #1B3A5C;
             --button-hover-bg: #7d2530;
         }
     }
@@ -56,8 +56,8 @@
     /* ---- Sobrescritas diretas (o dark mode do Django e teimoso) ---- */
 
     #header {
-        background: #590515 !important;
-        color: #F3DEE1 !important;
+        background: #16304D !important;
+        color: #B8C6D6 !important;
     }
     #branding h1,
     #branding h1 a:link,
@@ -65,25 +65,25 @@
         color: #FFFFFF !important;
         font-weight: 800;
     }
-    #user-tools a:link, #user-tools a:visited { color: #F3DEE1 !important; }
+    #user-tools a:link, #user-tools a:visited { color: #B8C6D6 !important; }
     #user-tools a:hover { color: #FFFFFF !important; }
 
     div.breadcrumbs {
-        background: #A62E38 !important;
-        color: #F8F3EE !important;
+        background: #1B3A5C !important;
+        color: #FAFAFA !important;
     }
     div.breadcrumbs a { color: #FFFFFF !important; }
 
     .module caption,
     .module h2,
     .inline-group h2 {
-        background: #A62E38 !important;
+        background: #1B3A5C !important;
         color: #FFFFFF !important;
     }
 
     .button, input[type=submit], input[type=button],
     .submit-row input, a.button {
-        background: #A62E38 !important;
+        background: #1B3A5C !important;
         color: #FFFFFF !important;
     }
     .button:hover, input[type=submit]:hover, input[type=button]:hover {
@@ -91,14 +91,14 @@
     }
     .button.default, input[type=submit].default,
     .submit-row input.default {
-        background: #590515 !important;
+        background: #16304D !important;
     }
     .button.default:hover, input[type=submit].default:hover {
         background: #3d0310 !important;
     }
 
     .object-tools a:link, .object-tools a:visited {
-        background: #590515 !important;
+        background: #16304D !important;
         color: #FFFFFF !important;
     }
     .object-tools a:hover { background: #3d0310 !important; }
@@ -107,11 +107,11 @@
     a:hover { color: var(--link-hover-color); }
 
     .selected, tr.selected {
-        background: #F3DEE1 !important;
+        background: #FBF3DF !important;
     }
 
     .actions .button {
-        background: #A62E38 !important;
+        background: #1B3A5C !important;
     }
 </style>
 {% endblock %}
