@@ -8,7 +8,11 @@
 <div class="mb-4">
     <h2 class="mb-1">Histórico</h2>
     <p class="text-secondary mb-0" style="font-size:0.875rem;">
-        {{ pagina_obj.paginator.count }} ação{{ pagina_obj.paginator.count|pluralize:"ões" }} registrada{{ pagina_obj.paginator.count|pluralize }}
+        {% if pagina_obj.paginator.count == 1 %}
+            1 ação registrada
+        {% else %}
+            {{ pagina_obj.paginator.count }} ações registradas
+        {% endif %}
     </p>
 </div>
 
@@ -22,14 +26,28 @@
             </div>
 
             <select name="tipo_acao" class="form-select form-select-sm" style="max-width:220px;">
-                <option value="">Todas as ações</option>
+                <option
+                    value=""
+                    disabled
+                    hidden
+                    {% if not tipo_acao_f %}selected{% endif %}
+                >
+                    Filtrar por ação...
+                </option>
                 {% for valor, rotulo in tipos_acao %}
                 <option value="{{ valor }}" {% if valor == tipo_acao_f %}selected{% endif %}>{{ rotulo }}</option>
                 {% endfor %}
             </select>
 
             <select name="usuario" class="form-select form-select-sm" style="max-width:220px;">
-                <option value="">Todos os usuários</option>
+                <option
+                    value=""
+                    disabled
+                    hidden
+                    {% if not usuario_f %}selected{% endif %}
+                >
+                    Filtrar por usuário...
+                </option>
                 {% for u in usuarios %}
                 <option value="{{ u.pk }}" {% if u.pk|stringformat:"s" == usuario_f %}selected{% endif %}>
                     {{ u.get_full_name|default:u.email }}
@@ -37,7 +55,20 @@
                 {% endfor %}
             </select>
 
-            <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
+            <button type="submit" class="btn btn-primary btn-sm px-3">
+                <i class="bi bi-funnel me-1"></i>
+                Filtrar
+            </button>
+
+            {% if busca or tipo_acao_f or usuario_f %}
+            <a
+                href="{% url 'historico_lista' %}"
+                class="btn btn-outline-secondary btn-sm px-3"
+            >
+                <i class="bi bi-x-lg me-1"></i>
+                Limpar filtros
+            </a>
+            {% endif %}
         </form>
     </div>
 </div>

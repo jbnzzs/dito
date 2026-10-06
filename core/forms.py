@@ -1,40 +1,65 @@
 from django import forms
 
-from .models import Imagem
+from .models import ComponenteCurricular, Imagem, Projeto
 
 class ImagemForm(forms.ModelForm):
     """
-    Formulário de criação e edição de uma Imagem (registro editorial).
+    Formulário de criação e edição de uma Imagem.
 
-    As informações técnicas (nome/caminho/tamanho do arquivo, dimensões,
-    resolução, tamanho físico) NÃO entram aqui: vêm da importação de Excel.
-    Os campos 'cadastrado_por', 'ativo', 'criado_em' e 'atualizado_em'
-    também ficam de fora — são controlados pelo sistema.
+    Projeto e Componente Curricular passam a vir de cadastros gerenciáveis.
+    Itens inativos não aparecem para novas associações, mas continuam
+    disponíveis quando já estão vinculados à imagem que está sendo editada.
     """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        projetos = Projeto.objects.filter(ativo=True)
+        componentes = ComponenteCurricular.objects.filter(ativo=True)
+
+        if self.instance and self.instance.pk:
+            if self.instance.projeto_id:
+                projetos = (
+                    projetos
+                    | Projeto.objects.filter(pk=self.instance.projeto_id)
+                ).distinct()
+
+            if self.instance.componente_curricular_id:
+                componentes = (
+                    componentes
+                    | ComponenteCurricular.objects.filter(
+                        pk=self.instance.componente_curricular_id
+                    )
+                ).distinct()
+
+        self.fields["projeto"].queryset = projetos.order_by("nome")
+        self.fields["componente_curricular"].queryset = componentes.order_by("nome")
+
+        self.fields["projeto"].empty_label = "Sem projeto"
+        self.fields["componente_curricular"].empty_label = "Sem componente"
 
     class Meta:
         model = Imagem
         fields = [
-            # Metadados editoriais
             "retranca",
+            "projeto",
             "nome_obra",
             "volume_ano_modulo",
             "componente_curricular",
             "capitulo_unidade",
             "etapa",
-            # Workflow
             "status",
             "responsavel",
             "prazo",
-            # FotoWeb
             "url_fotoweb",
             "url_pdf",
         ]
         widgets = {
             "retranca": forms.TextInput(attrs={"class": "form-control"}),
+            "projeto": forms.Select(attrs={"class": "form-select"}),
             "nome_obra": forms.TextInput(attrs={"class": "form-control"}),
             "volume_ano_modulo": forms.TextInput(attrs={"class": "form-control"}),
-            "componente_curricular": forms.TextInput(attrs={"class": "form-control"}),
+            "componente_curricular": forms.Select(attrs={"class": "form-select"}),
             "capitulo_unidade": forms.TextInput(attrs={"class": "form-control"}),
             "etapa": forms.Select(attrs={"class": "form-select"}),
             "status": forms.Select(attrs={"class": "form-select"}),
@@ -52,6 +77,7 @@ class ImagemForm(forms.ModelForm):
                 "placeholder": "https://ensinolivre-my.sharepoint.com/",
             }),
         }
+
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError

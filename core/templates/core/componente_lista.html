@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Componentes — Dito!{% endblock %}
+{% block page_title %}Componentes{% endblock %}
+{% block nav_componentes %}active{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+    {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }} mb-3">
+        {{ msg }}
+    </div>
+    {% endfor %}
+{% endif %}
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+
+    <div>
+        <h2 class="mb-1">Componentes</h2>
+
+        <p class="text-secondary mb-0" style="font-size:0.875rem;">
+            Padronize os componentes curriculares usados nas imagens.
+        </p>
+    </div>
+
+    {% if pode_gerenciar %}
+    <a href="{% url 'componente_criar' %}" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>
+        Novo componente
+    </a>
+    {% endif %}
+
+</div>
+
+<div class="card" style="max-width:980px; margin:0 auto;">
+
+    <div class="card-body p-0">
+
+        {% if componentes %}
+
+        <div class="table-responsive">
+
+            <table class="table table-sm align-middle mb-0">
+
+                <thead>
+                    <tr>
+                        <th class="ps-3">Componente curricular</th>
+                        <th>Imagens vinculadas</th>
+                        <th>Situação</th>
+
+                        {% if pode_gerenciar %}
+                        <th class="text-end pe-3">Ações</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for componente in componentes %}
+
+                    <tr>
+
+                        <td class="ps-3 fw-semibold">
+                            {{ componente.nome }}
+                        </td>
+
+                        <td>
+                            {{ componente.total_imagens }}
+                        </td>
+
+                        <td>
+                            {% if componente.ativo %}
+                            <span class="badge text-bg-success">
+                                Ativo
+                            </span>
+                            {% else %}
+                            <span class="badge text-bg-secondary">
+                                Inativo
+                            </span>
+                            {% endif %}
+                        </td>
+
+                        {% if pode_gerenciar %}
+                        <td class="text-end pe-3">
+
+                            <a
+                                href="{% url 'componente_editar' componente.pk %}"
+                                class="btn btn-sm btn-outline-secondary dito-btn-acao"
+                                title="Editar componente"
+                            >
+                                <i class="bi bi-pencil"></i>
+                            </a>
+
+                            <form
+                                method="post"
+                                action="{% url 'componente_toggle_ativo' componente.pk %}"
+                                class="d-inline"
+                            >
+                                {% csrf_token %}
+
+                                <button
+                                    type="submit"
+                                    class="btn btn-outline-secondary btn-sm"
+                                    title="{% if componente.ativo %}Inativar componente{% else %}Ativar componente{% endif %}"
+                                >
+                                    {% if componente.ativo %}
+                                    <i class="bi bi-pause-circle"></i>
+                                    {% else %}
+                                    <i class="bi bi-play-circle"></i>
+                                    {% endif %}
+                                </button>
+                            </form>
+
+                        </td>
+                        {% endif %}
+
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        {% else %}
+
+        <div class="dito-empty-state py-5">
+
+            <i class="bi bi-journal-bookmark"></i>
+
+            <p class="mb-2">
+                Nenhum componente cadastrado.
+            </p>
+
+            {% if pode_gerenciar %}
+            <a
+                href="{% url 'componente_criar' %}"
+                class="btn btn-primary btn-sm"
+            >
+                Criar primeiro componente
+            </a>
+            {% endif %}
+
+        </div>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+{% endblock %}

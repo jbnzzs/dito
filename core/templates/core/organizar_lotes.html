@@ -51,7 +51,14 @@
 <form method="get" class="row g-2 mb-3">
     <div class="col-md-3">
         <select name="componente" class="form-select">
-            <option value="">Todos os componentes</option>
+            <option
+                value=""
+                disabled
+                hidden
+                {% if not componente %}selected{% endif %}
+            >
+                Filtrar por componente...
+            </option>
             {% for c in componentes_disponiveis %}
             <option value="{{ c }}" {% if c == componente %}selected{% endif %}>{{ c }}</option>
             {% endfor %}
@@ -59,7 +66,14 @@
     </div>
     <div class="col-md-3">
         <select name="volume" class="form-select">
-            <option value="">Todos os volumes/ano/módulo</option>
+            <option
+                value=""
+                disabled
+                hidden
+                {% if not volume %}selected{% endif %}
+            >
+                Filtrar por volume/ano/módulo...
+            </option>
             {% for v in volumes_disponiveis %}
             <option value="{{ v }}" {% if v == volume %}selected{% endif %}>{{ v }}</option>
             {% endfor %}
@@ -70,8 +84,23 @@
                value="{{ busca }}">
     </div>
     <div class="col-md-2">
-        <button type="submit" class="btn btn-outline-primary w-100">Filtrar</button>
+        <button type="submit" class="btn btn-outline-primary w-100">
+            <i class="bi bi-funnel me-1"></i>
+            Filtrar
+        </button>
     </div>
+
+    {% if componente or volume or busca %}
+    <div class="col-12">
+        <a
+            href="{{ request.path }}"
+            class="btn btn-outline-secondary btn-sm"
+        >
+            <i class="bi bi-x-lg me-1"></i>
+            Limpar filtros
+        </a>
+    </div>
+    {% endif %}
 </form>
 
 {# ---- Seleção e criação do lote ---- #}

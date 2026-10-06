@@ -179,6 +179,31 @@ class StatusWorkflow(models.Model):
         verbose_name="Exige atribuição do coordenador",
         help_text="Se marcado, o coordenador precisa escolher um responsável antes de avançar.",
     )
+    permite_edicao = models.BooleanField(
+        default=False,
+        verbose_name="Permite edição",
+        help_text="Se marcado, o perfil responsável pode editar a descrição neste status.",
+    )
+    avanca_ao_abrir = models.BooleanField(
+        default=False,
+        verbose_name="Avança ao abrir",
+        help_text="Se marcado, a tarefa avança automaticamente para o próximo status ao ser aberta pelo responsável.",
+    )
+    descricao_concluida = models.BooleanField(
+        default=False,
+        verbose_name="Descrição concluída",
+        help_text="Identifica que este status representa a conclusão da etapa de descrição.",
+    )
+    conferencia_concluida = models.BooleanField(
+        default=False,
+        verbose_name="Conferência concluída",
+        help_text="Identifica que este status representa a conclusão da etapa de conferência.",
+    )
+    revisao_concluida = models.BooleanField(
+        default=False,
+        verbose_name="Revisão concluída",
+        help_text="Identifica que este status representa a conclusão da etapa de revisão.",
+    )
     is_inicial = models.BooleanField(
         default=False,
         verbose_name="Status inicial",
@@ -219,6 +244,61 @@ class StatusWorkflow(models.Model):
 
 
 # ============================================================
+# CADASTROS EDITORIAIS
+# ============================================================
+
+class Projeto(models.Model):
+    """
+    Agrupador editorial de alto nível.
+
+    Um mesmo projeto pode reunir imagens de diferentes obras/editoras.
+    A inativação não apaga o registro nem rompe vínculos existentes.
+    """
+    nome = models.CharField(
+        max_length=200,
+        unique=True,
+        verbose_name="Nome do projeto",
+    )
+    descricao = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Descrição",
+    )
+    ativo = models.BooleanField(default=True, verbose_name="Ativo")
+    criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
+    atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
+
+    class Meta:
+        verbose_name = "Projeto"
+        verbose_name_plural = "Projetos"
+        ordering = ["nome"]
+
+    def __str__(self):
+        return self.nome
+
+
+class ComponenteCurricular(models.Model):
+    """Cadastro gerenciável dos componentes curriculares usados nas imagens."""
+
+    nome = models.CharField(
+        max_length=100,
+        unique=True,
+        verbose_name="Componente curricular",
+    )
+    ativo = models.BooleanField(default=True, verbose_name="Ativo")
+    criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
+    atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
+
+    class Meta:
+        verbose_name = "Componente curricular"
+        verbose_name_plural = "Componentes curriculares"
+        ordering = ["nome"]
+
+    def __str__(self):
+        return self.nome
+
+
+# ============================================================
 # IMAGEM
 # ============================================================
 
@@ -247,15 +327,27 @@ class Imagem(models.Model):
         verbose_name="Retranca",
         help_text="Identificador editorial da imagem.",
     )
+    projeto = models.ForeignKey(
+        Projeto,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="imagens",
+        verbose_name="Projeto",
+        help_text="Agrupador maior que pode reunir imagens de diferentes obras/editoras.",
+    )
     nome_obra = models.CharField(max_length=200, verbose_name="Nome da obra")
     volume_ano_modulo = models.CharField(
         max_length=60,
         blank=True,
         verbose_name="Volume/Ano/Módulo",
     )
-    componente_curricular = models.CharField(
-        max_length=100,
+    componente_curricular = models.ForeignKey(
+        ComponenteCurricular,
+        on_delete=models.PROTECT,
+        null=True,
         blank=True,
+        related_name="imagens",
         verbose_name="Componente curricular",
     )
     capitulo_unidade = models.CharField(
@@ -293,6 +385,16 @@ class Imagem(models.Model):
         blank=True,
         verbose_name="URL do PDF",
         help_text="Link para o PDF da imagem.",
+    )
+    dados_fotoweb_originais = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Dados originais do FotoWeb",
+        help_text=(
+            "Snapshot da linha original importada do relatório FotoWeb. "
+            "Usado para gerar um novo arquivo no mesmo formato, alterando "
+            "somente os campos de descrição."
+        ),
     )
     tamanho_arquivo = models.CharField(
         max_length=30,
@@ -389,34 +491,6 @@ class Imagem(models.Model):
         verbose_name = "Imagem"
         verbose_name_plural = "Imagens"
         ordering = ["-criado_em"]
-
-    # Base do acervo no FotoWeb. O caminho de rede do arquivo
-    # (//arara/ACERVO/_UPLOADS_FOTOWEB/<resto>) tem exatamente o mesmo
-    # "resto" que a URL do FotoWeb, então dá para montar o link sem
-    # precisar cadastrá-lo imagem por imagem.
-    FOTOWEB_BASE = "http://fotoweb.ensinolivre.com.br:9090/fotoweb/archives/5087-G27-EF1-AUDIODESC/"
-    FOTOWEB_PREFIXO_REDE = "_UPLOADS_FOTOWEB/"
-
-    @property
-    def link_fotoweb(self):
-        """
-        Link para a imagem no FotoWeb. Usa a URL cadastrada manualmente
-        se houver; senão, monta a partir do caminho de rede do arquivo.
-        Retorna "" quando não há caminho suficiente para montar.
-        """
-        if self.url_fotoweb:
-            return self.url_fotoweb
-
-        caminho = (self.caminho_arquivo or "").replace("\\", "/")
-        marcador = self.FOTOWEB_PREFIXO_REDE
-        if marcador not in caminho:
-            return ""
-
-        relativo = caminho.split(marcador, 1)[1].strip("/")
-        if not relativo:
-            return ""
-
-        return f"{self.FOTOWEB_BASE}{relativo}.info"
 
     def __str__(self):
         return f"{self.retranca} — {self.nome_obra}"
@@ -658,11 +732,20 @@ class Lote(models.Model):
         verbose_name="Descrição",
         help_text="Observação opcional sobre o critério usado para formar o lote.",
     )
-    prazo = models.DateField(
+    data_prevista = models.DateField(
         null=True,
         blank=True,
-        verbose_name="Prazo do lote",
-        help_text="Ao salvar, este prazo é aplicado a todas as imagens do lote.",
+        verbose_name="Data prevista",
+        help_text="Previsão de conclusão do lote.",
+    )
+    data_efetiva = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Data efetiva",
+        help_text=(
+            "Data em que todas as imagens ativas do lote chegaram ao status final. "
+            "É preenchida automaticamente, mas pode ser ajustada pela coordenação."
+        ),
     )
     criado_por = models.ForeignKey(
         Usuario,
@@ -678,66 +761,64 @@ class Lote(models.Model):
     )
 
     def esta_totalmente_descrito(self):
-        """True se todas as imagens ativas do lote estão com status 'descrito'."""
+        """
+        True quando todas as imagens ativas do lote já alcançaram o marco
+        configurado como conclusão da descrição. O nome e a slug do status
+        não participam da regra; a posição do marco no workflow é usada para
+        considerar também imagens que já avançaram para etapas posteriores.
+        """
         imagens = self.imagens.filter(ativo=True)
         if not imagens.exists():
             return False
-        return not imagens.exclude(status__slug="descrito").exists()
 
-    def liberar_para_conferencia(self, usuario):
-        """
-        Avança TODAS as imagens ativas do lote de 'descrito' para
-        'liberado-conferencia' de uma vez, registrando histórico por imagem.
-        Retorna a quantidade de imagens liberadas.
-        """
-        from django.db import transaction
+        marco_descricao = (
+            StatusWorkflow.objects
+            .filter(ativo=True, descricao_concluida=True)
+            .order_by("ordem")
+            .first()
+        )
+        if not marco_descricao:
+            return False
 
-        proximo = StatusWorkflow.objects.get(slug="liberado-conferencia")
-        imagens = list(self.imagens.filter(ativo=True, status__slug="descrito"))
-
-        if not imagens:
-            return 0
-
-        with transaction.atomic():
-            for imagem in imagens:
-                status_anterior = imagem.status
-                imagem.status = proximo
-                imagem.responsavel = None
-                imagem.save()
-                HistoricoItem.objects.create(
-                    imagem=imagem,
-                    descricao=getattr(imagem, "descricao", None),
-                    usuario=usuario,
-                    tipo_acao=HistoricoItem.TipoAcao.LIBERADO_CONFERENCIA,
-                    status_anterior=status_anterior,
-                    novo_status=proximo,
-                    observacao=f"Liberado automaticamente: lote '{self.nome}' totalmente descrito.",
-                )
-        return len(imagens)
+        return not imagens.filter(status__ordem__lt=marco_descricao.ordem).exists()
 
     def progresso_do_usuario(self, usuario):
         """
         Progresso pessoal de um descritor/revisor dentro do lote. Considera
         tanto as imagens atualmente atribuídas quanto as que ele já entregou
         (autoria preservada em descricao.descritor/.revisor), para que o
-        lote continue visível — em modo consulta — depois do envio.
-        """
-        from .models import Usuario as U
+        lote continue visível em modo consulta depois do envio.
 
-        if usuario.tipo == U.Tipo.DESCRITOR:
-            pendentes = ["liberado-descricao", "descrevendo"]
-        elif usuario.tipo == U.Tipo.REVISOR:
-            pendentes = ["liberado-conferencia", "em-conferencia"]
-        else:
+        Uma imagem é considerada pendente para o perfil quando o status atual
+        pertence a esse perfil e representa uma etapa operacional: permite
+        edição ou avança automaticamente ao ser aberta. Assim, o cálculo não
+        depende mais de nomes ou slugs específicos do workflow.
+        """
+        from django.db.models import Q
+
+        if usuario.tipo not in (Usuario.Tipo.DESCRITOR, Usuario.Tipo.REVISOR):
             return None
 
-        minhas = self.imagens.filter(ativo=True).filter(filtro_autoria_imagem(usuario)).distinct()
+        minhas = (
+            self.imagens
+            .filter(ativo=True)
+            .filter(filtro_autoria_imagem(usuario))
+            .distinct()
+        )
         total = minhas.count()
 
         if total == 0:
             return None
 
-        restantes = minhas.filter(status__slug__in=pendentes).count()
+        restantes = (
+            minhas
+            .filter(status__perfil_responsavel=usuario.tipo)
+            .filter(
+                Q(status__permite_edicao=True)
+                | Q(status__avanca_ao_abrir=True)
+            )
+            .count()
+        )
         concluidas = total - restantes
 
         return {
@@ -759,14 +840,29 @@ class Lote(models.Model):
     def total_imagens(self):
         return self.imagens.filter(ativo=True).count()
 
-    def propagar_prazo(self):
+    def esta_totalmente_finalizado(self):
         """
-        Aplica o prazo do lote a todas as imagens ativas vinculadas a ele.
-        Retorna a quantidade de imagens atualizadas.
+        True quando o lote possui imagens ativas e todas estão em um status
+        marcado com is_final=True. O nome do status não participa da regra.
         """
-        if self.prazo is None:
-            return 0
-        return self.imagens.filter(ativo=True).update(prazo=self.prazo)
+        imagens = self.imagens.filter(ativo=True)
+        if not imagens.exists():
+            return False
+        return not imagens.exclude(status__is_final=True).exists()
+
+    def sincronizar_data_efetiva(self):
+        """
+        Preenche a data efetiva na primeira vez em que todas as imagens ativas
+        do lote chegam ao status final. Uma data já registrada não é sobrescrita.
+        """
+        if self.data_efetiva or not self.esta_totalmente_finalizado():
+            return False
+
+        from django.utils import timezone
+
+        self.data_efetiva = timezone.localdate()
+        self.save(update_fields=["data_efetiva"])
+        return True
 
     def progresso_por_status(self):
         """
@@ -782,15 +878,16 @@ class Lote(models.Model):
 
         contagens = dict(
             self.imagens.filter(ativo=True)
-            .values_list("status__slug")
+            .values_list("status_id")
             .annotate(qtd=Count("id"))
         )
 
         resultado = []
         for status in StatusWorkflow.objects.filter(ativo=True).order_by("ordem"):
-            qtd = contagens.get(status.slug, 0)
+            qtd = contagens.get(status.pk, 0)
             if qtd:
                 resultado.append({
+                    "status_id": status.pk,
                     "slug": status.slug,
                     "nome": status.nome,
                     "ordem": status.ordem,
@@ -798,3 +895,23 @@ class Lote(models.Model):
                     "percentual": round((qtd / total) * 100, 1),
                 })
         return resultado
+
+# ============================================================
+# SINCRONIZAÇÃO AUTOMÁTICA DE DATAS DO LOTE
+# ============================================================
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+
+@receiver(post_save, sender=Imagem)
+def sincronizar_data_efetiva_lote_ao_salvar_imagem(sender, instance, **kwargs):
+    """
+    Sempre que uma imagem vinculada a um lote é salva, verifica se o lote
+    acabou de ser concluído. A data efetiva é gravada apenas uma vez.
+    """
+    if not instance.lote_id:
+        return
+
+    instance.lote.sincronizar_data_efetiva()
+

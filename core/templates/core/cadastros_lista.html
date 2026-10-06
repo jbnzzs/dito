@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block title %}Projetos e Componentes — Dito!{% endblock %}
+{% block page_title %}Projetos e Componentes{% endblock %}
+{% block nav_cadastros %}active{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+    {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }} mb-3">{{ msg }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <h2 class="mb-1">Projetos e Componentes</h2>
+        <p class="text-secondary mb-0" style="font-size:0.875rem;">
+            Gerencie os agrupadores editoriais usados nas imagens.
+        </p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-7">
+        <div class="card h-100">
+            <div class="card-header bg-transparent d-flex align-items-center justify-content-between gap-3 flex-wrap">
+                <div>
+                    <h5 class="mb-1">Projetos</h5>
+                    <div class="text-secondary" style="font-size:0.78rem;">
+                        Um projeto pode reunir imagens de diferentes obras/editoras.
+                    </div>
+                </div>
+                {% if pode_gerenciar %}
+                <a href="{% url 'projeto_criar' %}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-lg me-1"></i>Novo projeto
+                </a>
+                {% endif %}
+            </div>
+
+            <div class="card-body p-0">
+                {% if projetos %}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-3">Projeto</th>
+                                <th>Imagens</th>
+                                <th>Situação</th>
+                                {% if pode_gerenciar %}<th class="text-end pe-3">Ações</th>{% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for projeto in projetos %}
+                            <tr>
+                                <td class="ps-3">
+                                    <div class="fw-semibold">{{ projeto.nome }}</div>
+                                    {% if projeto.descricao %}
+                                    <div class="text-secondary" style="font-size:0.76rem;">
+                                        {{ projeto.descricao }}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td>{{ projeto.total_imagens }}</td>
+                                <td>
+                                    {% if projeto.ativo %}
+                                    <span class="badge text-bg-success">Ativo</span>
+                                    {% else %}
+                                    <span class="badge text-bg-secondary">Inativo</span>
+                                    {% endif %}
+                                </td>
+                                {% if pode_gerenciar %}
+                                <td class="text-end pe-3">
+                                    <a href="{% url 'projeto_editar' projeto.pk %}" class="btn btn-outline-secondary btn-sm">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <form method="post" action="{% url 'projeto_toggle_ativo' projeto.pk %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-outline-secondary btn-sm" title="{% if projeto.ativo %}Inativar{% else %}Ativar{% endif %}">
+                                            {% if projeto.ativo %}
+                                                <i class="bi bi-pause-circle"></i>
+                                            {% else %}
+                                                <i class="bi bi-play-circle"></i>
+                                            {% endif %}
+                                        </button>
+                                    </form>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="dito-empty-state py-5">
+                    <i class="bi bi-folder2-open"></i>
+                    <p>Nenhum projeto cadastrado.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-5">
+        <div class="card h-100">
+            <div class="card-header bg-transparent d-flex align-items-center justify-content-between gap-3 flex-wrap">
+                <div>
+                    <h5 class="mb-1">Componentes curriculares</h5>
+                    <div class="text-secondary" style="font-size:0.78rem;">
+                        Lista padronizada usada no cadastro das imagens.
+                    </div>
+                </div>
+                {% if pode_gerenciar %}
+                <a href="{% url 'componente_criar' %}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-lg me-1"></i>Novo componente
+                </a>
+                {% endif %}
+            </div>
+
+            <div class="card-body p-0">
+                {% if componentes %}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-3">Componente</th>
+                                <th>Imagens</th>
+                                <th>Situação</th>
+                                {% if pode_gerenciar %}<th class="text-end pe-3">Ações</th>{% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for componente in componentes %}
+                            <tr>
+                                <td class="ps-3 fw-semibold">{{ componente.nome }}</td>
+                                <td>{{ componente.total_imagens }}</td>
+                                <td>
+                                    {% if componente.ativo %}
+                                    <span class="badge text-bg-success">Ativo</span>
+                                    {% else %}
+                                    <span class="badge text-bg-secondary">Inativo</span>
+                                    {% endif %}
+                                </td>
+                                {% if pode_gerenciar %}
+                                <td class="text-end pe-3">
+                                    <a href="{% url 'componente_editar' componente.pk %}" class="btn btn-outline-secondary btn-sm">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <form method="post" action="{% url 'componente_toggle_ativo' componente.pk %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-outline-secondary btn-sm" title="{% if componente.ativo %}Inativar{% else %}Ativar{% endif %}">
+                                            {% if componente.ativo %}
+                                                <i class="bi bi-pause-circle"></i>
+                                            {% else %}
+                                                <i class="bi bi-play-circle"></i>
+                                            {% endif %}
+                                        </button>
+                                    </form>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="dito-empty-state py-5">
+                    <i class="bi bi-journal-bookmark"></i>
+                    <p>Nenhum componente cadastrado.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-body py-3">
+        <div class="text-secondary" style="font-size:0.8rem;">
+            <strong class="text-body">Inativar não exclui.</strong>
+            Projetos e componentes já vinculados continuam preservados nas imagens antigas,
+            mas deixam de aparecer como opção para novas associações.
+        </div>
+    </div>
+</div>
+
+{% endblock %}

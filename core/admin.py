@@ -1,6 +1,16 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import Usuario, StatusWorkflow, Imagem, Descricao, Trecho, HistoricoItem, Lote
+from .models import (
+    ComponenteCurricular,
+    Descricao,
+    HistoricoItem,
+    Imagem,
+    Lote,
+    Projeto,
+    StatusWorkflow,
+    Trecho,
+    Usuario,
+)
 
 
 @admin.register(Usuario)
@@ -52,10 +62,26 @@ class StatusWorkflowAdmin(admin.ModelAdmin):
     ordering = ("ordem",)
 
 
+@admin.register(Projeto)
+class ProjetoAdmin(admin.ModelAdmin):
+    list_display = ("nome", "ativo", "criado_em", "atualizado_em")
+    list_filter = ("ativo",)
+    search_fields = ("nome", "descricao")
+    ordering = ("nome",)
+
+
+@admin.register(ComponenteCurricular)
+class ComponenteCurricularAdmin(admin.ModelAdmin):
+    list_display = ("nome", "ativo", "criado_em", "atualizado_em")
+    list_filter = ("ativo",)
+    search_fields = ("nome",)
+    ordering = ("nome",)
+
+
 @admin.register(Imagem)
 class ImagemAdmin(admin.ModelAdmin):
-    list_display = ("retranca", "nome_obra", "etapa", "status", "responsavel", "criado_em")
-    list_filter = ("status", "etapa", "ativo")
+    list_display = ("retranca", "projeto", "nome_obra", "componente_curricular", "etapa", "status", "responsavel", "criado_em")
+    list_filter = ("projeto", "componente_curricular", "status", "etapa", "ativo")
     search_fields = ("retranca", "nome_obra")
     ordering = ("-criado_em",)
 

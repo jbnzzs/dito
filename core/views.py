@@ -1,17 +1,462 @@
 import ast
+import ntpath
 import os
+import re
+import unicodedata
 import uuid
+from functools import lru_cache
+from urllib.parse import quote, urlencode, urlsplit
 
 import openpyxl
 import pycountry
+from babel import Locale
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import FileResponse
 from django.db import transaction
 from django.shortcuts import redirect, render, get_object_or_404
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 
-from .models import Descricao, Imagem, StatusWorkflow, Trecho, Usuario
+from .models import (
+    ComponenteCurricular,
+    Descricao,
+    Imagem,
+    Projeto,
+    StatusWorkflow,
+    Trecho,
+    Usuario,
+)
 from .forms import ImagemForm
+
+
+# ============================================================
+# FOTOWEB — MODELO ORIGINAL DO RELATÓRIO
+# ============================================================
+
+FOTOWEB_COLUNAS_RELATORIO = [
+    "obra",
+    "componente",
+    "volume",
+    "capitulo",
+    "keywords",
+    "status",
+    "retranca",
+    "img_file",
+    "descricao",
+    "usuario",
+    "etapa",
+    "retranca_lower",
+    "descricao_flat",
+]
+
+
+def _valor_json_fotoweb(valor):
+    """
+    Converte valores vindos do Excel para tipos seguros no JSONField.
+
+    Strings, números, booleanos e nulos são mantidos. Datas/horas e
+    outros objetos são convertidos para texto para que o snapshot possa
+    ser persistido sem alterar os demais dados da linha.
+    """
+    if valor is None:
+        return None
+
+    if isinstance(
+        valor,
+        (
+            str,
+            int,
+            float,
+            bool,
+        ),
+    ):
+        return valor
+
+    if hasattr(valor, "isoformat"):
+        try:
+            return valor.isoformat()
+        except Exception:
+            pass
+
+    return str(valor)
+
+
+def _snapshot_linha_fotoweb(
+    data,
+    numero_linha=None,
+    arquivo_origem="",
+):
+    """
+    Guarda a linha original do relatório FotoWeb.
+
+    Os campos internos iniciados por ``__`` são metadados do Dito e NÃO
+    são exportados para o arquivo final.
+    """
+    snapshot = {
+        coluna: _valor_json_fotoweb(
+            data.get(coluna)
+        )
+        for coluna in FOTOWEB_COLUNAS_RELATORIO
+    }
+
+    snapshot["__numero_linha"] = numero_linha
+    snapshot["__arquivo_origem"] = str(
+        arquivo_origem
+        or ""
+    )
+
+    return snapshot
+
+
+# ============================================================
+# EXCEL — NORMALIZAÇÃO DE COLUNAS
+# ============================================================
+
+def _normalizar_cabecalho_excel(valor):
+    """
+    Normaliza cabeçalhos vindos do Excel.
+
+    Exemplos:
+    - "Coleção" -> "colecao"
+    - "Componente Curricular" -> "componente_curricular"
+    - "IMG File" -> "img_file"
+
+    Isso evita que diferenças de maiúsculas, acentos, espaços ou hífens
+    façam os dados deixarem de ser importados.
+    """
+    texto = str(valor or "").strip()
+
+    texto = unicodedata.normalize(
+        "NFKD",
+        texto,
+    ).encode(
+        "ascii",
+        "ignore",
+    ).decode(
+        "ascii",
+    )
+
+    texto = texto.casefold()
+    texto = re.sub(r"[^a-z0-9]+", "_", texto)
+
+    return texto.strip("_")
+
+
+def _valor_excel(data, *chaves):
+    """
+    Retorna o primeiro valor preenchido entre os nomes de coluna aceitos.
+    """
+    for chave in chaves:
+        valor = data.get(chave)
+
+        if valor is not None and str(valor).strip():
+            return valor
+
+    return ""
+
+
+# ============================================================
+# PDF — REDE INTERNA
+# ============================================================
+
+PDF_REDE_RAIZ = r"\\arara\HTML"
+PDF_PASTA_ARQUIVOS = "PDFs"
+PDF_PASTA_GRAVADOS = "GRAVADOS"
+PDF_TIPO_MATERIAL = "mp"
+
+# O nome do componente cadastrado no Dito nem sempre é exatamente o nome
+# da pasta usada pela produção na rede.
+#
+# Exemplo confirmado:
+#   componente no Dito/Excel: ARTE
+#   pasta na rede:            ART
+#
+# À medida que outros componentes forem confirmados, basta adicionar aqui.
+PDF_COMPONENTES_REDE = {
+    "ARTE": "ART",
+    "ART": "ART",
+}
+
+
+def _normalizar_codigo_rede(valor):
+    """
+    Normaliza códigos usados em nomes de pastas/arquivos da rede.
+
+    Ex.:
+    - "ART" -> "ART"
+    - "Mat" -> "MAT"
+    """
+    texto = str(valor or "").strip()
+
+    texto = unicodedata.normalize(
+        "NFKD",
+        texto,
+    ).encode(
+        "ascii",
+        "ignore",
+    ).decode(
+        "ascii",
+    )
+
+    return re.sub(
+        r"[^A-Za-z0-9]+",
+        "",
+        texto,
+    ).upper()
+
+
+def _codigo_componente_pdf_rede(valor):
+    """
+    Retorna o código de pasta usado na rede para o componente.
+
+    O cadastro editorial pode usar um nome completo (ex.: ARTE), enquanto
+    a estrutura da rede usa uma sigla (ex.: ART).
+    """
+    normalizado = _normalizar_codigo_rede(
+        valor
+    )
+
+    if not normalizado:
+        return ""
+
+    return PDF_COMPONENTES_REDE.get(
+        normalizado,
+        normalizado,
+    )
+
+
+def _normalizar_projeto_editorial_rede(valor):
+    """
+    Mantém o projeto editorial no padrão de pasta.
+
+    Ex.: G28_E002_EF2
+    """
+    partes = [
+        _normalizar_codigo_rede(parte)
+        for parte in str(valor or "").strip().split("_")
+        if str(parte or "").strip()
+    ]
+
+    return "_".join(
+        parte
+        for parte in partes
+        if parte
+    )
+
+
+def _normalizar_numero_projeto_pdf(valor):
+    """
+    Aceita '013' ou 'p013' e devolve 'p013'.
+    """
+    texto = str(valor or "").strip().lower()
+
+    numeros = re.sub(
+        r"\D",
+        "",
+        texto,
+    )
+
+    if not numeros:
+        return ""
+
+    return f"p{numeros.zfill(3)}"
+
+
+def _extrair_ano_pdf(valor):
+    """
+    Extrai o ano/série do valor vindo do relatório.
+
+    Exemplos:
+    - 9 -> 9
+    - 9ANO -> 9
+    - 9º ANO -> 9
+    """
+    texto = str(valor or "").strip()
+
+    encontrado = re.search(
+        r"\d{1,2}",
+        texto,
+    )
+
+    if not encontrado:
+        return ""
+
+    return encontrado.group(0)
+
+
+def _prefixo_arquivo_pdf(projeto_editorial):
+    """
+    Do projeto editorial G28_E002_EF2, usa G28_E002 no nome do arquivo.
+
+    Resultado: g28_e002
+    """
+    projeto = _normalizar_projeto_editorial_rede(
+        projeto_editorial
+    )
+
+    partes = [
+        parte
+        for parte in projeto.split("_")
+        if parte
+    ]
+
+    if len(partes) < 2:
+        return ""
+
+    return "_".join(
+        partes[:2]
+    ).lower()
+
+
+def _montar_caminho_pdf_rede(
+    projeto_editorial,
+    numero_projeto,
+    componente,
+    volume_ano,
+):
+    r"""
+    Monta o caminho completo do Manual do Professor na rede interna.
+
+    Exemplo:
+    \\arara\HTML\G28_E002_EF2\ART\PDFs\9ANO\GRAVADOS\
+    g28_e002_9p013a_mp.pdf
+    """
+    projeto = _normalizar_projeto_editorial_rede(
+        projeto_editorial
+    )
+
+    numero = _normalizar_numero_projeto_pdf(
+        numero_projeto
+    )
+
+    componente_codigo = _codigo_componente_pdf_rede(
+        componente
+    )
+
+    ano = _extrair_ano_pdf(
+        volume_ano
+    )
+
+    prefixo = _prefixo_arquivo_pdf(
+        projeto
+    )
+
+    if (
+        not projeto
+        or not numero
+        or not componente_codigo
+        or not ano
+        or not prefixo
+    ):
+        return ""
+
+    inicial_componente = (
+        componente_codigo[0].lower()
+    )
+
+    nome_pdf = (
+        f"{prefixo}_"
+        f"{ano}"
+        f"{numero}"
+        f"{inicial_componente}_"
+        f"{PDF_TIPO_MATERIAL}.pdf"
+    )
+
+    return (
+        f"{PDF_REDE_RAIZ}\\"
+        f"{projeto}\\"
+        f"{componente_codigo}\\"
+        f"{PDF_PASTA_ARQUIVOS}\\"
+        f"{ano}ANO\\"
+        f"{PDF_PASTA_GRAVADOS}\\"
+        f"{nome_pdf}"
+    )
+
+
+# ============================================================
+# FOTOWEB
+# ============================================================
+
+FOTOWEB_ARCHIVES_BASE_URL = (
+    "http://fotoweb.ensinolivre.com.br:9090/fotoweb/archives/"
+)
+
+
+def _montar_url_fotoweb(acervo, retranca):
+    """
+    Monta a URL de pesquisa da imagem no FotoWeb.
+
+    Cada relatório importado pertence a um único Acervo. A retranca da
+    imagem é enviada no parâmetro ``q`` da pesquisa do FotoWeb.
+    """
+    acervo = str(acervo or "").strip().strip("/")
+    retranca = str(retranca or "").strip()
+
+    if not acervo or not retranca:
+        return ""
+
+    acervo_url = quote(acervo, safe="")
+    retranca_url = quote(retranca, safe="")
+
+    return (
+        f"{FOTOWEB_ARCHIVES_BASE_URL}"
+        f"{acervo_url}/?q={retranca_url}"
+    )
+
+
+@lru_cache(maxsize=1)
+def _catalogo_idiomas_pt():
+    """
+    Retorna os idiomas que possuem nome localizado em português (pt-BR).
+
+    O código ISO 639-3 continua sendo a referência interna. A lista exibida
+    ao usuário vem do CLDR, por meio do Babel, para evitar que nomes sem
+    tradução apareçam em inglês no seletor.
+    """
+    locale_pt = Locale.parse("pt_BR")
+    nomes_por_codigo = {}
+
+    for codigo_locale, nome_localizado in locale_pt.languages.items():
+        idioma = None
+
+        if len(codigo_locale) == 2:
+            idioma = pycountry.languages.get(alpha_2=codigo_locale)
+        elif len(codigo_locale) == 3:
+            idioma = pycountry.languages.get(alpha_3=codigo_locale)
+
+        if not idioma or not hasattr(idioma, "alpha_3"):
+            continue
+
+        nome = str(nome_localizado or "").strip()
+        if not nome:
+            continue
+
+        # Na interface, mantemos inicial maiúscula para acompanhar o padrão
+        # visual atual do seletor.
+        nome = nome[:1].upper() + nome[1:]
+        nomes_por_codigo.setdefault(idioma.alpha_3, nome)
+
+    idiomas = [
+        {"codigo": codigo, "nome": nome}
+        for codigo, nome in nomes_por_codigo.items()
+    ]
+    idiomas.sort(key=lambda item: item["nome"].casefold())
+
+    return idiomas, nomes_por_codigo
+
+
+def _nome_idioma_pt(codigo, fallback=None):
+    """Nome do idioma em português; nunca usa o nome inglês como fallback."""
+    _, nomes_por_codigo = _catalogo_idiomas_pt()
+
+    if codigo in nomes_por_codigo:
+        return nomes_por_codigo[codigo]
+
+    if codigo:
+        return f"Idioma ({codigo.upper()})"
+
+    return fallback or "Idioma não identificado"
 
 
 def _saudacao():
@@ -25,49 +470,53 @@ def _saudacao():
 
 def _imagens_do_lote_para_usuario(lote, usuario):
     """
-    Escopo de imagens pendentes de um lote para um usuário, conforme o perfil:
-    - Coordenador/Administrador: todas as imagens do lote (exceto finalizadas).
-    - Descritor: apenas as atribuídas a ele, em status de descrição.
-    - Revisor: apenas as atribuídas a ele, em status de conferência.
-    Ordenado por retranca — a mesma ordem usada na navegação sequencial.
-    Retorna um queryset (possivelmente vazio).
+    Escopo de imagens pendentes de um lote para um usuário, conforme as
+    propriedades configuradas no StatusWorkflow.
+
+    A regra não depende do nome nem do slug do status:
+    - Coordenador/Administrador: imagens não finalizadas.
+    - Descritor/Revisor: imagens atribuídas a ele em status da sua fase que
+      permitam edição ou avancem automaticamente ao abrir.
     """
+    from django.db.models import Q
+
     if not lote:
         return Imagem.objects.none()
 
-    if usuario.tipo in (Usuario.Tipo.COORDENADOR, Usuario.Tipo.ADMINISTRADOR):
-        slugs_pendentes = [
-            "liberado-descricao", "descrevendo", "descrito",
-            "liberado-conferencia", "em-conferencia", "conferido",
-            "revisando", "revisado",
-        ]
-        # Igual aos demais perfis: imagens já marcadas como prontas saem da
-        # fila de navegação, para o contador andar e o botão de concluir o
-        # lote aparecer na última pendente.
-        filtro_responsavel = {"pronto_para_lote": False}
-    elif usuario.tipo == Usuario.Tipo.DESCRITOR:
-        slugs_pendentes = ["liberado-descricao", "descrevendo"]
-        filtro_responsavel = {"responsavel": usuario, "pronto_para_lote": False}
-    elif usuario.tipo == Usuario.Tipo.REVISOR:
-        slugs_pendentes = ["liberado-conferencia", "em-conferencia"]
-        filtro_responsavel = {"responsavel": usuario, "pronto_para_lote": False}
-    else:
-        return Imagem.objects.none()
-
-    return (
-        Imagem.objects.filter(
-            lote=lote,
-            ativo=True,
-            status__slug__in=slugs_pendentes,
-            **filtro_responsavel,
-        )
-        .order_by("retranca")
+    base = Imagem.objects.filter(
+        lote=lote,
+        ativo=True,
+        status__ativo=True,
     )
+
+    if usuario.tipo in (Usuario.Tipo.COORDENADOR, Usuario.Tipo.ADMINISTRADOR):
+        return (
+            base
+            .filter(status__is_final=False)
+            .order_by("retranca")
+        )
+
+    if usuario.tipo in (Usuario.Tipo.DESCRITOR, Usuario.Tipo.REVISOR):
+        return (
+            base
+            .filter(
+                responsavel=usuario,
+                status__perfil_responsavel=usuario.tipo,
+            )
+            .filter(
+                Q(status__permite_edicao=True)
+                | Q(status__avanca_ao_abrir=True)
+            )
+            .order_by("retranca")
+        )
+
+    return Imagem.objects.none()
+
 
 def _proxima_imagem_do_lote(imagem_atual, usuario):
     """
-    Próxima imagem NÃO marcada como pronta no mesmo lote. Primeiro tenta
-    a próxima na ordem (retranca maior); se não houver mais à frente,
+    Próxima imagem pendente do mesmo lote para o perfil atual. Primeiro
+    tenta a próxima na ordem (retranca maior); se não houver mais à frente,
     volta para o começo da fila — permite começar pelo meio do lote sem
     deixar imagens anteriores de fora.
     """
@@ -85,8 +534,12 @@ def _proxima_imagem_do_lote(imagem_atual, usuario):
 def _escopo_fixo_do_lote(lote, usuario):
     """
     Todas as imagens do lote que pertencem à fase deste usuário,
-    independente do status atual — usado só para numerar a posição fixa
-    'X/Y' na tela de descrição, sem encolher conforme o lote é concluído.
+    independente do status atual.
+
+    Esse escopo é usado como base estável para o total do lote na tela
+    de descrição. A numeração exibida não representa mais a posição da
+    retranca dentro do lote; ela representa quantas imagens o usuário
+    já iniciou naquela etapa.
     """
     from django.db.models import Q
 
@@ -115,6 +568,217 @@ def _apenas_coordenador(usuario):
     return usuario.tipo in (usuario.Tipo.ADMINISTRADOR, usuario.Tipo.COORDENADOR)
 
 
+def _url_interna_segura(request, url):
+    """Retorna uma URL de retorno somente quando ela pertence ao próprio Dito!."""
+    if not url:
+        return None
+
+    if not url_has_allowed_host_and_scheme(
+        url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return None
+
+    return url
+
+
+def _url_anterior_segura(request):
+    """Retorna o Referer interno quando ele aponta para outra tela."""
+    referer = _url_interna_segura(
+        request,
+        request.META.get("HTTP_REFERER"),
+    )
+
+    if not referer:
+        return None
+
+    try:
+        path_referer = urlsplit(referer).path.rstrip("/")
+        path_atual = request.path.rstrip("/")
+    except (TypeError, ValueError):
+        return None
+
+    if path_referer == path_atual:
+        return None
+
+    return referer
+
+
+def _perfil_operacional(usuario):
+    """
+    Perfil usado pelo motor do workflow.
+
+    Administrador mantém acesso amplo ao sistema, mas quando participa de
+    transições do fluxo atua como Coordenador.
+    """
+    if usuario.tipo == Usuario.Tipo.ADMINISTRADOR:
+        return Usuario.Tipo.COORDENADOR
+    return usuario.tipo
+
+
+def _status_inicial_workflow():
+    """Retorna o status inicial ativo configurado no workflow."""
+    return (
+        StatusWorkflow.objects
+        .filter(ativo=True, is_inicial=True)
+        .order_by("ordem")
+        .first()
+    )
+
+
+def _status_entrada_perfil(perfil, depois_de=None):
+    """
+    Retorna o próximo status de entrada de um perfil.
+
+    Um status de entrada é identificado pela flag avanca_ao_abrir, e não
+    pelo nome/slug. Quando depois_de é informado, busca apenas status
+    posteriores na fila.
+    """
+    qs = StatusWorkflow.objects.filter(
+        ativo=True,
+        perfil_responsavel=perfil,
+        avanca_ao_abrir=True,
+    )
+
+    if depois_de is not None:
+        qs = qs.filter(ordem__gt=depois_de.ordem)
+
+    return qs.order_by("ordem").first()
+
+
+def _usuario_pode_visualizar_imagem(usuario, imagem, descricao=None):
+    """
+    Coordenação/Admin podem visualizar qualquer imagem.
+    Descritor/Revisor podem visualizar tarefas atualmente atribuídas a eles
+    ou tarefas em que a autoria da etapa já foi registrada.
+    """
+    if usuario.tipo in (Usuario.Tipo.ADMINISTRADOR, Usuario.Tipo.COORDENADOR):
+        return True
+
+    if imagem.responsavel_id == usuario.id:
+        return True
+
+    if not descricao:
+        return False
+
+    if usuario.tipo == Usuario.Tipo.DESCRITOR:
+        return descricao.descritor_id == usuario.id
+
+    if usuario.tipo == Usuario.Tipo.REVISOR:
+        return descricao.revisor_id == usuario.id
+
+    return False
+
+
+def _usuario_pode_iniciar_status(usuario, imagem, descricao=None):
+    """Verifica se o usuário pode disparar a transição automática ao abrir."""
+    status = imagem.status
+
+    if not status or not status.ativo or not status.avanca_ao_abrir:
+        return False
+
+    if _perfil_operacional(usuario) != status.perfil_responsavel:
+        return False
+
+    if usuario.tipo == Usuario.Tipo.DESCRITOR:
+        if imagem.responsavel_id != usuario.id:
+            return False
+        if descricao and descricao.descritor_bloqueado:
+            return False
+
+    if usuario.tipo == Usuario.Tipo.REVISOR:
+        if imagem.responsavel_id != usuario.id:
+            return False
+        if descricao and descricao.revisor_bloqueado:
+            return False
+
+    return True
+
+
+def _usuario_pode_editar_imagem(usuario, imagem, descricao=None):
+    """
+    A edição depende da flag permite_edicao do status.
+
+    O nome e o slug do status não participam da regra de permissão.
+    """
+    status = imagem.status
+
+    if not status or not status.ativo or not status.permite_edicao:
+        return False
+
+    # Administrador pode editar qualquer etapa explicitamente editável.
+    if usuario.tipo == Usuario.Tipo.ADMINISTRADOR:
+        return True
+
+    if status.perfil_responsavel != usuario.tipo:
+        return False
+
+    if usuario.tipo == Usuario.Tipo.DESCRITOR:
+        if imagem.responsavel_id != usuario.id:
+            return False
+        if descricao and descricao.descritor_bloqueado:
+            return False
+
+    elif usuario.tipo == Usuario.Tipo.REVISOR:
+        if imagem.responsavel_id != usuario.id:
+            return False
+        if descricao and descricao.revisor_bloqueado:
+            return False
+
+    return True
+
+
+def _tipo_acao_inicio(perfil):
+    """Tipo de histórico gerado quando uma etapa começa ao abrir a tarefa."""
+    from .models import HistoricoItem
+
+    return {
+        Usuario.Tipo.DESCRITOR: HistoricoItem.TipoAcao.DESCRICAO_INICIADA,
+        Usuario.Tipo.REVISOR: HistoricoItem.TipoAcao.CONFERENCIA_INICIADA,
+        Usuario.Tipo.COORDENADOR: HistoricoItem.TipoAcao.REVISAO_INICIADA,
+    }.get(perfil, HistoricoItem.TipoAcao.STATUS_ALTERADO)
+
+
+def _tipo_acao_transicao(status_anterior, novo_status):
+    """
+    Resolve a ação de histórico pelas flags semânticas do status de destino.
+    """
+    from .models import HistoricoItem
+
+    if novo_status.descricao_concluida:
+        return HistoricoItem.TipoAcao.DESCRICAO_SALVA
+
+    if novo_status.conferencia_concluida:
+        return HistoricoItem.TipoAcao.CONFERENCIA_CONCLUIDA
+
+    if novo_status.revisao_concluida:
+        return HistoricoItem.TipoAcao.REVISAO_CONCLUIDA
+
+    if novo_status.is_final:
+        return HistoricoItem.TipoAcao.DESCRICAO_FINALIZADA
+
+    if status_anterior.avanca_ao_abrir and novo_status.permite_edicao:
+        return _tipo_acao_inicio(novo_status.perfil_responsavel)
+
+    return HistoricoItem.TipoAcao.STATUS_ALTERADO
+
+
+def _normalizar_texto_descricao(texto):
+    """Substitui aspas duplas por aspas simples antes de persistir."""
+    return str(texto or "").replace('"', "'")
+
+
+def _data_iso_ou_none(valor):
+    """Converte YYYY-MM-DD vindo de input type=date para date ou None."""
+    from datetime import date
+
+    valor = str(valor or "").strip()
+    if not valor:
+        return None
+    return date.fromisoformat(valor)
+
+
 # ============================================================
 # DASHBOARD
 # ============================================================
@@ -130,20 +794,27 @@ def dashboard(request):
 
     if usuario.tipo in (usuario.Tipo.ADMINISTRADOR, usuario.Tipo.COORDENADOR):
         total = Imagem.objects.filter(ativo=True).count()
-        finalizadas = Imagem.objects.filter(ativo=True, status__slug="finalizado").count()
+        finalizadas = Imagem.objects.filter(
+            ativo=True,
+            status__is_final=True,
+        ).count()
         pendentes = total - finalizadas
+
         por_status = (
             StatusWorkflow.objects
             .filter(ativo=True)
             .annotate(total=Count("imagens", filter=Q(imagens__ativo=True)))
             .order_by("ordem")
         )
+
         from .models import HistoricoItem
+
         historico_recente = (
             HistoricoItem.objects
             .select_related("imagem", "usuario", "novo_status")
             .order_by("-criado_em")[:8]
         )
+
         ctx.update({
             "visao": "coordenacao",
             "total": total,
@@ -154,8 +825,19 @@ def dashboard(request):
         })
 
     elif usuario.tipo == usuario.Tipo.DESCRITOR:
-        minhas = Imagem.objects.filter(responsavel=usuario, ativo=True).select_related("status")
-        disponiveis = minhas.filter(status__slug__in=["liberado-descricao", "descrevendo"])
+        minhas = (
+            Imagem.objects
+            .filter(responsavel=usuario, ativo=True)
+            .select_related("status")
+        )
+        disponiveis = minhas.filter(
+            status__ativo=True,
+            status__perfil_responsavel=Usuario.Tipo.DESCRITOR,
+        ).filter(
+            Q(status__permite_edicao=True)
+            | Q(status__avanca_ao_abrir=True)
+        )
+
         ctx.update({
             "visao": "descritor",
             "total_minhas": minhas.count(),
@@ -164,8 +846,19 @@ def dashboard(request):
         })
 
     elif usuario.tipo == usuario.Tipo.REVISOR:
-        minhas = Imagem.objects.filter(responsavel=usuario, ativo=True).select_related("status")
-        para_conferir = minhas.filter(status__slug__in=["liberado-conferencia", "em-conferencia"])
+        minhas = (
+            Imagem.objects
+            .filter(responsavel=usuario, ativo=True)
+            .select_related("status")
+        )
+        para_conferir = minhas.filter(
+            status__ativo=True,
+            status__perfil_responsavel=Usuario.Tipo.REVISOR,
+        ).filter(
+            Q(status__permite_edicao=True)
+            | Q(status__avanca_ao_abrir=True)
+        )
+
         ctx.update({
             "visao": "revisor",
             "total_minhas": minhas.count(),
@@ -183,6 +876,7 @@ def dashboard(request):
 @login_required
 def minhas_tarefas(request):
     from django.core.paginator import Paginator
+    from django.db.models import Count
     from .models import filtro_autoria_imagem
 
     usuario = request.user
@@ -192,96 +886,217 @@ def minhas_tarefas(request):
     lote_id = request.GET.get("lote", "")
     sem_lote = request.GET.get("sem_lote") == "1"
 
-    # Lista completa dos 9 status — usada para Coordenador/Admin (visão total)
-    # e agora também para Descritor/Revisor, para que a tarefa continue
-    # visível (em modo "Ver") até o final do fluxo, como prova do que a
-    # pessoa produziu — em vez de sumir assim que sai da janela ativa dela.
-    TODOS_OS_SLUGS = [
-        "liberado-descricao", "descrevendo", "descrito",
-        "liberado-conferencia", "em-conferencia", "conferido",
-        "revisando", "revisado", "finalizado",
-    ]
+    # A lista vem do banco. Nenhum status é fixado pelo nome/slug no código.
+    status_list = list(
+        StatusWorkflow.objects
+        .filter(ativo=True)
+        .order_by("ordem")
+    )
+    slugs_visiveis = [s.slug for s in status_list]
 
-    # Definir quais status e título conforme perfil
     if usuario.tipo == usuario.Tipo.DESCRITOR:
-        slugs_visiveis = TODOS_OS_SLUGS
         titulo_secao = "Minhas tarefas de descrição"
         acao_label = "Descrever"
         acao_icon = "bi-pencil-square"
 
     elif usuario.tipo == usuario.Tipo.REVISOR:
-        slugs_visiveis = TODOS_OS_SLUGS
         titulo_secao = "Minhas tarefas de conferência"
         acao_label = "Conferir"
         acao_icon = "bi-eye"
 
     elif usuario.tipo in (usuario.Tipo.COORDENADOR, usuario.Tipo.ADMINISTRADOR):
-        slugs_visiveis = TODOS_OS_SLUGS
         titulo_secao = "Todas as tarefas"
         acao_label = "Abrir"
         acao_icon = "bi-arrow-right-circle"
 
     else:
-        slugs_visiveis = []
         titulo_secao = "Minhas tarefas"
         acao_label = "Abrir"
         acao_icon = "bi-arrow-right-circle"
 
-    # Queryset base
+    # Quando a coordenação abre o card "Imagens avulsas" pela tela de Lotes,
+    # deixa explícito que esta listagem é o ponto de gestão das imagens sem lote.
+    if (
+        sem_lote
+        and usuario.tipo in (
+            usuario.Tipo.COORDENADOR,
+            usuario.Tipo.ADMINISTRADOR,
+        )
+    ):
+        titulo_secao = "Imagens avulsas"
+
     if usuario.tipo in (usuario.Tipo.COORDENADOR, usuario.Tipo.ADMINISTRADOR):
         tarefas = Imagem.objects.filter(
             ativo=True,
-            status__slug__in=slugs_visiveis,
+            status__ativo=True,
         )
     else:
-        tarefas = Imagem.objects.filter(
-            ativo=True,
-            status__slug__in=slugs_visiveis,
-        ).filter(filtro_autoria_imagem(usuario)).distinct()
+        tarefas = (
+            Imagem.objects
+            .filter(
+                ativo=True,
+                status__ativo=True,
+            )
+            .filter(filtro_autoria_imagem(usuario))
+            .distinct()
+        )
 
-    # Filtros
     if status_slug:
         tarefas = tarefas.filter(status__slug=status_slug)
+
     if busca:
         tarefas = tarefas.filter(retranca__icontains=busca)
 
     lote_atual = None
+
     if sem_lote:
         tarefas = tarefas.filter(lote__isnull=True)
+
     elif lote_id:
         from .models import Lote
+
         lote_atual = Lote.objects.filter(pk=lote_id).first()
         if lote_atual:
             tarefas = tarefas.filter(lote=lote_atual)
 
-    tarefas = tarefas.select_related("status", "responsavel", "lote").order_by("-criado_em")
+    tarefas = (
+        tarefas
+        .select_related("status", "responsavel", "lote")
+        .order_by("-criado_em")
+    )
 
-    # Contadores por status (para os cards de resumo)
-    # Contadores por status (uma única query)
-    from django.db.models import Count
+    base_contadores = Imagem.objects.filter(
+        ativo=True,
+        status__ativo=True,
+    )
 
-    base_contadores = Imagem.objects.filter(ativo=True, status__slug__in=slugs_visiveis)
     if usuario.tipo not in (usuario.Tipo.COORDENADOR, usuario.Tipo.ADMINISTRADOR):
-        base_contadores = base_contadores.filter(filtro_autoria_imagem(usuario)).distinct()
+        base_contadores = (
+            base_contadores
+            .filter(filtro_autoria_imagem(usuario))
+            .distinct()
+        )
 
     if sem_lote:
         base_contadores = base_contadores.filter(lote__isnull=True)
+
     elif lote_atual:
         base_contadores = base_contadores.filter(lote=lote_atual)
 
     agregado = dict(
-        base_contadores.values_list("status__slug").annotate(qtd=Count("id"))
+        base_contadores
+        .values_list("status__slug")
+        .annotate(qtd=Count("id"))
     )
-    contadores = {slug: agregado.get(slug, 0) for slug in slugs_visiveis}
+
+    contadores = {
+        status.slug: agregado.get(status.slug, 0)
+        for status in status_list
+    }
+
+    # Usado apenas pela interface para escolher entre botão de ação e "Ver".
+    # A lista é derivada das flags do banco, não de slugs fixos.
+    perfil_operacional = _perfil_operacional(usuario)
+
+    slugs_ativos = [
+        status.slug
+        for status in status_list
+        if (
+            (
+                usuario.tipo == Usuario.Tipo.ADMINISTRADOR
+                and (
+                    status.permite_edicao
+                    or status.avanca_ao_abrir
+                    or status.revisao_concluida
+                )
+            )
+            or (
+                status.perfil_responsavel == perfil_operacional
+                and (
+                    status.permite_edicao
+                    or status.avanca_ao_abrir
+                    or status.revisao_concluida
+                )
+            )
+        )
+    ]
 
     total = tarefas.count()
     paginador = Paginator(tarefas, 50)
     pagina_obj = paginador.get_page(pagina)
 
-    # Status disponíveis para filtro
-    status_list = StatusWorkflow.objects.filter(
-        ativo=True, slug__in=slugs_visiveis
-    ).order_by("ordem")
+    # ------------------------------------------------------------
+    # Atribuição de imagens avulsas
+    # ------------------------------------------------------------
+    # A atribuição continua centralizada no fluxo de Lotes. Quando a
+    # coordenação entra no card "Imagens avulsas", disponibilizamos os
+    # responsáveis para atribuição individual de cada imagem.
+    descritores = Usuario.objects.none()
+    revisores = Usuario.objects.none()
+
+    if (
+        sem_lote
+        and usuario.tipo in (
+            usuario.Tipo.COORDENADOR,
+            usuario.Tipo.ADMINISTRADOR,
+        )
+    ):
+        descritores = (
+            Usuario.objects
+            .filter(
+                tipo=Usuario.Tipo.DESCRITOR,
+                is_active=True,
+            )
+            .order_by(
+                "first_name",
+                "last_name",
+                "username",
+            )
+        )
+
+        revisores = (
+            Usuario.objects
+            .filter(
+                tipo=Usuario.Tipo.REVISOR,
+                is_active=True,
+            )
+            .order_by(
+                "first_name",
+                "last_name",
+                "username",
+            )
+        )
+
+    # ------------------------------------------------------------
+    # Navegação de retorno
+    # ------------------------------------------------------------
+    # Quando a tela foi aberta a partir de Lotes, o parâmetro ``next``
+    # preserva exatamente aquela tela (inclusive filtros). Em acessos
+    # antigos sem ``next``, lote/sem_lote continuam voltando para Lotes.
+    url_voltar = _url_interna_segura(
+        request,
+        request.GET.get("next"),
+    )
+
+    # Para Descritor e Revisor, Minhas Tarefas faz parte do fluxo de Lotes.
+    # Mesmo quando a tela é aberta diretamente pelo menu lateral (sem ``next``),
+    # o botão Voltar deve levar para Lotes, e não para o Dashboard ou para a
+    # própria tela de tarefas.
+    if not url_voltar and usuario.tipo in (
+        Usuario.Tipo.DESCRITOR,
+        Usuario.Tipo.REVISOR,
+    ):
+        url_voltar = reverse("lotes_lista")
+
+    # Coordenador/Admin ainda preservam a origem real quando disponível.
+    if not url_voltar and (lote_atual or sem_lote):
+        url_voltar = reverse("lotes_lista")
+
+    if not url_voltar:
+        url_voltar = _url_anterior_segura(request)
+
+    if not url_voltar:
+        url_voltar = reverse("dashboard")
 
     ctx = {
         "tarefas": pagina_obj,
@@ -294,14 +1109,25 @@ def minhas_tarefas(request):
         "status_slug_ativo": status_slug,
         "busca": busca,
         "contadores": contadores,
-        "slugs_ativos": ["liberado-descricao", "descrevendo",
-                         "liberado-conferencia", "em-conferencia"],
+        "slugs_ativos": slugs_ativos,
         "mostrar_todos_status": usuario.tipo in (
-            usuario.Tipo.COORDENADOR, usuario.Tipo.ADMINISTRADOR
+            usuario.Tipo.COORDENADOR,
+            usuario.Tipo.ADMINISTRADOR,
         ),
         "lote_atual": lote_atual,
         "sem_lote": sem_lote,
+        "descritores": descritores,
+        "revisores": revisores,
+        "pode_atribuir_avulsas": (
+            sem_lote
+            and usuario.tipo in (
+                usuario.Tipo.COORDENADOR,
+                usuario.Tipo.ADMINISTRADOR,
+            )
+        ),
+        "url_voltar": url_voltar,
     }
+
     return render(request, "core/minhas_tarefas.html", ctx)
 
 
@@ -316,6 +1142,7 @@ def imagens_lista(request):
     from .models import Lote
 
     busca = request.GET.get("busca", "").strip()
+    projeto_f = request.GET.get("projeto", "").strip()
     obra_f = request.GET.get("obra", "").strip()
     componente_f = request.GET.get("componente", "").strip()
     status_f = request.GET.get("status", "").strip()
@@ -327,19 +1154,39 @@ def imagens_lista(request):
     mostrar_inativas = request.GET.get("mostrar_inativas") == "1"
     pagina = request.GET.get("pagina", 1)
 
+    # Quantidade de imagens por página.
+    # O padrão é 25 para manter a listagem leve, mas o usuário pode
+    # aumentar quando quiser visualizar mais registros de uma vez.
+    por_pagina_opcoes = (25, 50, 100)
+
+    try:
+        por_pagina = int(
+            request.GET.get(
+                "por_pagina",
+                25,
+            )
+        )
+    except (TypeError, ValueError):
+        por_pagina = 25
+
+    if por_pagina not in por_pagina_opcoes:
+        por_pagina = 25
+
     imagens = Imagem.objects.filter(ativo=False) if mostrar_inativas else Imagem.objects.filter(ativo=True)
 
     imagens = imagens.select_related(
-        "status", "responsavel", "lote",
+        "status", "responsavel", "lote", "projeto", "componente_curricular",
         "descricao", "descricao__descritor", "descricao__revisor",
     )
 
     if busca:
         imagens = imagens.filter(retranca__icontains=busca)
+    if projeto_f:
+        imagens = imagens.filter(projeto__nome__icontains=projeto_f)
     if obra_f:
         imagens = imagens.filter(nome_obra__icontains=obra_f)
     if componente_f:
-        imagens = imagens.filter(componente_curricular__icontains=componente_f)
+        imagens = imagens.filter(componente_curricular__nome__icontains=componente_f)
     if status_f:
         imagens = imagens.filter(status__nome__icontains=status_f)
     if resp_descricao_f:
@@ -384,7 +1231,10 @@ def imagens_lista(request):
     imagens = imagens.order_by("-criado_em")
 
     total = imagens.count()
-    paginador = Paginator(imagens, 50)
+    paginador = Paginator(
+        imagens,
+        por_pagina,
+    )
     pagina_obj = paginador.get_page(pagina)
 
     status_list = StatusWorkflow.objects.filter(ativo=True).order_by("ordem")
@@ -397,14 +1247,21 @@ def imagens_lista(request):
         .order_by("nome")
     )
 
-    # Opções para os datalists de Obra e Componente
+    # Opções para os filtros de Projeto, Obra e Componente
+    projetos_disponiveis = (
+        Projeto.objects
+        .filter(imagens__ativo=True)
+        .distinct()
+        .order_by("nome")
+    )
+
     obras_disponiveis = (
         Imagem.objects.filter(ativo=True).exclude(nome_obra="")
         .values_list("nome_obra", flat=True).distinct().order_by()
     )
     componentes_disponiveis = (
-        Imagem.objects.filter(ativo=True).exclude(componente_curricular="")
-        .values_list("componente_curricular", flat=True).distinct().order_by()
+        Imagem.objects.filter(ativo=True, componente_curricular__isnull=False)
+        .values_list("componente_curricular__nome", flat=True).distinct().order_by()
     )
 
     # Preserva todos os filtros aplicados ao montar links de paginação
@@ -413,7 +1270,7 @@ def imagens_lista(request):
     qs_sem_pagina = querydict.urlencode()
 
     tem_filtro = any([
-        busca, obra_f, componente_f, status_f, lote_f,
+        busca, projeto_f, obra_f, componente_f, status_f, lote_f,
         resp_descricao_f, resp_revisao_f,
         pagamento_descritor_f, pagamento_revisor_f, mostrar_inativas,
     ])
@@ -422,6 +1279,7 @@ def imagens_lista(request):
         "imagens": pagina_obj,
         "status_list": status_list,
         "busca": busca,
+        "projeto_f": projeto_f,
         "obra_f": obra_f,
         "componente_f": componente_f,
         "status_f": status_f,
@@ -434,12 +1292,15 @@ def imagens_lista(request):
         "tem_filtro": tem_filtro,
         "total": total,
         "pagina_obj": pagina_obj,
+        "por_pagina": por_pagina,
+        "por_pagina_opcoes": por_pagina_opcoes,
         "descritores": descritores,
         "revisores": revisores,
         "lotes": lotes,
         "lote_selecionado": lote_selecionado,
         "pode_atribuir_lote": _apenas_coordenador(request.user),
         "status_pagamento_choices": Imagem.StatusPagamento.choices,
+        "projetos_disponiveis": projetos_disponiveis,
         "obras_disponiveis": sorted(set(obras_disponiveis)),
         "componentes_disponiveis": sorted(set(componentes_disponiveis)),
         "qs_sem_pagina": qs_sem_pagina,
@@ -454,32 +1315,216 @@ def imagens_lista(request):
 @login_required
 def importar_imagens(request):
     if not _apenas_coordenador(request.user):
-        messages.error(request, "Apenas coordenadores e administradores podem importar imagens.")
+        messages.error(
+            request,
+            "Apenas coordenadores e administradores podem importar imagens.",
+        )
         return redirect("dashboard")
 
-    if request.method == "GET":
-        return render(request, "core/importar_imagens.html")
+    from django.db.models.functions import Lower
 
+    projetos_ativos = (
+        Projeto.objects
+        .filter(ativo=True)
+        .order_by(Lower("nome"))
+    )
+
+    contexto_base = {
+        "projetos": projetos_ativos,
+        "projeto_selecionado_id": request.POST.get("projeto", ""),
+        "acervo_fotoweb": request.POST.get("acervo_fotoweb", "").strip(),
+
+        # Para o projeto atual, já deixamos os valores de teste preenchidos.
+        # Em futuras importações eles podem ser alterados na própria tela.
+        "projeto_editorial_pdf": (
+            request.POST.get("projeto_editorial_pdf", "").strip()
+            if request.method == "POST"
+            else "G28_E002_EF2"
+        ),
+        "numero_projeto_pdf": (
+            request.POST.get("numero_projeto_pdf", "").strip()
+            if request.method == "POST"
+            else "p013"
+        ),
+    }
+
+    if request.method == "GET":
+        return render(
+            request,
+            "core/importar_imagens.html",
+            contexto_base,
+        )
+
+    # ------------------------------------------------------------
+    # Projeto da importação
+    # ------------------------------------------------------------
+    projeto_id = request.POST.get("projeto", "").strip()
+
+    if not projeto_id:
+        messages.error(
+            request,
+            "Selecione o projeto ao qual este grupo de imagens pertence.",
+        )
+        return render(
+            request,
+            "core/importar_imagens.html",
+            contexto_base,
+        )
+
+    try:
+        projeto_selecionado = Projeto.objects.get(
+            pk=projeto_id,
+            ativo=True,
+        )
+    except (Projeto.DoesNotExist, ValueError):
+        messages.error(
+            request,
+            "O projeto selecionado não existe ou está inativo.",
+        )
+        return render(
+            request,
+            "core/importar_imagens.html",
+            contexto_base,
+        )
+
+    # ------------------------------------------------------------
+    # Acervo FotoWeb da importação
+    # ------------------------------------------------------------
+    acervo_fotoweb = (
+        request.POST.get("acervo_fotoweb", "")
+        .strip()
+        .strip("/")
+    )
+
+    if not acervo_fotoweb:
+        messages.error(
+            request,
+            "Informe o Acervo FotoWeb deste relatório.",
+        )
+        return render(
+            request,
+            "core/importar_imagens.html",
+            contexto_base,
+        )
+
+    # ------------------------------------------------------------
+    # PDF na rede interna
+    # ------------------------------------------------------------
+    projeto_editorial_pdf = (
+        request.POST.get(
+            "projeto_editorial_pdf",
+            "",
+        )
+        .strip()
+    )
+
+    numero_projeto_pdf = (
+        request.POST.get(
+            "numero_projeto_pdf",
+            "",
+        )
+        .strip()
+    )
+
+    projeto_editorial_pdf = (
+        _normalizar_projeto_editorial_rede(
+            projeto_editorial_pdf
+        )
+    )
+
+    numero_projeto_pdf = (
+        _normalizar_numero_projeto_pdf(
+            numero_projeto_pdf
+        )
+    )
+
+    if not projeto_editorial_pdf:
+        messages.error(
+            request,
+            "Informe o Projeto Editorial utilizado na rede interna.",
+        )
+        return render(
+            request,
+            "core/importar_imagens.html",
+            contexto_base,
+        )
+
+    if len(projeto_editorial_pdf.split("_")) < 2:
+        messages.error(
+            request,
+            "Informe um Projeto Editorial válido. Ex.: G28_E002_EF2.",
+        )
+        return render(
+            request,
+            "core/importar_imagens.html",
+            contexto_base,
+        )
+
+    if not numero_projeto_pdf:
+        messages.error(
+            request,
+            "Informe o número do projeto Scriba do PDF. Ex.: p013.",
+        )
+        return render(
+            request,
+            "core/importar_imagens.html",
+            contexto_base,
+        )
+
+    # ------------------------------------------------------------
+    # Arquivo
+    # ------------------------------------------------------------
     arquivo = request.FILES.get("arquivo")
+
     if not arquivo:
         messages.error(request, "Nenhum arquivo enviado.")
-        return render(request, "core/importar_imagens.html")
+        return render(
+            request,
+            "core/importar_imagens.html",
+            contexto_base,
+        )
 
-    if not arquivo.name.endswith(".xlsx"):
-        messages.error(request, "O arquivo deve estar no formato .xlsx")
-        return render(request, "core/importar_imagens.html")
+    if not arquivo.name.lower().endswith(".xlsx"):
+        messages.error(
+            request,
+            "O arquivo deve estar no formato .xlsx",
+        )
+        return render(
+            request,
+            "core/importar_imagens.html",
+            contexto_base,
+        )
+
+    status_inicial = _status_inicial_workflow()
+
+    if not status_inicial:
+        messages.error(
+            request,
+            "Nenhum status inicial ativo foi configurado "
+            "no Gerenciador de Status.",
+        )
+        return render(
+            request,
+            "core/importar_imagens.html",
+            contexto_base,
+        )
 
     try:
-        status_inicial = StatusWorkflow.objects.get(slug="liberado-descricao")
-    except StatusWorkflow.DoesNotExist:
-        messages.error(request, "Status 'Liberado para descrição' não encontrado.")
-        return render(request, "core/importar_imagens.html")
-
-    try:
-        wb = openpyxl.load_workbook(arquivo, read_only=True, data_only=True)
+        wb = openpyxl.load_workbook(
+            arquivo,
+            read_only=True,
+            data_only=True,
+        )
     except Exception as e:
-        messages.error(request, f"Erro ao abrir o arquivo: {e}")
-        return render(request, "core/importar_imagens.html")
+        messages.error(
+            request,
+            f"Erro ao abrir o arquivo: {e}",
+        )
+        return render(
+            request,
+            "core/importar_imagens.html",
+            contexto_base,
+        )
 
     ws = wb.active
     headers = None
@@ -487,134 +1532,560 @@ def importar_imagens(request):
 
     for row in ws.iter_rows(values_only=True):
         if headers is None:
-            headers = row
+            headers = [
+                _normalizar_cabecalho_excel(celula)
+                for celula in row
+            ]
             continue
-        data_rows.append(dict(zip(headers, row)))
+
+        data_rows.append(
+            dict(zip(headers, row))
+        )
 
     wb.close()
 
     if not data_rows:
-        messages.error(request, "O arquivo está vazio.")
-        return render(request, "core/importar_imagens.html")
+        messages.error(
+            request,
+            "O arquivo está vazio.",
+        )
+        return render(
+            request,
+            "core/importar_imagens.html",
+            contexto_base,
+        )
+
+    # ------------------------------------------------------------
+    # Validar colunas essenciais do relatório
+    # ------------------------------------------------------------
+    colunas_detectadas = set(headers or [])
+
+    aliases_retranca = {
+        "retranca",
+    }
+
+    aliases_obra = {
+        "colecao",
+        "obra",
+        "nome_obra",
+    }
+
+    aliases_componente = {
+        "disciplina",
+        "componente",
+        "componente_curricular",
+    }
+
+    if not colunas_detectadas.intersection(aliases_retranca):
+        messages.error(
+            request,
+            "Não encontrei a coluna de Retranca no arquivo Excel.",
+        )
+        return render(
+            request,
+            "core/importar_imagens.html",
+            contexto_base,
+        )
+
+    if not colunas_detectadas.intersection(aliases_obra):
+        messages.error(
+            request,
+            "Não encontrei a coluna de Obra/Coleção no arquivo Excel.",
+        )
+        return render(
+            request,
+            "core/importar_imagens.html",
+            contexto_base,
+        )
+
+    if not colunas_detectadas.intersection(aliases_componente):
+        messages.error(
+            request,
+            "Não encontrei a coluna de Disciplina/Componente no arquivo Excel.",
+        )
+        return render(
+            request,
+            "core/importar_imagens.html",
+            contexto_base,
+        )
 
     importacao_id = uuid.uuid4()
 
-    # ---- Pré-carregar dados de referência ----
-    # Retrancas já existentes no banco
+    # ------------------------------------------------------------
+    # Pré-carregar dados de referência
+    # ------------------------------------------------------------
+
+    # --------------------------------------------------------
+    # Retrancas do arquivo e imagens já existentes
+    # --------------------------------------------------------
+    # Em vez de carregar TODAS as retrancas do banco para a memória,
+    # consulta somente as retrancas presentes neste arquivo.
+    retrancas_arquivo = {
+        str(
+            _valor_excel(
+                linha,
+                "retranca",
+            )
+            or ""
+        ).strip()
+        for linha in data_rows
+    }
+    retrancas_arquivo.discard("")
+
+    imagens_existentes = {
+        imagem.retranca: imagem
+        for imagem in (
+            Imagem.objects
+            .filter(
+                retranca__in=retrancas_arquivo
+            )
+            .only(
+                "id",
+                "retranca",
+                "dados_fotoweb_originais",
+            )
+        )
+    }
+
     retrancas_existentes = set(
-        Imagem.objects.values_list("retranca", flat=True)
+        imagens_existentes
     )
 
-    # Cache de usuários por username
+    # Imagens duplicadas não são recriadas, mas recebem o snapshot
+    # atualizado da linha original. Isso permite reimportar relatórios
+    # antigos apenas para preparar a futura exportação FotoWeb.
+    imagens_snapshot_atualizar = {}
+
+    # Cache de usuários por username.
     usernames = {
-        str(r.get("usuario", "") or "").strip()
+        str(
+            _valor_excel(
+                r,
+                "usuario",
+                "responsavel",
+            )
+        ).strip()
         for r in data_rows
-        if r.get("usuario")
-    }
-    usuarios_cache = {
-        u.username: u
-        for u in Usuario.objects.filter(username__in=usernames)
+        if _valor_excel(
+            r,
+            "usuario",
+            "responsavel",
+        )
     }
 
-    # Cache de idiomas pycountry
+    usuarios_cache = {
+        u.username: u
+        for u in Usuario.objects.filter(
+            username__in=usernames,
+        )
+    }
+
+    # Componentes já cadastrados são reaproveitados.
+    # Se a planilha trouxer um componente novo, ele entra
+    # automaticamente no Gerenciador de Componentes.
+    componentes_cache = {
+        componente.nome.casefold(): componente
+        for componente in ComponenteCurricular.objects.all()
+    }
+
+    def resolver_componente(nome):
+        nome = str(nome or "").strip()
+
+        if not nome:
+            return None
+
+        chave = nome.casefold()
+        componente = componentes_cache.get(chave)
+
+        if componente:
+            return componente
+
+        componente, _ = (
+            ComponenteCurricular.objects.get_or_create(
+                nome=nome,
+                defaults={"ativo": True},
+            )
+        )
+
+        componentes_cache[chave] = componente
+        return componente
+
+    # Cache de idiomas.
+    # O código ISO continua igual, mas o nome gravado passa a
+    # ser localizado em português.
     idioma_cache = {}
 
     def resolver_idioma(lang_code):
         if lang_code in idioma_cache:
             return idioma_cache[lang_code]
-        alpha_2 = lang_code.split("-")[0]
+
+        codigo_recebido = str(
+            lang_code or ""
+        ).strip()
+
+        parte_idioma = (
+            codigo_recebido
+            .split("-")[0]
+            .lower()
+        )
+
         try:
-            lang = pycountry.languages.get(alpha_2=alpha_2)
-            codigo = lang.alpha_3 if lang and hasattr(lang, "alpha_3") else "und"
-            nome = lang.name if lang else lang_code
+            idioma = None
+
+            if len(parte_idioma) == 2:
+                idioma = pycountry.languages.get(
+                    alpha_2=parte_idioma,
+                )
+            elif len(parte_idioma) == 3:
+                idioma = pycountry.languages.get(
+                    alpha_3=parte_idioma,
+                )
+
+            codigo = (
+                idioma.alpha_3
+                if idioma
+                and hasattr(idioma, "alpha_3")
+                else "und"
+            )
+
+            nome = _nome_idioma_pt(codigo)
+
         except Exception:
-            codigo, nome = "und", lang_code
-        idioma_cache[lang_code] = (codigo, nome)
+            codigo = "und"
+            nome = "Idioma não identificado"
+
+        idioma_cache[lang_code] = (
+            codigo,
+            nome,
+        )
+
         return codigo, nome
 
-    # ---- Processar linhas ----
+    # ------------------------------------------------------------
+    # Processar linhas
+    # ------------------------------------------------------------
     imagens_criar = []
     rows_com_descricao = []
     puladas = 0
     erros = []
     log = []
 
-    etapas_validas = [e[0] for e in Imagem.Etapa.choices]
+    etapas_validas = [
+        e[0]
+        for e in Imagem.Etapa.choices
+    ]
 
-    for data in data_rows:
-        retranca = str(data.get("retranca") or "").strip()
+    for numero_linha, data in enumerate(
+        data_rows,
+        start=2,
+    ):
+        retranca = str(
+            _valor_excel(
+                data,
+                "retranca",
+            )
+        ).strip()
+
         if not retranca:
             puladas += 1
             continue
 
+        dados_fotoweb_originais = (
+            _snapshot_linha_fotoweb(
+                data,
+                numero_linha=numero_linha,
+                arquivo_origem=arquivo.name,
+            )
+        )
+
         if retranca in retrancas_existentes:
             puladas += 1
-            log.append({"tipo": "pulada", "retranca": retranca, "msg": "Já existe"})
+
+            imagem_existente = (
+                imagens_existentes.get(
+                    retranca
+                )
+            )
+
+            if imagem_existente:
+                imagem_existente.dados_fotoweb_originais = (
+                    dados_fotoweb_originais
+                )
+
+                imagens_snapshot_atualizar[
+                    imagem_existente.pk
+                ] = imagem_existente
+
+                mensagem_pulada = (
+                    "Já existe — base original do FotoWeb atualizada; "
+                    "projeto e workflow preservados"
+                )
+            else:
+                # Duplicata dentro da própria planilha.
+                mensagem_pulada = (
+                    "Retranca repetida no arquivo — primeira ocorrência preservada"
+                )
+
+            log.append({
+                "tipo": "pulada",
+                "retranca": retranca,
+                "msg": mensagem_pulada,
+            })
             continue
 
-        username = str(data.get("usuario") or "").strip()
-        responsavel = usuarios_cache.get(username)
+        username = str(
+            _valor_excel(
+                data,
+                "usuario",
+                "responsavel",
+            )
+        ).strip()
 
-        etapa_raw = str(data.get("etapa") or "AD")
-        etapa = etapa_raw.replace("Etapa:", "").strip()
+        responsavel = usuarios_cache.get(
+            username
+        )
+
+        etapa_raw = str(
+            _valor_excel(
+                data,
+                "etapa",
+            )
+            or "AD"
+        )
+
+        etapa = (
+            etapa_raw
+            .replace("Etapa:", "")
+            .strip()
+        )
+
         if etapa not in etapas_validas:
             etapa = Imagem.Etapa.AD
 
-        img_file = str(data.get("img_file") or "")
-        nome_arquivo = os.path.basename(img_file) if img_file else ""
+        img_file = str(
+            _valor_excel(
+                data,
+                "img_file",
+                "arquivo",
+                "caminho_arquivo",
+            )
+        )
+
+        nome_arquivo = (
+            os.path.basename(img_file)
+            if img_file
+            else ""
+        )
+
+        componente_raw = str(
+            _valor_excel(
+                data,
+                "disciplina",
+                "componente",
+                "componente_curricular",
+            )
+        ).strip()
+
+        volume_raw = str(
+            _valor_excel(
+                data,
+                "volume",
+                "volume_ano_modulo",
+            )
+        ).strip()
+
+        caminho_pdf_rede = (
+            _montar_caminho_pdf_rede(
+                projeto_editorial_pdf,
+                numero_projeto_pdf,
+                componente_raw,
+                volume_raw,
+            )
+        )
 
         imagem = Imagem(
             retranca=retranca,
-            nome_obra=str(data.get("colecao") or ""),
-            componente_curricular=str(data.get("disciplina") or ""),
-            volume_ano_modulo=str(data.get("volume") or ""),
-            capitulo_unidade=str(data.get("capitulo") or ""),
+
+            # Todas as imagens NOVAS desta importação
+            # pertencem ao projeto escolhido no formulário.
+            projeto=projeto_selecionado,
+
+            nome_obra=str(
+                _valor_excel(
+                    data,
+                    "colecao",
+                    "obra",
+                    "nome_obra",
+                )
+            ).strip(),
+            componente_curricular=resolver_componente(
+                componente_raw
+            ),
+            volume_ano_modulo=volume_raw,
+            capitulo_unidade=str(
+                _valor_excel(
+                    data,
+                    "capitulo",
+                    "capitulo_unidade",
+                )
+            ).strip(),
             etapa=etapa,
             nome_arquivo=nome_arquivo,
             caminho_arquivo=img_file,
+
+            # Link de pesquisa no FotoWeb montado automaticamente
+            # a partir do Acervo desta importação + retranca.
+            url_fotoweb=_montar_url_fotoweb(
+                acervo_fotoweb,
+                retranca,
+            ),
+
+            # O campo existente url_pdf passa a armazenar o caminho UNC
+            # do Manual do Professor na rede interna.
+            url_pdf=caminho_pdf_rede,
+
+            # Guarda os valores ORIGINAIS da linha do FotoWeb.
+            # Na exportação específica, somente descricao e
+            # descricao_flat serão substituídas.
+            dados_fotoweb_originais=dados_fotoweb_originais,
+
             status=status_inicial,
             responsavel=responsavel,
             cadastrado_por=request.user,
             importacao_id=importacao_id,
             ativo=True,
         )
-        imagens_criar.append(imagem)
-        rows_com_descricao.append((retranca, responsavel, data.get("descricao")))
-        retrancas_existentes.add(retranca)  # evitar duplicatas no mesmo arquivo
-        log.append({"tipo": "criada", "retranca": retranca, "msg": "Importada com sucesso"})
 
-    # ---- Bulk create imagens em lotes de 500 ----
+        imagens_criar.append(imagem)
+
+        rows_com_descricao.append((
+            retranca,
+            responsavel,
+            _valor_excel(
+                data,
+                "descricao",
+            ),
+        ))
+
+        # Evita duplicatas dentro da própria planilha.
+        retrancas_existentes.add(retranca)
+
+        log.append({
+            "tipo": "criada",
+            "retranca": retranca,
+            "msg": (
+                f"Importada para o projeto "
+                f"'{projeto_selecionado.nome}' "
+                f"com FotoWeb preparado"
+                + (
+                    " e caminho do PDF gerado"
+                    if caminho_pdf_rede
+                    else " — PDF sem dados suficientes para montar o caminho"
+                )
+            ),
+        })
+
+    # ------------------------------------------------------------
+    # Bulk create imagens em lotes de 500
+    # ------------------------------------------------------------
     LOTE = 500
     criadas = 0
 
     try:
         with transaction.atomic():
-            for i in range(0, len(imagens_criar), LOTE):
-                lote = imagens_criar[i:i + LOTE]
-                Imagem.objects.bulk_create(lote, ignore_conflicts=True)
+
+            # Atualiza somente o snapshot FotoWeb das imagens que já
+            # existiam. Nenhum dado operacional do Dito é alterado.
+            imagens_para_atualizar = list(
+                imagens_snapshot_atualizar.values()
+            )
+
+            for i in range(
+                0,
+                len(imagens_para_atualizar),
+                LOTE,
+            ):
+                Imagem.objects.bulk_update(
+                    imagens_para_atualizar[
+                        i:i + LOTE
+                    ],
+                    [
+                        "dados_fotoweb_originais",
+                    ],
+                    batch_size=LOTE,
+                )
+
+            for i in range(
+                0,
+                len(imagens_criar),
+                LOTE,
+            ):
+                lote = imagens_criar[
+                    i:i + LOTE
+                ]
+
+                Imagem.objects.bulk_create(
+                    lote,
+                    ignore_conflicts=True,
+                )
+
                 criadas += len(lote)
 
-            # Buscar IDs das imagens criadas
-            retrancas_criadas = [img.retranca for img in imagens_criar]
+            # Buscar IDs das imagens criadas.
+            retrancas_criadas = [
+                img.retranca
+                for img in imagens_criar
+            ]
+
             imagens_db = {
                 img.retranca: img
-                for img in Imagem.objects.filter(retranca__in=retrancas_criadas)
+                for img in Imagem.objects.filter(
+                    retranca__in=retrancas_criadas
+                )
             }
 
-            # ---- Bulk create descrições ----
+            # ----------------------------------------------------
+            # Bulk create descrições
+            # ----------------------------------------------------
             descricoes_criar = []
             trechos_por_retranca = {}
 
-            for retranca, responsavel, descricao_raw in rows_com_descricao:
-                imagem = imagens_db.get(retranca)
-                if not imagem or not descricao_raw:
+            for (
+                retranca,
+                responsavel,
+                descricao_raw,
+            ) in rows_com_descricao:
+
+                imagem = imagens_db.get(
+                    retranca
+                )
+
+                if (
+                    not imagem
+                    or not descricao_raw
+                ):
                     continue
 
                 try:
-                    trechos_data = ast.literal_eval(str(descricao_raw))
-                    if not isinstance(trechos_data, list) or not trechos_data:
+                    trechos_data = (
+                        ast.literal_eval(
+                            str(descricao_raw)
+                        )
+                    )
+
+                    if (
+                        not isinstance(
+                            trechos_data,
+                            list,
+                        )
+                        or not trechos_data
+                    ):
                         continue
-                except (ValueError, SyntaxError):
+
+                except (
+                    ValueError,
+                    SyntaxError,
+                ):
                     continue
 
                 descricao = Descricao(
@@ -622,59 +2093,156 @@ def importar_imagens(request):
                     descritor=responsavel,
                     descritor_bloqueado=False,
                 )
-                descricoes_criar.append(descricao)
-                trechos_por_retranca[retranca] = trechos_data
 
-            for i in range(0, len(descricoes_criar), LOTE):
-                Descricao.objects.bulk_create(descricoes_criar[i:i + LOTE], ignore_conflicts=True)
+                descricoes_criar.append(
+                    descricao
+                )
 
-            # Buscar IDs das descrições criadas
+                trechos_por_retranca[
+                    retranca
+                ] = trechos_data
+
+            for i in range(
+                0,
+                len(descricoes_criar),
+                LOTE,
+            ):
+                Descricao.objects.bulk_create(
+                    descricoes_criar[
+                        i:i + LOTE
+                    ],
+                    ignore_conflicts=True,
+                )
+
+            # Buscar IDs das descrições criadas.
             descricoes_db = {
                 d.imagem.retranca: d
                 for d in Descricao.objects.filter(
-                    imagem__retranca__in=list(trechos_por_retranca.keys())
+                    imagem__retranca__in=list(
+                        trechos_por_retranca.keys()
+                    )
                 ).select_related("imagem")
             }
 
-            # ---- Bulk create trechos ----
+            # ----------------------------------------------------
+            # Bulk create trechos
+            # ----------------------------------------------------
             trechos_criar = []
 
-            for retranca, trechos_data in trechos_por_retranca.items():
-                descricao = descricoes_db.get(retranca)
+            for (
+                retranca,
+                trechos_data,
+            ) in trechos_por_retranca.items():
+
+                descricao = descricoes_db.get(
+                    retranca
+                )
+
                 if not descricao:
                     continue
 
-                for ordem, trecho_data in enumerate(trechos_data, 1):
-                    lang_code = trecho_data.get("lang", "pt-BR")
-                    texto = trecho_data.get("text", "")
-                    idioma_codigo, idioma_nome = resolver_idioma(lang_code)
+                for (
+                    ordem,
+                    trecho_data,
+                ) in enumerate(
+                    trechos_data,
+                    1,
+                ):
+                    lang_code = (
+                        trecho_data.get(
+                            "lang",
+                            "pt-BR",
+                        )
+                    )
 
-                    trechos_criar.append(Trecho(
-                        descricao=descricao,
-                        ordem=ordem,
-                        texto=texto,
-                        idioma_codigo=idioma_codigo,
-                        idioma_nome=idioma_nome,
-                    ))
+                    texto = (
+                        _normalizar_texto_descricao(
+                            trecho_data.get(
+                                "text",
+                                "",
+                            )
+                        )
+                    )
 
-            for i in range(0, len(trechos_criar), LOTE):
-                Trecho.objects.bulk_create(trechos_criar[i:i + LOTE])
+                    (
+                        idioma_codigo,
+                        idioma_nome,
+                    ) = resolver_idioma(
+                        lang_code
+                    )
+
+                    trechos_criar.append(
+                        Trecho(
+                            descricao=descricao,
+                            ordem=ordem,
+                            texto=texto,
+                            idioma_codigo=(
+                                idioma_codigo
+                            ),
+                            idioma_nome=(
+                                idioma_nome
+                            ),
+                        )
+                    )
+
+            for i in range(
+                0,
+                len(trechos_criar),
+                LOTE,
+            ):
+                Trecho.objects.bulk_create(
+                    trechos_criar[
+                        i:i + LOTE
+                    ]
+                )
 
     except Exception as e:
-        erros.append({"retranca": "—", "msg": str(e)})
+        erros.append({
+            "retranca": "—",
+            "msg": str(e),
+        })
         criadas = 0
 
     ctx = {
         "resultado": True,
         "criadas": criadas,
         "puladas": puladas,
+        "fotoweb_sincronizadas": len(
+            imagens_snapshot_atualizar
+        ),
         "erros": erros,
-        "log": log[:200],  # limita o log a 200 linhas para não travar o navegador
+
+        # Limita o log para não travar o navegador.
+        "log": log[:200],
         "log_truncado": len(log) > 200,
         "total_log": len(log),
-        "importacao_id": importacao_id if criadas > 0 else None,
+
+        "importacao_id": (
+            importacao_id
+            if criadas > 0
+            else None
+        ),
+
+        # Deixa explícito em qual Projeto, Acervo e configuração de rede
+        # o grupo foi importado.
+        "projeto_importacao": projeto_selecionado,
+        "acervo_fotoweb": acervo_fotoweb,
+        "projeto_editorial_pdf": projeto_editorial_pdf,
+        "numero_projeto_pdf": numero_projeto_pdf,
+
+        # Mantém a lista disponível caso seja necessário
+        # renderizar novamente o formulário.
+        "projetos": projetos_ativos,
+        "projeto_selecionado_id": str(
+            projeto_selecionado.pk
+        ),
     }
-    return render(request, "core/importar_imagens.html", ctx)
+
+    return render(
+        request,
+        "core/importar_imagens.html",
+        ctx,
+    )
 
 
 # ============================================================
@@ -683,141 +2251,291 @@ def importar_imagens(request):
 
 @login_required
 def descricao_imagem(request, pk):
-    from django.shortcuts import get_object_or_404
     from .models import HistoricoItem
 
-    imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
+    imagem = get_object_or_404(
+        Imagem.objects.select_related("status", "responsavel"),
+        pk=pk,
+        ativo=True,
+    )
     usuario = request.user
     descricao = getattr(imagem, "descricao", None)
 
-    # ---- Verificar permissão de acesso ----
-    pode_editar = False
-    pode_visualizar = False
-    somente_leitura = False
+    # ------------------------------------------------------------
+    # Navegação de retorno
+    # ------------------------------------------------------------
+    # A origem explícita (``next``) tem prioridade. Isso permite voltar
+    # exatamente para o lote, para imagens avulsas ou para uma listagem
+    # filtrada de tarefas. Se a URL foi aberta por um link antigo, usamos
+    # o Referer interno como fallback.
+    url_voltar = _url_interna_segura(
+        request,
+        request.GET.get("next"),
+    )
+
+    if not url_voltar:
+        url_voltar = _url_anterior_segura(request)
+
+    if not url_voltar:
+        if usuario.tipo in (Usuario.Tipo.DESCRITOR, Usuario.Tipo.REVISOR):
+            url_voltar = reverse("minhas_tarefas")
+        else:
+            url_voltar = reverse("imagens_lista")
+
+    # ------------------------------------------------------------
+    # Visualização
+    # ------------------------------------------------------------
+    pode_visualizar = _usuario_pode_visualizar_imagem(
+        usuario,
+        imagem,
+        descricao,
+    )
+
+    if not pode_visualizar:
+        return render(request, "core/descricao.html", {
+            "imagem": imagem,
+            "descricao": descricao,
+            "trechos": [],
+            "pode_editar": False,
+            "pode_visualizar": False,
+            "somente_leitura": True,
+            "motivo_bloqueio": "Esta imagem não está disponível para você.",
+            "idiomas_json": "[]",
+            "lote_progresso_atual": None,
+            "lote_total": None,
+            "lote_eh_ultima": False,
+            "url_voltar": url_voltar,
+        })
+
+    # ------------------------------------------------------------
+    # Auto-transição ao abrir
+    # ------------------------------------------------------------
+    # O comportamento depende exclusivamente das flags do StatusWorkflow.
+    # O nome e o slug do status não interferem na regra.
+    if _usuario_pode_iniciar_status(usuario, imagem, descricao):
+        status_anterior = imagem.status
+        novo_status = status_anterior.proximo()
+
+        if (
+            novo_status
+            and novo_status.ativo
+            and novo_status.perfil_responsavel == status_anterior.perfil_responsavel
+            and novo_status.permite_edicao
+        ):
+            perfil = status_anterior.perfil_responsavel
+            tipo_acao = _tipo_acao_inicio(perfil)
+
+            with transaction.atomic():
+                if descricao:
+                    campos_descricao = []
+
+                    if (
+                        perfil == Usuario.Tipo.DESCRITOR
+                        and usuario.tipo == Usuario.Tipo.DESCRITOR
+                        and descricao.descritor_id != usuario.id
+                    ):
+                        descricao.descritor = usuario
+                        campos_descricao.append("descritor")
+
+                    elif (
+                        perfil == Usuario.Tipo.REVISOR
+                        and usuario.tipo == Usuario.Tipo.REVISOR
+                        and descricao.revisor_id != usuario.id
+                    ):
+                        descricao.revisor = usuario
+                        campos_descricao.append("revisor")
+
+                    elif (
+                        perfil == Usuario.Tipo.COORDENADOR
+                        and descricao.coordenador_id != usuario.id
+                    ):
+                        descricao.coordenador = usuario
+                        campos_descricao.append("coordenador")
+
+                    if campos_descricao:
+                        descricao.save(update_fields=campos_descricao)
+
+                imagem.status = novo_status
+
+                # Na revisão final, o coordenador passa a ser o responsável
+                # operacional pela imagem ao iniciar a etapa.
+                if perfil == Usuario.Tipo.COORDENADOR:
+                    imagem.responsavel = usuario
+                    imagem.save(update_fields=["status", "responsavel"])
+                else:
+                    imagem.save(update_fields=["status"])
+
+                HistoricoItem.objects.create(
+                    imagem=imagem,
+                    descricao=descricao,
+                    usuario=usuario,
+                    tipo_acao=tipo_acao,
+                    status_anterior=status_anterior,
+                    novo_status=novo_status,
+                    observacao="Tarefa iniciada automaticamente ao abrir.",
+                )
+
+    # ------------------------------------------------------------
+    # Permissão de edição
+    # ------------------------------------------------------------
+    pode_editar = _usuario_pode_editar_imagem(
+        usuario,
+        imagem,
+        descricao,
+    )
+
+    # Uma revisão concluída não precisa voltar a ser editável para ser
+    # finalizada. O coordenador/admin pode abrir a imagem em modo de
+    # consulta e avançá-la individualmente para o status final.
+    proximo_status = imagem.status.proximo() if imagem.status else None
+    pode_finalizar = bool(
+        pode_visualizar
+        and imagem.status
+        and imagem.status.revisao_concluida
+        and proximo_status
+        and proximo_status.is_final
+        and (
+            usuario.tipo == Usuario.Tipo.ADMINISTRADOR
+            or imagem.status.perfil_responsavel == _perfil_operacional(usuario)
+        )
+    )
+
+    somente_leitura = pode_visualizar and not pode_editar
     motivo_bloqueio = None
 
-    def _era_dono(campo_bloqueio, campo_dono):
-        return descricao and getattr(descricao, campo_dono + "_id", None) == usuario.id and getattr(descricao, campo_bloqueio)
-
-    if usuario.tipo in (usuario.Tipo.ADMINISTRADOR, usuario.Tipo.COORDENADOR):
-        pode_editar = True
-        pode_visualizar = True
-
-    elif usuario.tipo == usuario.Tipo.DESCRITOR:
-        if _era_dono("descritor_bloqueado", "descritor"):
-            pode_visualizar = True
-            somente_leitura = True
-            motivo_bloqueio = "Você já enviou esta descrição. Somente o coordenador pode liberar novamente para edição."
-        elif (imagem.status.slug in ("liberado-descricao", "descrevendo")
-              and (not imagem.responsavel or imagem.responsavel == usuario)):
-            pode_editar = True
-            pode_visualizar = True
-        elif descricao and descricao.descritor_id == usuario.id:
-            pode_visualizar = True
-            somente_leitura = True
-        else:
-            motivo_bloqueio = "Esta imagem não está disponível para você."
-
-    elif usuario.tipo == usuario.Tipo.REVISOR:
-        if _era_dono("revisor_bloqueado", "revisor"):
-            pode_visualizar = True
-            somente_leitura = True
-            motivo_bloqueio = "Você já concluiu a conferência. Somente o coordenador pode liberar novamente para edição."
-        elif (imagem.status.slug in ("liberado-conferencia", "em-conferencia")
-              and (not imagem.responsavel or imagem.responsavel == usuario)):
-            pode_editar = True
-            pode_visualizar = True
-        elif descricao and descricao.revisor_id == usuario.id:
-            pode_visualizar = True
-            somente_leitura = True
-        else:
-            motivo_bloqueio = "Esta imagem não está disponível para você."
-
-    else:
-        motivo_bloqueio = "Você não tem permissão para acessar esta tela."
-
-    # ---- Auto-transição: iniciar trabalho ao abrir a tarefa ----
-    if pode_editar:
-        status_anterior = imagem.status
-        novo_slug = None
-        tipo_acao = None
-
-        if usuario.tipo == usuario.Tipo.DESCRITOR and imagem.status.slug == "liberado-descricao":
-            novo_slug = "descrevendo"
-            tipo_acao = HistoricoItem.TipoAcao.DESCRICAO_INICIADA
-
-        elif usuario.tipo == usuario.Tipo.REVISOR and imagem.status.slug == "liberado-conferencia":
-            novo_slug = "em-conferencia"
-            tipo_acao = HistoricoItem.TipoAcao.CONFERENCIA_INICIADA
-            # Registra quem é o revisor desta descrição (campo antes nunca preenchido).
-            if descricao and not descricao.revisor:
-                descricao.revisor = usuario
-                descricao.save()
-
-        elif usuario.tipo == usuario.Tipo.COORDENADOR and imagem.status.slug == "conferido":
-            # Conferência concluída pelo revisor: ao abrir a tarefa, o
-            # coordenador assume a revisão final automaticamente.
-            novo_slug = "revisando"
-            tipo_acao = HistoricoItem.TipoAcao.REVISAO_INICIADA
-            if descricao and not descricao.coordenador:
-                descricao.coordenador = usuario
-                descricao.save()
-            if not imagem.responsavel:
-                imagem.responsavel = usuario
-
-        if novo_slug:
-            novo_status = StatusWorkflow.objects.get(slug=novo_slug)
-            imagem.status = novo_status
-            imagem.save()
-            HistoricoItem.objects.create(
-                imagem=imagem,
-                descricao=descricao,
-                usuario=usuario,
-                tipo_acao=tipo_acao,
-                status_anterior=status_anterior,
-                novo_status=novo_status,
-                observacao="Tarefa iniciada automaticamente ao abrir.",
+    if somente_leitura:
+        if (
+            usuario.tipo == Usuario.Tipo.DESCRITOR
+            and descricao
+            and descricao.descritor_id == usuario.id
+            and descricao.descritor_bloqueado
+        ):
+            motivo_bloqueio = (
+                "Você já enviou esta descrição. "
+                "Somente o coordenador pode liberar novamente para edição."
             )
 
-    # ---- Buscar trechos existentes ----
+        elif (
+            usuario.tipo == Usuario.Tipo.REVISOR
+            and descricao
+            and descricao.revisor_id == usuario.id
+            and descricao.revisor_bloqueado
+        ):
+            motivo_bloqueio = (
+                "Você já concluiu a conferência. "
+                "Somente o coordenador pode liberar novamente para edição."
+            )
+
+        elif not pode_finalizar:
+            motivo_bloqueio = (
+                "Esta imagem está disponível apenas para consulta neste status."
+            )
+
+    # ------------------------------------------------------------
+    # Trechos existentes
+    # ------------------------------------------------------------
     trechos = []
     if descricao:
         trechos = descricao.trechos.filter(ativo=True).order_by("ordem")
 
-    # ---- Todos os idiomas via pycountry ----
+    # ------------------------------------------------------------
+    # Idiomas
+    # ------------------------------------------------------------
     import json
 
-    PRIORITARIOS = ["por", "eng", "spa", "fra", "deu", "ita", "jpn",
-                    "zho", "lat", "ara", "rus", "hin", "kor", "grk"]
+    PRIORITARIOS = [
+        "por", "eng", "spa", "fra", "deu", "ita", "jpn",
+        "zho", "lat", "ara", "rus", "hin", "kor", "ell",
+    ]
 
-    todos = []
-    prioritarios = []
-    for lang in pycountry.languages:
-        if not hasattr(lang, "alpha_3"):
-            continue
-        entry = {"codigo": lang.alpha_3, "nome": lang.name}
-        if lang.alpha_3 in PRIORITARIOS:
-            prioritarios.append(entry)
-        else:
-            todos.append(entry)
+    idiomas_pt, nomes_idiomas = _catalogo_idiomas_pt()
 
-    prioritarios.sort(key=lambda x: x["nome"])
-    todos.sort(key=lambda x: x["nome"])
-    idiomas_json = json.dumps(prioritarios + todos, ensure_ascii=False)
+    prioritarios = [
+        item for item in idiomas_pt
+        if item["codigo"] in PRIORITARIOS
+    ]
+    todos = [
+        item for item in idiomas_pt
+        if item["codigo"] not in PRIORITARIOS
+    ]
 
-    # ---- Posição fixa da imagem dentro do lote (contador "2/10") ----
-    lote_posicao = None
+    # Mantém a ordem definida acima para os idiomas mais usados e deixa
+    # o restante em ordem alfabética pelo nome em português.
+    ordem_prioritarios = {
+        codigo: posicao
+        for posicao, codigo in enumerate(PRIORITARIOS)
+    }
+    prioritarios.sort(
+        key=lambda item: ordem_prioritarios.get(item["codigo"], 999)
+    )
+    todos.sort(key=lambda item: item["nome"].casefold())
+
+    # Compatibilidade com descrições antigas. Se o banco ainda tiver um
+    # nome em inglês, a tela usa sempre o nome localizado pelo código ISO.
+    # Para códigos que não possuem nome pt-BR no CLDR, mostramos apenas
+    # uma identificação neutra pelo código, nunca o nome inglês.
+    for trecho in trechos:
+        trecho.idioma_nome = nomes_idiomas.get(
+            trecho.idioma_codigo,
+            _nome_idioma_pt(trecho.idioma_codigo),
+        )
+
+    idiomas_json = json.dumps(
+        prioritarios + todos,
+        ensure_ascii=False,
+    )
+
+    # ------------------------------------------------------------
+    # Progresso do usuário dentro do lote
+    # ------------------------------------------------------------
+    # Não existe uma "posição fixa" da imagem no lote. O usuário pode abrir
+    # qualquer retranca primeiro. Por isso, o contador representa quantas
+    # imagens ele já iniciou naquela etapa do workflow.
+    #
+    # Exemplo:
+    # - abre qualquer imagem pela primeira vez -> 1/178
+    # - abre outra imagem ainda não iniciada   -> 2/178
+    # - reabre uma imagem já iniciada          -> continua 2/178
+    lote_progresso_atual = None
     lote_total = None
     lote_eh_ultima = False
 
     if imagem.lote:
-        fixo = _escopo_fixo_do_lote(imagem.lote, usuario)
-        ids_fixos = list(fixo.values_list("pk", flat=True))
-        lote_total = len(ids_fixos)
-        if imagem.pk in ids_fixos:
-            lote_posicao = ids_fixos.index(imagem.pk) + 1
+        escopo_lote = _escopo_fixo_do_lote(
+            imagem.lote,
+            usuario,
+        )
 
-        lote_eh_ultima = _proxima_imagem_do_lote(imagem, usuario) is None
+        lote_total = escopo_lote.count()
+
+        perfil_etapa = (
+            imagem.status.perfil_responsavel
+            if imagem.status
+            else _perfil_operacional(usuario)
+        )
+
+        tipo_inicio = _tipo_acao_inicio(
+            perfil_etapa
+        )
+
+        lote_progresso_atual = (
+            HistoricoItem.objects
+            .filter(
+                imagem__in=escopo_lote,
+                usuario=usuario,
+                tipo_acao=tipo_inicio,
+            )
+            .values("imagem_id")
+            .distinct()
+            .count()
+        )
+
+        lote_eh_ultima = (
+            _proxima_imagem_do_lote(
+                imagem,
+                usuario,
+            ) is None
+        )
 
     ctx = {
         "imagem": imagem,
@@ -825,14 +2543,18 @@ def descricao_imagem(request, pk):
         "trechos": trechos,
         "pode_editar": pode_editar,
         "pode_visualizar": pode_visualizar,
+        "pode_finalizar": pode_finalizar,
         "somente_leitura": somente_leitura,
         "motivo_bloqueio": motivo_bloqueio,
         "idiomas_json": idiomas_json,
-        "lote_posicao": lote_posicao,
+        "lote_progresso_atual": lote_progresso_atual,
         "lote_total": lote_total,
         "lote_eh_ultima": lote_eh_ultima,
+        "url_voltar": url_voltar,
     }
+
     return render(request, "core/descricao.html", ctx)
+
 
 import json
 from django.http import JsonResponse
@@ -843,73 +2565,105 @@ from django.views.decorators.http import require_POST
 @require_POST
 def salvar_trecho(request, pk):
     """Salva ou atualiza os trechos de uma descrição via AJAX."""
-    from django.shortcuts import get_object_or_404
     from .models import HistoricoItem
 
-    imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
+    imagem = get_object_or_404(
+        Imagem.objects.select_related("status", "responsavel"),
+        pk=pk,
+        ativo=True,
+    )
     usuario = request.user
+    descricao_atual = getattr(imagem, "descricao", None)
 
-    # Verificar permissão
-    pode_editar = False
-    if usuario.tipo in (usuario.Tipo.ADMINISTRADOR, usuario.Tipo.COORDENADOR):
-        pode_editar = True
-    elif usuario.tipo == usuario.Tipo.DESCRITOR:
-        descricao_atual = getattr(imagem, "descricao", None)
-        if (imagem.status.slug in ("liberado-descricao", "descrevendo")
-                and (not descricao_atual or not descricao_atual.descritor_bloqueado)
-                and (not imagem.responsavel or imagem.responsavel == usuario)):
-            pode_editar = True
-    elif usuario.tipo == usuario.Tipo.REVISOR:
-        if imagem.status.slug in ("liberado-conferencia", "em-conferencia"):
-            pode_editar = True
-
-    if not pode_editar:
-        return JsonResponse({"ok": False, "erro": "Sem permissão."}, status=403)
+    if not _usuario_pode_editar_imagem(
+        usuario,
+        imagem,
+        descricao_atual,
+    ):
+        return JsonResponse(
+            {"ok": False, "erro": "Sem permissão para editar neste status."},
+            status=403,
+        )
 
     try:
         body = json.loads(request.body)
     except json.JSONDecodeError:
-        return JsonResponse({"ok": False, "erro": "JSON inválido."}, status=400)
+        return JsonResponse(
+            {"ok": False, "erro": "JSON inválido."},
+            status=400,
+        )
 
-    # Garantir que a Descrição existe
     descricao, criada = Descricao.objects.get_or_create(
         imagem=imagem,
         defaults={
-            "descritor": usuario if usuario.tipo == usuario.Tipo.DESCRITOR else None,
+            "descritor": (
+                usuario
+                if usuario.tipo == Usuario.Tipo.DESCRITOR
+                else None
+            ),
             "descritor_bloqueado": False,
         },
     )
 
+    # Mantém a autoria das etapas coerente mesmo quando a descrição já existia.
+    campos_descricao = []
+
+    if (
+        usuario.tipo == Usuario.Tipo.DESCRITOR
+        and descricao.descritor_id != usuario.id
+    ):
+        descricao.descritor = usuario
+        campos_descricao.append("descritor")
+
+    elif (
+        usuario.tipo == Usuario.Tipo.REVISOR
+        and descricao.revisor_id != usuario.id
+    ):
+        descricao.revisor = usuario
+        campos_descricao.append("revisor")
+
+    elif (
+        usuario.tipo in (
+            Usuario.Tipo.COORDENADOR,
+            Usuario.Tipo.ADMINISTRADOR,
+        )
+        and imagem.status.perfil_responsavel == Usuario.Tipo.COORDENADOR
+        and descricao.coordenador_id != usuario.id
+    ):
+        descricao.coordenador = usuario
+        campos_descricao.append("coordenador")
+
+    if campos_descricao:
+        descricao.save(update_fields=campos_descricao)
+
     trechos_data = body.get("trechos", [])
-    marcar_pronto = body.get("marcar_pronto_lote", False)   # <<< LINHA NOVA
 
     with transaction.atomic():
         descricao.trechos.all().delete()
 
         novos = []
+
         for i, t in enumerate(trechos_data, 1):
-            texto = t.get("texto", "").strip()
+            texto = _normalizar_texto_descricao(
+                t.get("texto", "")
+            ).strip()
             idioma_codigo = t.get("idioma_codigo", "por")
             idioma_nome = t.get("idioma_nome", "Português")
+
             if texto:
-                novos.append(Trecho(
-                    descricao=descricao,
-                    ordem=i,
-                    texto=texto,
-                    idioma_codigo=idioma_codigo,
-                    idioma_nome=idioma_nome,
-                ))
+                novos.append(
+                    Trecho(
+                        descricao=descricao,
+                        ordem=i,
+                        texto=texto,
+                        idioma_codigo=idioma_codigo,
+                        idioma_nome=idioma_nome,
+                    )
+                )
 
         Trecho.objects.bulk_create(novos)
 
-        # <<< BLOCO NOVO — vai aqui, depois do bulk_create >>>
-        if marcar_pronto and imagem.lote:
-            imagem.pronto_para_lote = True
-            imagem.save(update_fields=["pronto_para_lote"])
-        # <<< FIM DO BLOCO NOVO >>>
-
-        # ---- Registrar histórico: início da descrição pelo Descritor ----
-        if usuario.tipo == usuario.Tipo.DESCRITOR and criada:
+        if usuario.tipo == Usuario.Tipo.DESCRITOR and criada:
             HistoricoItem.objects.create(
                 imagem=imagem,
                 descricao=descricao,
@@ -918,69 +2672,129 @@ def salvar_trecho(request, pk):
                 observacao="Descrição iniciada pelo descritor.",
             )
 
-    return JsonResponse({"ok": True, "total": len(novos)})
+    return JsonResponse({
+        "ok": True,
+        "total": len(novos),
+    })
+
 
 @login_required
 @require_POST
 def avancar_status(request, pk):
     """
-    Avança o status da imagem no workflow. Motor genérico baseado nos campos
-    do StatusWorkflow (perfil_responsavel, exige_atribuicao, is_final).
-    Quando o próximo status pertence a um perfil diferente (handoff de
-    fase), tranca o acesso de quem está saindo — preservando quem fez
-    o quê nos campos descricao.descritor/.revisor, que nunca mudam.
+    Avança a imagem para o próximo status ativo do workflow.
+
+    As regras dependem das flags do StatusWorkflow, e não do nome/slug:
+    - permite_edicao controla se a etapa pode ser concluída;
+    - revisao_concluida permite o avanço final para o status is_final;
+    - perfil_responsavel controla quem pode executar a transição;
+    - flags de conclusão definem o tipo correto de histórico.
     """
-    from django.shortcuts import get_object_or_404
     from .models import HistoricoItem
 
-    imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
+    imagem = get_object_or_404(
+        Imagem.objects.select_related("status", "responsavel"),
+        pk=pk,
+        ativo=True,
+    )
     usuario = request.user
     status_atual = imagem.status
-
-    TIPO_ACAO_POR_DESTINO = {
-        "descrito":   HistoricoItem.TipoAcao.DESCRICAO_SALVA,
-        "conferido":  HistoricoItem.TipoAcao.CONFERENCIA_CONCLUIDA,
-        "revisando":  HistoricoItem.TipoAcao.REVISAO_INICIADA,
-        "revisado":   HistoricoItem.TipoAcao.REVISAO_CONCLUIDA,
-        "finalizado": HistoricoItem.TipoAcao.DESCRICAO_FINALIZADA,
-    }
+    descricao = getattr(imagem, "descricao", None)
 
     if status_atual.is_final:
-        return JsonResponse({"ok": False, "erro": "Esta imagem já está finalizada."}, status=400)
+        return JsonResponse(
+            {"ok": False, "erro": "Esta imagem já está finalizada."},
+            status=400,
+        )
 
-    if status_atual.exige_atribuicao and not imagem.responsavel:
-        return JsonResponse({
-            "ok": False,
-            "erro": (
-                f"Atribua um(a) {status_atual.get_perfil_responsavel_display().lower()} "
-                "antes de avançar (ação de atribuição na listagem de imagens)."
-            ),
-        }, status=400)
+    perfil_operacional = _perfil_operacional(usuario)
 
-    if usuario.tipo != Usuario.Tipo.ADMINISTRADOR and usuario.tipo != status_atual.perfil_responsavel:
+    if (
+        usuario.tipo != Usuario.Tipo.ADMINISTRADOR
+        and perfil_operacional != status_atual.perfil_responsavel
+    ):
         return JsonResponse(
             {"ok": False, "erro": "Você não tem permissão para avançar esta tarefa."},
             status=403,
         )
 
-    proximo_status = status_atual.proximo()
-    if not proximo_status:
+    # Etapas normais só podem ser concluídas quando são editáveis.
+    # A exceção é o marco "revisão concluída", que pode avançar para o
+    # status final sem precisar ser editável.
+    if not (
+        status_atual.permite_edicao
+        or status_atual.revisao_concluida
+    ):
         return JsonResponse(
-            {"ok": False, "erro": "Não há próximo status configurado após este."}, status=400
+            {
+                "ok": False,
+                "erro": "Este status não permite avanço manual.",
+            },
+            status=400,
         )
 
-    tipo_acao = TIPO_ACAO_POR_DESTINO.get(proximo_status.slug, HistoricoItem.TipoAcao.STATUS_ALTERADO)
-    descricao = getattr(imagem, "descricao", None)
-    mudou_perfil = proximo_status.perfil_responsavel != status_atual.perfil_responsavel
+    if (
+        status_atual.exige_atribuicao
+        and not imagem.responsavel
+    ):
+        return JsonResponse(
+            {
+                "ok": False,
+                "erro": (
+                    f"Atribua um(a) "
+                    f"{status_atual.get_perfil_responsavel_display().lower()} "
+                    "antes de avançar."
+                ),
+            },
+            status=400,
+        )
+
+    if usuario.tipo in (Usuario.Tipo.DESCRITOR, Usuario.Tipo.REVISOR):
+        if imagem.responsavel_id != usuario.id:
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "erro": "Esta tarefa não está atribuída a você.",
+                },
+                status=403,
+            )
+
+    proximo_status = status_atual.proximo()
+
+    if not proximo_status:
+        return JsonResponse(
+            {
+                "ok": False,
+                "erro": "Não há próximo status ativo configurado.",
+            },
+            status=400,
+        )
+
+    tipo_acao = _tipo_acao_transicao(
+        status_atual,
+        proximo_status,
+    )
+    mudou_perfil = (
+        proximo_status.perfil_responsavel
+        != status_atual.perfil_responsavel
+    )
 
     with transaction.atomic():
         autoatribuido = False
 
-        # ---- INÍCIO DO TRECHO NOVO (bloqueio simétrico) ----
-        if mudou_perfil:
-            if descricao and status_atual.perfil_responsavel == Usuario.Tipo.DESCRITOR:
+        # --------------------------------------------------------
+        # Bloqueio da etapa concluída
+        # --------------------------------------------------------
+        if mudou_perfil and descricao:
+            if (
+                status_atual.perfil_responsavel
+                == Usuario.Tipo.DESCRITOR
+            ):
                 descricao.descritor_bloqueado = True
-                descricao.save()
+                descricao.save(
+                    update_fields=["descritor_bloqueado"]
+                )
+
                 HistoricoItem.objects.create(
                     imagem=imagem,
                     descricao=descricao,
@@ -988,11 +2802,21 @@ def avancar_status(request, pk):
                     tipo_acao=HistoricoItem.TipoAcao.DESCRITOR_BLOQUEADO,
                     status_anterior=status_atual,
                     novo_status=proximo_status,
-                    observacao="Acesso do descritor bloqueado automaticamente após o envio.",
+                    observacao=(
+                        "Acesso do descritor bloqueado "
+                        "automaticamente após o envio."
+                    ),
                 )
-            elif descricao and status_atual.perfil_responsavel == Usuario.Tipo.REVISOR:
+
+            elif (
+                status_atual.perfil_responsavel
+                == Usuario.Tipo.REVISOR
+            ):
                 descricao.revisor_bloqueado = True
-                descricao.save()
+                descricao.save(
+                    update_fields=["revisor_bloqueado"]
+                )
+
                 HistoricoItem.objects.create(
                     imagem=imagem,
                     descricao=descricao,
@@ -1000,27 +2824,43 @@ def avancar_status(request, pk):
                     tipo_acao=HistoricoItem.TipoAcao.REVISOR_BLOQUEADO,
                     status_anterior=status_atual,
                     novo_status=proximo_status,
-                    observacao="Acesso do revisor bloqueado automaticamente após a conferência.",
+                    observacao=(
+                        "Acesso do revisor bloqueado "
+                        "automaticamente após a conferência."
+                    ),
                 )
 
-            if usuario.tipo == proximo_status.perfil_responsavel:
+        # --------------------------------------------------------
+        # Responsável da próxima fase
+        # --------------------------------------------------------
+        if mudou_perfil:
+            if perfil_operacional == proximo_status.perfil_responsavel:
                 imagem.responsavel = usuario
                 autoatribuido = True
             else:
                 imagem.responsavel = None
-        # ---- FIM DO TRECHO NOVO ----
-        # se o perfil não mudou, o responsável permanece o mesmo
 
         imagem.status = proximo_status
         imagem.save()
 
-        if autoatribuido and usuario.tipo == Usuario.Tipo.COORDENADOR and descricao and not descricao.coordenador:
+        # --------------------------------------------------------
+        # Autoria da revisão final
+        # --------------------------------------------------------
+        if (
+            autoatribuido
+            and proximo_status.perfil_responsavel == Usuario.Tipo.COORDENADOR
+            and descricao
+            and not descricao.coordenador_id
+        ):
             descricao.coordenador = usuario
-            descricao.save()
+            descricao.save(update_fields=["coordenador"])
 
+        # --------------------------------------------------------
+        # Finalização
+        # --------------------------------------------------------
         if proximo_status.is_final and descricao:
             descricao.finalizado = True
-            descricao.save()
+            descricao.save(update_fields=["finalizado"])
 
         HistoricoItem.objects.create(
             imagem=imagem,
@@ -1031,11 +2871,33 @@ def avancar_status(request, pk):
             novo_status=proximo_status,
         )
 
+    # Mantém a origem durante a navegação sequencial do lote. Assim, ao
+    # abrir a próxima imagem, o botão Voltar continua apontando para a
+    # mesma tela de tarefas que originou o fluxo.
+    url_retorno = _url_interna_segura(
+        request,
+        request.GET.get("next"),
+    )
+
     proxima_url = None
+
     if imagem.lote:
-        proxima = _proxima_imagem_do_lote(imagem, usuario)
+        proxima = _proxima_imagem_do_lote(
+            imagem,
+            usuario,
+        )
+
         if proxima:
-            proxima_url = reverse("descricao_imagem", kwargs={"pk": proxima.pk})
+            proxima_url = reverse(
+                "descricao_imagem",
+                kwargs={"pk": proxima.pk},
+            )
+
+            if url_retorno:
+                proxima_url = (
+                    f"{proxima_url}?"
+                    f"{urlencode({'next': url_retorno})}"
+                )
 
     return JsonResponse({
         "ok": True,
@@ -1043,6 +2905,136 @@ def avancar_status(request, pk):
         "novo_slug": proximo_status.slug,
         "proxima_url": proxima_url,
     })
+
+
+# ============================================================
+# PDF — ABRIR ARQUIVO DA REDE
+# ============================================================
+
+@login_required
+def abrir_pdf_rede(request, pk):
+    """
+    Entrega o PDF ao navegador por meio do Django.
+
+    Isso evita depender de links file:// no navegador, que normalmente são
+    bloqueados quando a aplicação está sendo acessada por HTTP/HTTPS.
+    """
+    imagem = get_object_or_404(
+        Imagem,
+        pk=pk,
+        ativo=True,
+    )
+
+    caminho = str(
+        imagem.url_pdf or ""
+    ).strip()
+
+    # Corrige automaticamente caminhos de imagens já importadas antes do
+    # mapeamento do componente ter sido ajustado.
+    #
+    # Exemplo:
+    #   ...\\ARTE\\PDFs\\...
+    # passa a ser:
+    #   ...\\ART\\PDFs\\...
+    componente_nome = (
+        imagem.componente_curricular.nome
+        if imagem.componente_curricular
+        else ""
+    )
+
+    componente_original = _normalizar_codigo_rede(
+        componente_nome
+    )
+    componente_rede = _codigo_componente_pdf_rede(
+        componente_nome
+    )
+
+    if (
+        caminho
+        and componente_original
+        and componente_rede
+        and componente_original != componente_rede
+    ):
+        trecho_antigo = (
+            f"\\{componente_original}\\"
+        )
+        trecho_novo = (
+            f"\\{componente_rede}\\"
+        )
+
+        caminho_corrigido = caminho.replace(
+            trecho_antigo,
+            trecho_novo,
+            1,
+        )
+
+        if caminho_corrigido != caminho:
+            caminho = caminho_corrigido
+
+            # Persiste a correção para não precisar recalcular no próximo acesso.
+            Imagem.objects.filter(
+                pk=imagem.pk
+            ).update(
+                url_pdf=caminho
+            )
+
+    if not caminho:
+        messages.error(
+            request,
+            "Esta imagem ainda não possui caminho de PDF configurado.",
+        )
+        return redirect(
+            request.META.get("HTTP_REFERER")
+            or reverse("imagens_lista")
+        )
+
+    raiz_normalizada = ntpath.normcase(
+        ntpath.normpath(
+            PDF_REDE_RAIZ
+        )
+    )
+
+    caminho_normalizado = ntpath.normcase(
+        ntpath.normpath(
+            caminho
+        )
+    )
+
+    # Segurança: só permitimos arquivos dentro da raiz definida da empresa.
+    if not (
+        caminho_normalizado == raiz_normalizada
+        or caminho_normalizado.startswith(
+            raiz_normalizada + "\\"
+        )
+    ):
+        messages.error(
+            request,
+            "O caminho do PDF está fora da pasta de rede permitida.",
+        )
+        return redirect(
+            request.META.get("HTTP_REFERER")
+            or reverse("imagens_lista")
+        )
+
+    if not os.path.isfile(caminho):
+        messages.error(
+            request,
+            f"PDF não encontrado na rede: {caminho}",
+        )
+        return redirect(
+            request.META.get("HTTP_REFERER")
+            or reverse("imagens_lista")
+        )
+
+    return FileResponse(
+        open(
+            caminho,
+            "rb",
+        ),
+        content_type="application/pdf",
+        as_attachment=False,
+        filename=ntpath.basename(caminho),
+    )
 
 
 # ============================================================
@@ -1070,8 +3062,8 @@ def imagem_criar(request):
             messages.success(request, "Imagem cadastrada com sucesso.")
             return redirect("imagens_lista")
     else:
-        # Pré-seleciona o primeiro status do workflow (Liberado para descrição)
-        status_inicial = StatusWorkflow.objects.order_by("ordem").first()
+        # Pré-seleciona o status marcado como inicial no workflow.
+        status_inicial = _status_inicial_workflow()
         form = ImagemForm(initial={"status": status_inicial})
 
     return render(request, "core/imagem_form.html", {
@@ -1132,22 +3124,40 @@ def imagem_excluir(request, pk):
 @login_required
 @require_POST
 def atribuir_descritor(request, pk):
-    """Coordenador atribui um Descritor a uma imagem liberada para descrição."""
+    """Coordenador atribui um Descritor ao status inicial de descrição."""
     from .models import HistoricoItem
 
     if not _apenas_coordenador(request.user):
-        messages.error(request, "Você não tem permissão para atribuir tarefas.")
+        messages.error(
+            request,
+            "Você não tem permissão para atribuir tarefas.",
+        )
         return redirect("imagens_lista")
 
-    imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
+    imagem = get_object_or_404(
+        Imagem.objects.select_related("status"),
+        pk=pk,
+        ativo=True,
+    )
 
-    if imagem.status.slug != "liberado-descricao":
-        messages.error(request, "Esta imagem não está em 'Liberado para descrição'.")
+    status_atual = imagem.status
+
+    if not (
+        status_atual.is_inicial
+        and status_atual.ativo
+        and status_atual.perfil_responsavel == Usuario.Tipo.DESCRITOR
+        and status_atual.exige_atribuicao
+    ):
+        messages.error(
+            request,
+            "Esta imagem não está em um status inicial elegível para atribuição a descritor.",
+        )
         return redirect(request.POST.get("next", "imagens_lista"))
 
     descritor_id = request.POST.get("descritor_id")
     descritor = Usuario.objects.filter(
-        pk=descritor_id, tipo=Usuario.Tipo.DESCRITOR
+        pk=descritor_id,
+        tipo=Usuario.Tipo.DESCRITOR,
     ).first()
 
     if not descritor:
@@ -1155,44 +3165,78 @@ def atribuir_descritor(request, pk):
         return redirect(request.POST.get("next", "imagens_lista"))
 
     if not descritor.contrato_ativo:
-        messages.error(request, f"{descritor} não possui contrato ativo no momento.")
+        messages.error(
+            request,
+            f"{descritor} não possui contrato ativo no momento.",
+        )
         return redirect(request.POST.get("next", "imagens_lista"))
 
-    imagem.responsavel = descritor
-    imagem.save()
+    with transaction.atomic():
+        imagem.responsavel = descritor
+        imagem.save(update_fields=["responsavel"])
 
-    HistoricoItem.objects.create(
-        imagem=imagem,
-        usuario=request.user,
-        tipo_acao=HistoricoItem.TipoAcao.TAREFA_ATRIBUIDA,
-        status_anterior=imagem.status,
-        novo_status=imagem.status,
-        observacao=f"Atribuído ao descritor {descritor}.",
+        descricao = getattr(imagem, "descricao", None)
+        if descricao:
+            campos_descricao = []
+
+            if descricao.descritor_id != descritor.id:
+                descricao.descritor = descritor
+                campos_descricao.append("descritor")
+
+            if descricao.descritor_bloqueado:
+                descricao.descritor_bloqueado = False
+                campos_descricao.append("descritor_bloqueado")
+
+            if campos_descricao:
+                descricao.save(update_fields=campos_descricao)
+
+        HistoricoItem.objects.create(
+            imagem=imagem,
+            descricao=descricao,
+            usuario=request.user,
+            tipo_acao=HistoricoItem.TipoAcao.TAREFA_ATRIBUIDA,
+            status_anterior=imagem.status,
+            novo_status=imagem.status,
+            observacao=f"Atribuído ao descritor {descritor}.",
+        )
+
+    messages.success(
+        request,
+        f"Tarefa atribuída a {descritor}.",
     )
-
-    messages.success(request, f"Tarefa atribuída a {descritor}.")
     return redirect(request.POST.get("next", "imagens_lista"))
 
 
 @login_required
 @require_POST
 def liberar_conferencia(request, pk):
-    """Coordenador libera uma imagem descrita para um Revisor conferir."""
+    """Coordenador libera uma descrição concluída para um Revisor."""
     from .models import HistoricoItem
 
     if not _apenas_coordenador(request.user):
-        messages.error(request, "Você não tem permissão para liberar tarefas.")
+        messages.error(
+            request,
+            "Você não tem permissão para liberar tarefas.",
+        )
         return redirect("imagens_lista")
 
-    imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
+    imagem = get_object_or_404(
+        Imagem.objects.select_related("status"),
+        pk=pk,
+        ativo=True,
+    )
 
-    if imagem.status.slug != "descrito":
-        messages.error(request, "Esta imagem não está em 'Descrito'.")
+    if not imagem.status.descricao_concluida:
+        messages.error(
+            request,
+            "Esta imagem ainda não está marcada como descrição concluída.",
+        )
         return redirect(request.POST.get("next", "imagens_lista"))
 
     revisor_id = request.POST.get("revisor_id")
     revisor = Usuario.objects.filter(
-        pk=revisor_id, tipo=Usuario.Tipo.REVISOR
+        pk=revisor_id,
+        tipo=Usuario.Tipo.REVISOR,
     ).first()
 
     if not revisor:
@@ -1200,26 +3244,65 @@ def liberar_conferencia(request, pk):
         return redirect(request.POST.get("next", "imagens_lista"))
 
     if not revisor.contrato_ativo:
-        messages.error(request, f"{revisor} não possui contrato ativo no momento.")
+        messages.error(
+            request,
+            f"{revisor} não possui contrato ativo no momento.",
+        )
         return redirect(request.POST.get("next", "imagens_lista"))
 
-    proximo_status = StatusWorkflow.objects.get(slug="liberado-conferencia")
-    status_anterior = imagem.status
-
-    imagem.responsavel = revisor
-    imagem.status = proximo_status
-    imagem.save()
-
-    HistoricoItem.objects.create(
-        imagem=imagem,
-        usuario=request.user,
-        tipo_acao=HistoricoItem.TipoAcao.LIBERADO_CONFERENCIA,
-        status_anterior=status_anterior,
-        novo_status=proximo_status,
-        observacao=f"Liberado para o revisor {revisor}.",
+    proximo_status = _status_entrada_perfil(
+        Usuario.Tipo.REVISOR,
+        depois_de=imagem.status,
     )
 
-    messages.success(request, f"Tarefa liberada para {revisor}.")
+    if not proximo_status:
+        messages.error(
+            request,
+            "Não existe um status ativo de entrada para o Revisor após esta etapa.",
+        )
+        return redirect(request.POST.get("next", "imagens_lista"))
+
+    status_anterior = imagem.status
+
+    with transaction.atomic():
+        imagem.responsavel = revisor
+        imagem.status = proximo_status
+        imagem.save(
+            update_fields=[
+                "responsavel",
+                "status",
+            ]
+        )
+
+        descricao = getattr(imagem, "descricao", None)
+        if descricao:
+            campos_descricao = []
+
+            if descricao.revisor_id != revisor.id:
+                descricao.revisor = revisor
+                campos_descricao.append("revisor")
+
+            if descricao.revisor_bloqueado:
+                descricao.revisor_bloqueado = False
+                campos_descricao.append("revisor_bloqueado")
+
+            if campos_descricao:
+                descricao.save(update_fields=campos_descricao)
+
+        HistoricoItem.objects.create(
+            imagem=imagem,
+            descricao=descricao,
+            usuario=request.user,
+            tipo_acao=HistoricoItem.TipoAcao.LIBERADO_CONFERENCIA,
+            status_anterior=status_anterior,
+            novo_status=proximo_status,
+            observacao=f"Liberado para o revisor {revisor}.",
+        )
+
+    messages.success(
+        request,
+        f"Tarefa liberada para {revisor}.",
+    )
     return redirect(request.POST.get("next", "imagens_lista"))
 
 
@@ -1230,28 +3313,51 @@ def devolver_descritor(request, pk):
     from .models import HistoricoItem
 
     if not _apenas_coordenador(request.user):
-        messages.error(request, "Você não tem permissão para liberar tarefas.")
+        messages.error(
+            request,
+            "Você não tem permissão para liberar tarefas.",
+        )
         return redirect("imagens_lista")
 
     imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
     descricao = getattr(imagem, "descricao", None)
 
     if not descricao or not descricao.descritor:
-        messages.error(request, "Esta imagem ainda não possui um descritor definido.")
+        messages.error(
+            request,
+            "Esta imagem ainda não possui um descritor definido.",
+        )
         return redirect(request.POST.get("next", "imagens_lista"))
 
     observacao = request.POST.get("observacao", "").strip()
-    status_liberado = StatusWorkflow.objects.get(slug="liberado-descricao")
+
+    status_liberado = _status_entrada_perfil(
+        Usuario.Tipo.DESCRITOR,
+    )
+
+    if not status_liberado:
+        messages.error(
+            request,
+            "Não existe um status ativo de entrada para o Descritor.",
+        )
+        return redirect(request.POST.get("next", "imagens_lista"))
+
     status_anterior = imagem.status
 
     with transaction.atomic():
         descricao.descritor_bloqueado = False
-        descricao.save()
+        descricao.save(
+            update_fields=["descritor_bloqueado"]
+        )
 
         imagem.status = status_liberado
         imagem.responsavel = descricao.descritor
-        imagem.pronto_para_lote = False
-        imagem.save()
+        imagem.save(
+            update_fields=[
+                "status",
+                "responsavel",
+            ]
+        )
 
         HistoricoItem.objects.create(
             imagem=imagem,
@@ -1260,10 +3366,16 @@ def devolver_descritor(request, pk):
             tipo_acao=HistoricoItem.TipoAcao.DESCRITOR_LIBERADO,
             status_anterior=status_anterior,
             novo_status=status_liberado,
-            observacao=observacao or f"Devolvido ao descritor {descricao.descritor} para correção.",
+            observacao=(
+                observacao
+                or f"Devolvido ao descritor {descricao.descritor} para correção."
+            ),
         )
 
-    messages.success(request, f"Tarefa devolvida para o descritor {descricao.descritor}.")
+    messages.success(
+        request,
+        f"Tarefa devolvida para o descritor {descricao.descritor}.",
+    )
     return redirect(request.POST.get("next", "imagens_lista"))
 
 
@@ -1274,28 +3386,51 @@ def devolver_revisor(request, pk):
     from .models import HistoricoItem
 
     if not _apenas_coordenador(request.user):
-        messages.error(request, "Você não tem permissão para liberar tarefas.")
+        messages.error(
+            request,
+            "Você não tem permissão para liberar tarefas.",
+        )
         return redirect("imagens_lista")
 
     imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
     descricao = getattr(imagem, "descricao", None)
 
     if not descricao or not descricao.revisor:
-        messages.error(request, "Esta imagem ainda não possui um revisor definido.")
+        messages.error(
+            request,
+            "Esta imagem ainda não possui um revisor definido.",
+        )
         return redirect(request.POST.get("next", "imagens_lista"))
 
     observacao = request.POST.get("observacao", "").strip()
-    status_liberado = StatusWorkflow.objects.get(slug="liberado-conferencia")
+
+    status_liberado = _status_entrada_perfil(
+        Usuario.Tipo.REVISOR,
+    )
+
+    if not status_liberado:
+        messages.error(
+            request,
+            "Não existe um status ativo de entrada para o Revisor.",
+        )
+        return redirect(request.POST.get("next", "imagens_lista"))
+
     status_anterior = imagem.status
 
     with transaction.atomic():
         descricao.revisor_bloqueado = False
-        descricao.save()
+        descricao.save(
+            update_fields=["revisor_bloqueado"]
+        )
 
         imagem.status = status_liberado
         imagem.responsavel = descricao.revisor
-        imagem.pronto_para_lote = False
-        imagem.save()
+        imagem.save(
+            update_fields=[
+                "status",
+                "responsavel",
+            ]
+        )
 
         HistoricoItem.objects.create(
             imagem=imagem,
@@ -1304,10 +3439,16 @@ def devolver_revisor(request, pk):
             tipo_acao=HistoricoItem.TipoAcao.REVISOR_LIBERADO,
             status_anterior=status_anterior,
             novo_status=status_liberado,
-            observacao=observacao or f"Devolvido ao revisor {descricao.revisor} para correção.",
+            observacao=(
+                observacao
+                or f"Devolvido ao revisor {descricao.revisor} para correção."
+            ),
         )
 
-    messages.success(request, f"Tarefa devolvida para o revisor {descricao.revisor}.")
+    messages.success(
+        request,
+        f"Tarefa devolvida para o revisor {descricao.revisor}.",
+    )
     return redirect(request.POST.get("next", "imagens_lista"))
 
 
@@ -1319,41 +3460,79 @@ def devolver_revisor(request, pk):
 @require_POST
 def atribuir_lote(request, lote_id):
     """
-    Atribui um Lote inteiro a um Descritor ou Revisor de uma vez.
-    Aplica a ação apenas às imagens do lote que estiverem no status
-    elegível para aquela ação; as demais são ignoradas e reportadas.
+    Atribui imagens elegíveis de um lote a um Descritor ou Revisor.
+
+    A elegibilidade é definida pelas flags do StatusWorkflow, nunca pelo
+    nome/slug do status.
     """
     from .models import Lote, HistoricoItem
 
     if not _apenas_coordenador(request.user):
-        messages.error(request, "Você não tem permissão para atribuir lotes.")
+        messages.error(
+            request,
+            "Você não tem permissão para atribuir lotes.",
+        )
         return redirect(request.POST.get("next", "imagens_lista"))
 
     lote = get_object_or_404(Lote, pk=lote_id, ativo=True)
 
-    tipo_acao = request.POST.get("tipo_acao")  # "descritor" ou "revisor"
+    tipo_acao = request.POST.get("tipo_acao")
     usuario_id = request.POST.get("usuario_id")
 
     if tipo_acao == "descritor":
-        status_elegivel = "liberado-descricao"
-        usuario_alvo = Usuario.objects.filter(pk=usuario_id, tipo=Usuario.Tipo.DESCRITOR).first()
+        usuario_alvo = Usuario.objects.filter(
+            pk=usuario_id,
+            tipo=Usuario.Tipo.DESCRITOR,
+        ).first()
+
+        imagens_elegiveis_qs = Imagem.objects.filter(
+            lote=lote,
+            ativo=True,
+            status__ativo=True,
+            status__is_inicial=True,
+            status__perfil_responsavel=Usuario.Tipo.DESCRITOR,
+            status__exige_atribuicao=True,
+        )
+
     elif tipo_acao == "revisor":
-        status_elegivel = "descrito"
-        usuario_alvo = Usuario.objects.filter(pk=usuario_id, tipo=Usuario.Tipo.REVISOR).first()
+        usuario_alvo = Usuario.objects.filter(
+            pk=usuario_id,
+            tipo=Usuario.Tipo.REVISOR,
+        ).first()
+
+        imagens_elegiveis_qs = Imagem.objects.filter(
+            lote=lote,
+            ativo=True,
+            status__ativo=True,
+            status__descricao_concluida=True,
+        )
+
     else:
         messages.error(request, "Ação inválida.")
         return redirect(request.POST.get("next", "imagens_lista"))
 
     if not usuario_alvo:
-        messages.error(request, "Usuário inválido para essa ação.")
+        messages.error(
+            request,
+            "Usuário inválido para essa ação.",
+        )
         return redirect(request.POST.get("next", "imagens_lista"))
 
     if not usuario_alvo.contrato_ativo:
-        messages.error(request, f"{usuario_alvo} não possui contrato ativo no momento.")
+        messages.error(
+            request,
+            f"{usuario_alvo} não possui contrato ativo no momento.",
+        )
         return redirect(request.POST.get("next", "imagens_lista"))
 
-    imagens_lote = Imagem.objects.filter(lote=lote, ativo=True)
-    imagens_elegiveis = list(imagens_lote.filter(status__slug=status_elegivel))
+    imagens_lote = Imagem.objects.filter(
+        lote=lote,
+        ativo=True,
+    )
+    imagens_elegiveis = list(
+        imagens_elegiveis_qs.select_related("status")
+    )
+
     total_lote = imagens_lote.count()
     total_elegiveis = len(imagens_elegiveis)
     ignoradas = total_lote - total_elegiveis
@@ -1361,7 +3540,7 @@ def atribuir_lote(request, lote_id):
     if total_elegiveis == 0:
         messages.error(
             request,
-            f"Nenhuma imagem do lote '{lote.nome}' está no status elegível para essa ação."
+            f"Nenhuma imagem do lote '{lote.nome}' está elegível para essa ação.",
         )
         return redirect(request.POST.get("next", "imagens_lista"))
 
@@ -1369,35 +3548,97 @@ def atribuir_lote(request, lote_id):
         if tipo_acao == "descritor":
             for imagem in imagens_elegiveis:
                 imagem.responsavel = usuario_alvo
-                imagem.save()
+                imagem.save(
+                    update_fields=["responsavel"]
+                )
+
+                descricao = getattr(imagem, "descricao", None)
+                if descricao:
+                    campos_descricao = []
+
+                    if descricao.descritor_id != usuario_alvo.id:
+                        descricao.descritor = usuario_alvo
+                        campos_descricao.append("descritor")
+
+                    if descricao.descritor_bloqueado:
+                        descricao.descritor_bloqueado = False
+                        campos_descricao.append("descritor_bloqueado")
+
+                    if campos_descricao:
+                        descricao.save(update_fields=campos_descricao)
+
                 HistoricoItem.objects.create(
                     imagem=imagem,
+                    descricao=descricao,
                     usuario=request.user,
                     tipo_acao=HistoricoItem.TipoAcao.TAREFA_ATRIBUIDA,
                     status_anterior=imagem.status,
                     novo_status=imagem.status,
-                    observacao=f"Atribuído ao descritor {usuario_alvo} via lote '{lote.nome}'.",
+                    observacao=(
+                        f"Atribuído ao descritor {usuario_alvo} "
+                        f"via lote '{lote.nome}'."
+                    ),
                 )
 
         elif tipo_acao == "revisor":
-            proximo_status = StatusWorkflow.objects.get(slug="liberado-conferencia")
             for imagem in imagens_elegiveis:
+                proximo_status = _status_entrada_perfil(
+                    Usuario.Tipo.REVISOR,
+                    depois_de=imagem.status,
+                )
+
+                if not proximo_status:
+                    continue
+
                 status_anterior = imagem.status
                 imagem.responsavel = usuario_alvo
                 imagem.status = proximo_status
-                imagem.save()
+                imagem.save(
+                    update_fields=[
+                        "responsavel",
+                        "status",
+                    ]
+                )
+
+                descricao = getattr(imagem, "descricao", None)
+                if descricao:
+                    campos_descricao = []
+
+                    if descricao.revisor_id != usuario_alvo.id:
+                        descricao.revisor = usuario_alvo
+                        campos_descricao.append("revisor")
+
+                    if descricao.revisor_bloqueado:
+                        descricao.revisor_bloqueado = False
+                        campos_descricao.append("revisor_bloqueado")
+
+                    if campos_descricao:
+                        descricao.save(update_fields=campos_descricao)
+
                 HistoricoItem.objects.create(
                     imagem=imagem,
+                    descricao=descricao,
                     usuario=request.user,
                     tipo_acao=HistoricoItem.TipoAcao.LIBERADO_CONFERENCIA,
                     status_anterior=status_anterior,
                     novo_status=proximo_status,
-                    observacao=f"Liberado para o revisor {usuario_alvo} via lote '{lote.nome}'.",
+                    observacao=(
+                        f"Liberado para o revisor {usuario_alvo} "
+                        f"via lote '{lote.nome}'."
+                    ),
                 )
 
-    msg = f"{total_elegiveis} imagem(ns) do lote '{lote.nome}' atribuída(s) a {usuario_alvo}."
+    msg = (
+        f"{total_elegiveis} imagem(ns) do lote '{lote.nome}' "
+        f"atribuída(s) a {usuario_alvo}."
+    )
+
     if ignoradas:
-        msg += f" {ignoradas} imagem(ns) ignorada(s) por não estarem no status elegível para essa ação."
+        msg += (
+            f" {ignoradas} imagem(ns) ignorada(s) "
+            "por não estarem elegíveis para essa ação."
+        )
+
     messages.success(request, msg)
     return redirect(request.POST.get("next", "imagens_lista"))
 
@@ -1436,7 +3677,14 @@ def organizar_lotes(request, importacao_id=None):
     if request.method == "POST":
         nome_lote = request.POST.get("nome_lote", "").strip()
         descricao_lote = request.POST.get("descricao_lote", "").strip()
+        data_prevista_raw = request.POST.get("data_prevista", "").strip()
         imagem_ids = request.POST.getlist("imagem_ids")
+
+        try:
+            data_prevista = _data_iso_ou_none(data_prevista_raw)
+        except ValueError:
+            messages.error(request, "Informe uma data prevista válida.")
+            return _redirect_organizar_lotes()
 
         if not nome_lote:
             messages.error(request, "Informe um nome para o lote.")
@@ -1448,9 +3696,11 @@ def organizar_lotes(request, importacao_id=None):
             lote = Lote.objects.create(
                 nome=nome_lote,
                 descricao=descricao_lote,
+                data_prevista=data_prevista,
                 criado_por=request.user,
             )
             atualizadas = imagens_sem_lote.filter(pk__in=imagem_ids).update(lote=lote)
+            lote.sincronizar_data_efetiva()
             messages.success(request, f"Lote '{nome_lote}' criado com {atualizadas} imagem(ns).")
 
         return _redirect_organizar_lotes()
@@ -1460,20 +3710,20 @@ def organizar_lotes(request, importacao_id=None):
     volume = request.GET.get("volume", "").strip()
     busca = request.GET.get("busca", "").strip()
 
-    imagens = imagens_sem_lote.select_related("status")
+    imagens = imagens_sem_lote.select_related("status", "componente_curricular")
 
     if componente:
-        imagens = imagens.filter(componente_curricular__icontains=componente)
+        imagens = imagens.filter(componente_curricular__nome__icontains=componente)
     if volume:
         imagens = imagens.filter(volume_ano_modulo__icontains=volume)
     if busca:
         imagens = imagens.filter(retranca__icontains=busca)
 
-    imagens = imagens.order_by("componente_curricular", "volume_ano_modulo", "retranca")
+    imagens = imagens.order_by("componente_curricular__nome", "volume_ano_modulo", "retranca")
 
     componentes_disponiveis = (
-        imagens_sem_lote.exclude(componente_curricular="")
-        .values_list("componente_curricular", flat=True)
+        imagens_sem_lote.filter(componente_curricular__isnull=False)
+        .values_list("componente_curricular__nome", flat=True)
         .distinct().order_by()
     )
     volumes_disponiveis = (
@@ -1560,7 +3810,13 @@ def atualizar_pagamento(request, pk):
 
 @login_required
 def lote_editar(request, pk):
-    """Edita nome, descrição, prazo e status ativo de um Lote existente."""
+    """
+    Edita os dados gerais do lote e permite administrar sua composição.
+
+    A movimentação de imagens entre lotes altera apenas a FK ``Imagem.lote``:
+    status, responsável, descrição, pagamentos e histórico editorial permanecem
+    intactos. Remover uma imagem do lote a transforma em imagem avulsa.
+    """
     from .models import Lote
 
     if not _apenas_coordenador(request.user):
@@ -1569,36 +3825,112 @@ def lote_editar(request, pk):
 
     lote = get_object_or_404(Lote, pk=pk)
 
+    def contexto_formulario():
+        return {
+            "lote": lote,
+            "imagens_lote": (
+                lote.imagens
+                .filter(ativo=True)
+                .select_related("status", "responsavel")
+                .order_by("retranca")
+            ),
+            "lotes_destino": (
+                Lote.objects
+                .filter(ativo=True)
+                .exclude(pk=lote.pk)
+                .order_by("nome")
+            ),
+        }
+
     if request.method == "POST":
+        # ------------------------------------------------------------
+        # Gestão das imagens que pertencem ao lote
+        # ------------------------------------------------------------
+        acao_imagens = request.POST.get("acao_imagens", "").strip()
+
+        if acao_imagens in ("mover", "remover"):
+            ids_selecionados = request.POST.getlist("imagens_selecionadas")
+
+            imagens = lote.imagens.filter(
+                ativo=True,
+                pk__in=ids_selecionados,
+            )
+            quantidade = imagens.count()
+
+            if quantidade == 0:
+                messages.warning(request, "Selecione pelo menos uma imagem do lote.")
+                return redirect("lote_editar", pk=lote.pk)
+
+            if acao_imagens == "remover":
+                with transaction.atomic():
+                    imagens.update(lote=None)
+                    lote.sincronizar_data_efetiva()
+
+                messages.success(
+                    request,
+                    f"{quantidade} imagem(ns) removida(s) do lote e deixada(s) como avulsa(s).",
+                )
+                return redirect("lote_editar", pk=lote.pk)
+
+            destino_id = request.POST.get("lote_destino", "").strip()
+            if not destino_id:
+                messages.warning(request, "Escolha o lote de destino.")
+                return redirect("lote_editar", pk=lote.pk)
+
+            destino = get_object_or_404(
+                Lote,
+                pk=destino_id,
+                ativo=True,
+            )
+
+            if destino.pk == lote.pk:
+                messages.warning(request, "Escolha um lote de destino diferente do lote atual.")
+                return redirect("lote_editar", pk=lote.pk)
+
+            with transaction.atomic():
+                imagens.update(lote=destino)
+                lote.sincronizar_data_efetiva()
+                destino.sincronizar_data_efetiva()
+
+            messages.success(
+                request,
+                f"{quantidade} imagem(ns) movida(s) de '{lote.nome}' para '{destino.nome}'.",
+            )
+            return redirect("lote_editar", pk=lote.pk)
+
+        # ------------------------------------------------------------
+        # Dados gerais do lote
+        # ------------------------------------------------------------
         nome = request.POST.get("nome", "").strip()
         descricao = request.POST.get("descricao", "").strip()
-        prazo = request.POST.get("prazo", "").strip() or None
+        data_prevista_raw = request.POST.get("data_prevista", "").strip()
+        data_efetiva_raw = request.POST.get("data_efetiva", "").strip()
         ativo = request.POST.get("ativo") == "on"
+
+        try:
+            data_prevista = _data_iso_ou_none(data_prevista_raw)
+            data_efetiva = _data_iso_ou_none(data_efetiva_raw)
+        except ValueError:
+            messages.error(request, "Confira as datas informadas e tente novamente.")
+            return render(request, "core/lote_form.html", contexto_formulario())
 
         if not nome:
             messages.error(request, "O nome do lote não pode ficar vazio.")
         elif Lote.objects.exclude(pk=lote.pk).filter(nome=nome).exists():
             messages.error(request, f"Já existe outro lote com o nome '{nome}'.")
         else:
-            prazo_anterior = lote.prazo
-
             lote.nome = nome
             lote.descricao = descricao
-            lote.prazo = prazo
+            lote.data_prevista = data_prevista
+            lote.data_efetiva = data_efetiva
             lote.ativo = ativo
             lote.save()
+            lote.sincronizar_data_efetiva()
 
-            msg = f"Lote '{lote.nome}' atualizado com sucesso."
-
-            # Propaga o prazo para as imagens, se ele foi definido ou alterado
-            if lote.prazo and lote.prazo != prazo_anterior:
-                atualizadas = lote.propagar_prazo()
-                msg += f" Prazo aplicado a {atualizadas} imagem(ns) do lote."
-
-            messages.success(request, msg)
+            messages.success(request, f"Lote '{lote.nome}' atualizado com sucesso.")
             return redirect("lotes_lista")
 
-    return render(request, "core/lote_form.html", {"lote": lote})
+    return render(request, "core/lote_form.html", contexto_formulario())
 
 # ============================================================
 # LISTAGEM DE LOTES
@@ -1725,91 +4057,22 @@ def proxima_imagem_lote(request, pk):
 @require_POST
 def devolver_lote(request, pk):
     """
-    Salva e envia o LOTE INTEIRO de uma vez para a próxima fase — nenhuma
-    imagem avança individualmente durante a navegação; só esta view move
-    o status, aplicando o mesmo bloqueio simétrico do avancar_status.
+    Endpoint legado mantido temporariamente para compatibilidade com abas
+    antigas abertas no navegador. A conclusão por lote foi desativada:
+    cada imagem deve avançar individualmente pelo endpoint avancar_status.
     """
-    from .models import HistoricoItem
+    get_object_or_404(Imagem, pk=pk, ativo=True)
 
-    imagem = get_object_or_404(Imagem, pk=pk, ativo=True)
-    usuario = request.user
-    lote = imagem.lote
-
-    if not lote:
-        return JsonResponse({"ok": False, "erro": "Esta imagem não pertence a um lote."}, status=400)
-
-    if usuario.tipo == Usuario.Tipo.DESCRITOR:
-        slug_origem, slug_destino = "descrevendo", "descrito"
-        tipo_acao = HistoricoItem.TipoAcao.DESCRICAO_SALVA
-        tipo_bloqueio = HistoricoItem.TipoAcao.DESCRITOR_BLOQUEADO
-        campo_bloqueio = "descritor_bloqueado"
-        rotulo = "descrição"
-    elif usuario.tipo == Usuario.Tipo.REVISOR:
-        slug_origem, slug_destino = "em-conferencia", "conferido"
-        tipo_acao = HistoricoItem.TipoAcao.CONFERENCIA_CONCLUIDA
-        tipo_bloqueio = HistoricoItem.TipoAcao.REVISOR_BLOQUEADO
-        campo_bloqueio = "revisor_bloqueado"
-        rotulo = "conferência"
-    elif usuario.tipo == Usuario.Tipo.COORDENADOR:
-        # Revisão final do lote: o coordenador conclui e o lote inteiro
-        # passa para "Revisado". Não há bloqueio de acesso nesta fase —
-        # o coordenador continua com permissão para reabrir e finalizar.
-        slug_origem, slug_destino = "revisando", "revisado"
-        tipo_acao = HistoricoItem.TipoAcao.REVISAO_CONCLUIDA
-        tipo_bloqueio = None
-        campo_bloqueio = None
-        rotulo = "revisão final"
-    else:
-        return JsonResponse(
-            {"ok": False, "erro": "Seu perfil não pode concluir um lote nesta etapa."}, status=403,
-        )
-
-    try:
-        proximo_status = StatusWorkflow.objects.get(slug=slug_destino)
-    except StatusWorkflow.DoesNotExist:
-        return JsonResponse({"ok": False, "erro": "Status não encontrado."}, status=400)
-
-    pendentes = list(
-        Imagem.objects.filter(lote=lote, ativo=True, responsavel=usuario, status__slug=slug_origem)
+    return JsonResponse(
+        {
+            "ok": False,
+            "erro": (
+                "A conclusão do lote inteiro foi desativada. "
+                "Atualize a página e conclua cada imagem individualmente."
+            ),
+        },
+        status=409,
     )
-
-    if not pendentes:
-        return JsonResponse(
-            {"ok": False, "erro": "Nenhuma imagem deste lote está pronta para devolução."}, status=400,
-        )
-
-    with transaction.atomic():
-        for img in pendentes:
-            status_anterior = img.status
-            img.status = proximo_status
-            img.pronto_para_lote = False
-            if campo_bloqueio:
-                img.responsavel = None
-            img.save()
-
-            descricao = getattr(img, "descricao", None)
-            if descricao and campo_bloqueio:
-                setattr(descricao, campo_bloqueio, True)
-                descricao.save()
-
-            HistoricoItem.objects.create(
-                imagem=img, descricao=descricao, usuario=usuario, tipo_acao=tipo_acao,
-                status_anterior=status_anterior, novo_status=proximo_status,
-                observacao=f"Lote '{lote.nome}' devolvido ao coordenador após {rotulo}.",
-            )
-            if descricao and tipo_bloqueio:
-                HistoricoItem.objects.create(
-                    imagem=img, descricao=descricao, usuario=usuario, tipo_acao=tipo_bloqueio,
-                    status_anterior=status_anterior, novo_status=proximo_status,
-                    observacao=f"Acesso bloqueado automaticamente ao devolver o lote '{lote.nome}'.",
-                )
-
-    return JsonResponse({
-        "ok": True,
-        "mensagem": (
-            f"Lote '{lote.nome}': {len(pendentes)} imagem(ns) concluída(s) após {rotulo}."
-        ),
-    })
 
 
 # ============================================================
@@ -1932,6 +4195,294 @@ def recusar_solicitacao(request, pk):
     return redirect("usuarios_lista")
 
 # ============================================================
+# GERENCIAMENTO DE PROJETOS
+# ============================================================
+
+@login_required
+def projeto_lista(request):
+    """
+    Lista os projetos cadastrados e a quantidade de imagens ativas
+    associadas a cada um.
+    """
+    from django.db.models import Count, Q
+    from django.db.models.functions import Lower
+
+    projetos = (
+        Projeto.objects
+        .annotate(
+            total_imagens=Count(
+                "imagens",
+                filter=Q(imagens__ativo=True),
+            )
+        )
+        .order_by(Lower("nome"))
+    )
+
+    return render(request, "core/projeto_lista.html", {
+        "projetos": projetos,
+        "pode_gerenciar": _apenas_coordenador(request.user),
+    })
+
+
+@login_required
+def projeto_criar(request):
+    if not _apenas_coordenador(request.user):
+        messages.error(
+            request,
+            "Você não tem permissão para gerenciar projetos.",
+        )
+        return redirect("projeto_lista")
+
+    if request.method == "POST":
+        nome = request.POST.get("nome", "").strip()
+        descricao = request.POST.get("descricao", "").strip()
+        ativo = request.POST.get("ativo") == "on"
+
+        if not nome:
+            messages.error(request, "Informe o nome do projeto.")
+        elif Projeto.objects.filter(nome__iexact=nome).exists():
+            messages.error(
+                request,
+                f"Já existe um projeto chamado '{nome}'.",
+            )
+        else:
+            projeto = Projeto.objects.create(
+                nome=nome,
+                descricao=descricao,
+                ativo=ativo,
+            )
+            messages.success(
+                request,
+                f"Projeto '{projeto.nome}' criado.",
+            )
+            return redirect("projeto_lista")
+
+    return render(request, "core/cadastro_item_form.html", {
+        "tipo": "projeto",
+        "titulo": "Novo projeto",
+        "item": None,
+        "url_voltar": "projeto_lista",
+    })
+
+
+@login_required
+def projeto_editar(request, pk):
+    if not _apenas_coordenador(request.user):
+        messages.error(
+            request,
+            "Você não tem permissão para gerenciar projetos.",
+        )
+        return redirect("projeto_lista")
+
+    projeto = get_object_or_404(Projeto, pk=pk)
+
+    if request.method == "POST":
+        nome = request.POST.get("nome", "").strip()
+        descricao = request.POST.get("descricao", "").strip()
+        ativo = request.POST.get("ativo") == "on"
+
+        if not nome:
+            messages.error(request, "Informe o nome do projeto.")
+        elif (
+            Projeto.objects
+            .filter(nome__iexact=nome)
+            .exclude(pk=projeto.pk)
+            .exists()
+        ):
+            messages.error(
+                request,
+                f"Já existe um projeto chamado '{nome}'.",
+            )
+        else:
+            projeto.nome = nome
+            projeto.descricao = descricao
+            projeto.ativo = ativo
+            projeto.save()
+
+            messages.success(
+                request,
+                f"Projeto '{projeto.nome}' atualizado.",
+            )
+            return redirect("projeto_lista")
+
+    return render(request, "core/cadastro_item_form.html", {
+        "tipo": "projeto",
+        "titulo": "Editar projeto",
+        "item": projeto,
+        "url_voltar": "projeto_lista",
+    })
+
+
+@login_required
+@require_POST
+def projeto_toggle_ativo(request, pk):
+    if not _apenas_coordenador(request.user):
+        messages.error(
+            request,
+            "Você não tem permissão para gerenciar projetos.",
+        )
+        return redirect("projeto_lista")
+
+    projeto = get_object_or_404(Projeto, pk=pk)
+    projeto.ativo = not projeto.ativo
+    projeto.save(update_fields=["ativo", "atualizado_em"])
+
+    estado = "ativado" if projeto.ativo else "inativado"
+
+    messages.success(
+        request,
+        f"Projeto '{projeto.nome}' {estado}. "
+        "Os vínculos existentes com imagens foram preservados.",
+    )
+    return redirect("projeto_lista")
+
+
+# ============================================================
+# GERENCIAMENTO DE COMPONENTES CURRICULARES
+# ============================================================
+
+@login_required
+def componente_lista(request):
+    """
+    Lista os componentes curriculares cadastrados e quantas imagens
+    ativas utilizam cada componente.
+    """
+    from django.db.models import Count, Q
+    from django.db.models.functions import Lower
+
+    componentes = (
+        ComponenteCurricular.objects
+        .annotate(
+            total_imagens=Count(
+                "imagens",
+                filter=Q(imagens__ativo=True),
+            )
+        )
+        .order_by(Lower("nome"))
+    )
+
+    return render(request, "core/componente_lista.html", {
+        "componentes": componentes,
+        "pode_gerenciar": _apenas_coordenador(request.user),
+    })
+
+
+@login_required
+def componente_criar(request):
+    if not _apenas_coordenador(request.user):
+        messages.error(
+            request,
+            "Você não tem permissão para gerenciar componentes.",
+        )
+        return redirect("componente_lista")
+
+    if request.method == "POST":
+        nome = request.POST.get("nome", "").strip()
+        ativo = request.POST.get("ativo") == "on"
+
+        if not nome:
+            messages.error(
+                request,
+                "Informe o nome do componente curricular.",
+            )
+        elif ComponenteCurricular.objects.filter(nome__iexact=nome).exists():
+            messages.error(
+                request,
+                f"Já existe um componente chamado '{nome}'.",
+            )
+        else:
+            componente = ComponenteCurricular.objects.create(
+                nome=nome,
+                ativo=ativo,
+            )
+            messages.success(
+                request,
+                f"Componente '{componente.nome}' criado.",
+            )
+            return redirect("componente_lista")
+
+    return render(request, "core/cadastro_item_form.html", {
+        "tipo": "componente",
+        "titulo": "Novo componente curricular",
+        "item": None,
+        "url_voltar": "componente_lista",
+    })
+
+
+@login_required
+def componente_editar(request, pk):
+    if not _apenas_coordenador(request.user):
+        messages.error(
+            request,
+            "Você não tem permissão para gerenciar componentes.",
+        )
+        return redirect("componente_lista")
+
+    componente = get_object_or_404(ComponenteCurricular, pk=pk)
+
+    if request.method == "POST":
+        nome = request.POST.get("nome", "").strip()
+        ativo = request.POST.get("ativo") == "on"
+
+        if not nome:
+            messages.error(
+                request,
+                "Informe o nome do componente curricular.",
+            )
+        elif (
+            ComponenteCurricular.objects
+            .filter(nome__iexact=nome)
+            .exclude(pk=componente.pk)
+            .exists()
+        ):
+            messages.error(
+                request,
+                f"Já existe um componente chamado '{nome}'.",
+            )
+        else:
+            componente.nome = nome
+            componente.ativo = ativo
+            componente.save()
+
+            messages.success(
+                request,
+                f"Componente '{componente.nome}' atualizado.",
+            )
+            return redirect("componente_lista")
+
+    return render(request, "core/cadastro_item_form.html", {
+        "tipo": "componente",
+        "titulo": "Editar componente curricular",
+        "item": componente,
+        "url_voltar": "componente_lista",
+    })
+
+
+@login_required
+@require_POST
+def componente_toggle_ativo(request, pk):
+    if not _apenas_coordenador(request.user):
+        messages.error(
+            request,
+            "Você não tem permissão para gerenciar componentes.",
+        )
+        return redirect("componente_lista")
+
+    componente = get_object_or_404(ComponenteCurricular, pk=pk)
+    componente.ativo = not componente.ativo
+    componente.save(update_fields=["ativo", "atualizado_em"])
+
+    estado = "ativado" if componente.ativo else "inativado"
+
+    messages.success(
+        request,
+        f"Componente '{componente.nome}' {estado}. "
+        "Os vínculos existentes com imagens foram preservados.",
+    )
+    return redirect("componente_lista")
+
+
+# ============================================================
 # GESTÃO DE STATUS DO WORKFLOW (Admin/Coordenador criam e editam,
 # todos os perfis podem visualizar a fila completa)
 # ============================================================
@@ -1980,6 +4531,11 @@ def status_criar(request):
         descricao_txt = request.POST.get("descricao", "").strip()
         perfil_responsavel = request.POST.get("perfil_responsavel")
         exige_atribuicao = request.POST.get("exige_atribuicao") == "on"
+        permite_edicao = request.POST.get("permite_edicao") == "on"
+        avanca_ao_abrir = request.POST.get("avanca_ao_abrir") == "on"
+        descricao_concluida = request.POST.get("descricao_concluida") == "on"
+        conferencia_concluida = request.POST.get("conferencia_concluida") == "on"
+        revisao_concluida = request.POST.get("revisao_concluida") == "on"
         is_inicial = request.POST.get("is_inicial") == "on"
         is_final = request.POST.get("is_final") == "on"
 
@@ -2003,6 +4559,11 @@ def status_criar(request):
             is_final=is_final,
             ordem=maior_ordem + 1,
             ativo=True,
+            permite_edicao=permite_edicao,
+            avanca_ao_abrir=avanca_ao_abrir,
+            descricao_concluida=descricao_concluida,
+            conferencia_concluida=conferencia_concluida,
+            revisao_concluida=revisao_concluida,
         )
         _aplicar_exclusividade_inicial_final(novo)
 
@@ -2029,6 +4590,11 @@ def status_editar(request, pk):
         descricao_txt = request.POST.get("descricao", "").strip()
         perfil_responsavel = request.POST.get("perfil_responsavel")
         exige_atribuicao = request.POST.get("exige_atribuicao") == "on"
+        permite_edicao = request.POST.get("permite_edicao") == "on"
+        avanca_ao_abrir = request.POST.get("avanca_ao_abrir") == "on"
+        descricao_concluida = request.POST.get("descricao_concluida") == "on"
+        conferencia_concluida = request.POST.get("conferencia_concluida") == "on"
+        revisao_concluida = request.POST.get("revisao_concluida") == "on"
         is_inicial = request.POST.get("is_inicial") == "on"
         is_final = request.POST.get("is_final") == "on"
 
@@ -2042,6 +4608,11 @@ def status_editar(request, pk):
         status_obj.exige_atribuicao = exige_atribuicao
         status_obj.is_inicial = is_inicial
         status_obj.is_final = is_final
+        status_obj.permite_edicao = permite_edicao
+        status_obj.avanca_ao_abrir = avanca_ao_abrir
+        status_obj.descricao_concluida = descricao_concluida
+        status_obj.conferencia_concluida = conferencia_concluida
+        status_obj.revisao_concluida = revisao_concluida
         status_obj.save()
         _aplicar_exclusividade_inicial_final(status_obj)
 
@@ -2169,71 +4740,643 @@ def _lang_tag(idioma_codigo):
     return alpha_2
 
 
-def _imagens_finalizadas(request):
-    """Queryset base do relatório, com os filtros opcionais da tela."""
+def _data_filtro(valor):
+    """
+    Converte uma data recebida por GET (AAAA-MM-DD) para date.
+
+    Se o valor estiver vazio ou inválido, o filtro é simplesmente ignorado.
+    """
+    from datetime import date
+
+    valor = (valor or "").strip()
+    if not valor:
+        return None
+
+    try:
+        return date.fromisoformat(valor)
+    except ValueError:
+        return None
+
+
+def _imagens_relatorio(request):
+    """
+    Queryset base do relatório geral.
+
+    Todos os filtros desta função são compartilhados pela tela e pela
+    exportação. Assim, o Excel sempre contém exatamente o mesmo conjunto
+    encontrado no relatório após aplicar os filtros.
+    """
     imagens = (
-        Imagem.objects.filter(descricao__finalizado=True, ativo=True)
-        .select_related("status", "descricao", "descricao__descritor")
+        Imagem.objects
+        .filter(ativo=True)
+        .select_related(
+            "status",
+            "responsavel",
+            "lote",
+            "projeto",
+            "componente_curricular",
+            "descricao",
+            "descricao__descritor",
+            "descricao__revisor",
+            "descricao__coordenador",
+        )
         .prefetch_related("descricao__trechos")
         .order_by("nome_obra", "retranca")
     )
 
+    retranca_f = request.GET.get("retranca", "").strip()
+    if retranca_f:
+        imagens = imagens.filter(retranca__icontains=retranca_f)
+
+    projeto_f = request.GET.get("projeto", "").strip()
+    if projeto_f:
+        if projeto_f == "sem_projeto":
+            imagens = imagens.filter(projeto__isnull=True)
+        else:
+            imagens = imagens.filter(projeto_id=projeto_f)
+
     obra_f = request.GET.get("obra", "").strip()
     if obra_f:
-        imagens = imagens.filter(nome_obra__icontains=obra_f)
+        imagens = imagens.filter(nome_obra=obra_f)
 
     lote_f = request.GET.get("lote", "").strip()
     if lote_f:
-        imagens = imagens.filter(lote_id=lote_f)
+        if lote_f == "avulsas":
+            imagens = imagens.filter(lote__isnull=True)
+        else:
+            imagens = imagens.filter(lote_id=lote_f)
+
+    componente_f = request.GET.get("componente", "").strip()
+    if componente_f:
+        imagens = imagens.filter(componente_curricular__nome=componente_f)
+
+    status_f = request.GET.get("status", "").strip()
+    if status_f:
+        imagens = imagens.filter(status_id=status_f)
+
+    responsavel_f = request.GET.get("responsavel", "").strip()
+    if responsavel_f:
+        if responsavel_f == "sem_responsavel":
+            imagens = imagens.filter(responsavel__isnull=True)
+        else:
+            imagens = imagens.filter(responsavel_id=responsavel_f)
+
+    pagamento_descritor_f = request.GET.get(
+        "pagamento_descritor",
+        "",
+    ).strip()
+    if pagamento_descritor_f:
+        imagens = imagens.filter(
+            pagamento_descritor=pagamento_descritor_f
+        )
+
+    pagamento_revisor_f = request.GET.get(
+        "pagamento_revisor",
+        "",
+    ).strip()
+    if pagamento_revisor_f:
+        imagens = imagens.filter(
+            pagamento_revisor=pagamento_revisor_f
+        )
+
+    data_inicio = _data_filtro(request.GET.get("data_inicio"))
+    if data_inicio:
+        imagens = imagens.filter(criado_em__date__gte=data_inicio)
+
+    data_fim = _data_filtro(request.GET.get("data_fim"))
+    if data_fim:
+        imagens = imagens.filter(criado_em__date__lte=data_fim)
 
     return imagens
 
 
+def _imagens_finalizadas(request):
+    """
+    Subconjunto das imagens filtradas que já chegou ao status final.
+
+    Mantido para a planilha de compatibilidade com o formato FotoWeb.
+    A regra usa a flag is_final do StatusWorkflow, não o nome do status.
+    """
+    return (
+        _imagens_relatorio(request)
+        .filter(
+            status__is_final=True,
+            descricao__finalizado=True,
+        )
+    )
+
+
 @login_required
 def relatorios_lista(request):
+    from django.core.paginator import Paginator
+    from django.db.models import Count
     from .models import Lote
 
-    imagens = _imagens_finalizadas(request)
+    imagens = _imagens_relatorio(request)
+
+    total = imagens.count()
+    finalizadas = imagens.filter(status__is_final=True).count()
+    em_andamento = total - finalizadas
+    sem_lote = imagens.filter(lote__isnull=True).count()
+
+    status_resumo = list(
+        imagens
+        .values(
+            "status_id",
+            "status__nome",
+            "status__slug",
+            "status__ordem",
+        )
+        .annotate(quantidade=Count("id"))
+        .order_by("status__ordem", "status__nome")
+    )
+
+    paginator = Paginator(imagens, 50)
+    pagina_obj = paginator.get_page(request.GET.get("pagina", 1))
+
+    # Query string compartilhada por exportação e paginação.
+    # "pagina" não entra porque o Excel exporta todo o resultado filtrado,
+    # não apenas a página atual da tabela.
+    filtros_query_dict = request.GET.copy()
+    filtros_query_dict.pop("pagina", None)
+    filtros_query = filtros_query_dict.urlencode()
+
+    imagens_base = Imagem.objects.filter(ativo=True)
+
+    projetos = (
+        Projeto.objects
+        .filter(imagens__ativo=True)
+        .distinct()
+        .order_by("nome")
+    )
+
+    componentes = (
+        imagens_base
+        .filter(componente_curricular__isnull=False)
+        .values_list("componente_curricular__nome", flat=True)
+        .distinct()
+        .order_by("componente_curricular__nome")
+    )
+
+    responsaveis = (
+        Usuario.objects
+        .filter(imagens_responsavel__ativo=True)
+        .distinct()
+        .order_by("first_name", "last_name", "email")
+    )
+
+    status_disponiveis = (
+        StatusWorkflow.objects
+        .filter(imagens__ativo=True)
+        .distinct()
+        .order_by("ordem", "nome")
+    )
+
+    filtros_ativos = any([
+        request.GET.get("retranca"),
+        request.GET.get("projeto"),
+        request.GET.get("obra"),
+        request.GET.get("componente"),
+        request.GET.get("lote"),
+        request.GET.get("status"),
+        request.GET.get("responsavel"),
+        request.GET.get("pagamento_descritor"),
+        request.GET.get("pagamento_revisor"),
+        request.GET.get("data_inicio"),
+        request.GET.get("data_fim"),
+    ])
 
     contexto = {
-        "total": imagens.count(),
+        "pagina_obj": pagina_obj,
+        "total": total,
+        "finalizadas": finalizadas,
+        "em_andamento": em_andamento,
+        "sem_lote": sem_lote,
+        "status_resumo": status_resumo,
+
+        # Opções dos filtros
+        "projetos": projetos,
         "obras": (
-            Imagem.objects.filter(descricao__finalizado=True, ativo=True)
+            imagens_base
+            .exclude(nome_obra="")
             .values_list("nome_obra", flat=True)
             .distinct()
             .order_by("nome_obra")
         ),
-        "lotes": Lote.objects.all().order_by("nome"),
+        "lotes": Lote.objects.filter(ativo=True).order_by("nome"),
+        "componentes": componentes,
+        "status_disponiveis": status_disponiveis,
+        "responsaveis": responsaveis,
+        "pagamentos": Imagem.StatusPagamento.choices,
+
+        # Valores selecionados
+        "retranca_selecionada": request.GET.get("retranca", ""),
+        "projeto_selecionado": request.GET.get("projeto", ""),
         "obra_selecionada": request.GET.get("obra", ""),
+        "componente_selecionado": request.GET.get("componente", ""),
         "lote_selecionado": request.GET.get("lote", ""),
+        "status_selecionado": request.GET.get("status", ""),
+        "responsavel_selecionado": request.GET.get("responsavel", ""),
+        "pagamento_descritor_selecionado": request.GET.get(
+            "pagamento_descritor",
+            "",
+        ),
+        "pagamento_revisor_selecionado": request.GET.get(
+            "pagamento_revisor",
+            "",
+        ),
+        "data_inicio_selecionada": request.GET.get("data_inicio", ""),
+        "data_fim_selecionada": request.GET.get("data_fim", ""),
+
+        "filtros_query": filtros_query,
+        "filtros_ativos": filtros_ativos,
     }
     return render(request, "core/relatorios.html", contexto)
 
 
 @login_required
-def relatorios_exportar(request):
+def relatorios_exportar_fotoweb(request):
+    """
+    Gera um .xlsx no MESMO modelo do relatório original do FotoWeb.
+
+    A linha base vem do snapshot salvo no momento da importação. Assim,
+    campos como keywords, status, img_file, usuario e etapa permanecem
+    exatamente como vieram do FotoWeb.
+
+    Somente:
+    - descricao
+    - descricao_flat
+
+    são substituídas pelas versões atuais existentes no Dito!.
+
+    Os filtros aplicados na tela de Relatórios também são respeitados.
+    """
     from django.http import HttpResponse
     from openpyxl import Workbook
 
-    imagens = _imagens_finalizadas(request)
+    imagens = list(
+        _imagens_relatorio(request)
+    )
 
-    wb = Workbook()
-    aba = wb.active
-    aba.title = "Relatório"
+    if not imagens:
+        messages.error(
+            request,
+            "Nenhuma imagem encontrada para exportar.",
+        )
+        return redirect("relatorios_lista")
 
-    colunas = [
-        "obra", "componente", "volume", "capitulo", "keywords", "status",
-        "retranca", "img_file", "descricao", "usuario", "etapa",
-        "retranca_lower", "descricao_flat",
+    faltando_base = [
+        imagem.retranca
+        for imagem in imagens
+        if not imagem.dados_fotoweb_originais
     ]
-    aba.append(colunas)
+
+    if faltando_base:
+        amostra = ", ".join(
+            faltando_base[:5]
+        )
+
+        complemento = (
+            f" Exemplos: {amostra}."
+            if amostra
+            else ""
+        )
+
+        messages.error(
+            request,
+            (
+                f"{len(faltando_base)} imagem(ns) ainda não possuem a "
+                "linha original do FotoWeb armazenada."
+                + complemento
+                + " Reimporte o relatório original dessas imagens; "
+                  "as retrancas existentes serão preservadas e somente "
+                  "a base FotoWeb será sincronizada."
+            ),
+        )
+
+        retorno = reverse(
+            "relatorios_lista"
+        )
+
+        query_string = (
+            request.GET.urlencode()
+        )
+
+        if query_string:
+            retorno = (
+                f"{retorno}?{query_string}"
+            )
+
+        return redirect(
+            retorno
+        )
+
+    # Ordem semelhante à origem quando o snapshot possui os metadados.
+    imagens.sort(
+        key=lambda imagem: (
+            str(
+                (
+                    imagem.dados_fotoweb_originais
+                    or {}
+                ).get(
+                    "__arquivo_origem",
+                    "",
+                )
+                or ""
+            ),
+            (
+                (
+                    imagem.dados_fotoweb_originais
+                    or {}
+                ).get(
+                    "__numero_linha",
+                    10**12,
+                )
+                or 10**12
+            ),
+            imagem.retranca,
+        )
+    )
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Sheet1"
+
+    # Cabeçalho idêntico ao modelo original.
+    worksheet.append(
+        FOTOWEB_COLUNAS_RELATORIO
+    )
 
     for imagem in imagens:
+        base = dict(
+            imagem.dados_fotoweb_originais
+            or {}
+        )
+
+        # ----------------------------------------------------
+        # A ÚNICA atualização feita no conteúdo da linha:
+        # descrição atual do Dito.
+        # ----------------------------------------------------
+        descricao = getattr(
+            imagem,
+            "descricao",
+            None,
+        )
+
+        if descricao:
+            trechos = list(
+                descricao.trechos
+                .filter(
+                    ativo=True
+                )
+                .order_by(
+                    "ordem"
+                )
+            )
+
+            if trechos:
+                base["descricao"] = (
+                    _json.dumps(
+                        [
+                            {
+                                "lang": _lang_tag(
+                                    trecho.idioma_codigo
+                                ),
+                                "text": trecho.texto,
+                            }
+                            for trecho in trechos
+                        ],
+                        ensure_ascii=False,
+                    )
+                )
+
+                base["descricao_flat"] = (
+                    " ".join(
+                        trecho.texto
+                        for trecho in trechos
+                    ).strip()
+                )
+
+        worksheet.append(
+            [
+                base.get(coluna)
+                for coluna in FOTOWEB_COLUNAS_RELATORIO
+            ]
+        )
+
+    resposta = HttpResponse(
+        content_type=(
+            "application/vnd.openxmlformats-officedocument."
+            "spreadsheetml.sheet"
+        )
+    )
+
+    resposta["Content-Disposition"] = (
+        'attachment; filename="relatorio_fotoweb_atualizado.xlsx"'
+    )
+
+    workbook.save(
+        resposta
+    )
+
+    return resposta
+
+
+@login_required
+def relatorios_exportar(request):
+    """
+    Exporta um arquivo .xlsx com duas abas.
+
+    A função usa _imagens_relatorio(request), portanto TODOS os filtros
+    escolhidos na tela também são respeitados no arquivo exportado.
+
+    1. Geral
+       Todas as imagens que respeitam os filtros atuais.
+
+    2. FotoWeb - Finalizados
+       Apenas as imagens filtradas que já chegaram ao status final.
+    """
+    from django.http import HttpResponse
+    from django.utils import timezone
+    from openpyxl import Workbook
+
+    def _valor_data_excel(valor, incluir_hora=False):
+        """
+        Converte datas para texto antes de enviá-las ao openpyxl.
+
+        Django trabalha com DateTimeField timezone-aware quando USE_TZ=True,
+        enquanto o Excel/openpyxl não aceita datetimes com fuso horário.
+        """
+        if not valor:
+            return ""
+
+        if hasattr(valor, "tzinfo") and valor.tzinfo is not None:
+            if timezone.is_aware(valor):
+                valor = timezone.localtime(valor)
+
+        if incluir_hora:
+            return valor.strftime("%d/%m/%Y %H:%M")
+
+        return valor.strftime("%d/%m/%Y")
+
+    imagens = list(_imagens_relatorio(request))
+    imagens_finalizadas = [
+        imagem
+        for imagem in imagens
+        if imagem.status
+        and imagem.status.is_final
+        and getattr(getattr(imagem, "descricao", None), "finalizado", False)
+    ]
+
+    wb = Workbook()
+
+    # ========================================================
+    # ABA 1 — RELATÓRIO GERAL
+    # ========================================================
+    aba_geral = wb.active
+    aba_geral.title = "Geral"
+
+    colunas_geral = [
+        "Retranca",
+        "Obra",
+        "Componente curricular",
+        "Volume/Ano/Módulo",
+        "Capítulo/Unidade",
+        "Etapa",
+        "Lote",
+        "Data prevista do lote",
+        "Data efetiva do lote",
+        "Status",
+        "Responsável atual",
+        "Descritor",
+        "Revisor",
+        "Coordenador",
+        "Pagamento descritor",
+        "Pagamento revisor",
+        "Prazo da imagem",
+        "Cadastrada em",
+        "Atualizada em",
+        "Descrição completa",
+    ]
+    aba_geral.append(colunas_geral)
+
+    for imagem in imagens:
+        descricao = getattr(imagem, "descricao", None)
+
+        if descricao:
+            trechos = list(
+                descricao.trechos
+                .filter(ativo=True)
+                .order_by("ordem")
+            )
+            descricao_flat = " ".join(t.texto for t in trechos)
+        else:
+            descricao_flat = ""
+
+        lote = imagem.lote
+
+        responsavel = (
+            imagem.responsavel.get_full_name()
+            or imagem.responsavel.email
+            if imagem.responsavel
+            else ""
+        )
+        descritor = (
+            descricao.descritor.get_full_name()
+            or descricao.descritor.email
+            if descricao and descricao.descritor
+            else ""
+        )
+        revisor = (
+            descricao.revisor.get_full_name()
+            or descricao.revisor.email
+            if descricao and descricao.revisor
+            else ""
+        )
+        coordenador = (
+            descricao.coordenador.get_full_name()
+            or descricao.coordenador.email
+            if descricao and descricao.coordenador
+            else ""
+        )
+
+        aba_geral.append([
+            imagem.retranca,
+            imagem.nome_obra,
+            imagem.componente_curricular.nome if imagem.componente_curricular else "",
+            imagem.volume_ano_modulo,
+            imagem.capitulo_unidade,
+            imagem.get_etapa_display(),
+            lote.nome if lote else "",
+            _valor_data_excel(
+                lote.data_prevista if lote else None
+            ),
+            _valor_data_excel(
+                lote.data_efetiva if lote else None
+            ),
+            imagem.status.nome if imagem.status else "",
+            responsavel,
+            descritor,
+            revisor,
+            coordenador,
+            imagem.get_pagamento_descritor_display(),
+            imagem.get_pagamento_revisor_display(),
+            _valor_data_excel(imagem.prazo),
+            _valor_data_excel(
+                imagem.criado_em,
+                incluir_hora=True,
+            ),
+            _valor_data_excel(
+                imagem.atualizado_em,
+                incluir_hora=True,
+            ),
+            descricao_flat or None,
+        ])
+
+    larguras_geral = [
+        28, 22, 20, 18, 18, 12, 18, 18, 18, 22,
+        24, 24, 24, 24, 20, 20, 16, 20, 20, 50,
+    ]
+    for i, largura in enumerate(larguras_geral, start=1):
+        aba_geral.column_dimensions[
+            aba_geral.cell(row=1, column=i).column_letter
+        ].width = largura
+
+    # ========================================================
+    # ABA 2 — FORMATO FOTOWEB (SÓ FINALIZADOS)
+    # ========================================================
+    aba_fotoweb = wb.create_sheet("FotoWeb - Finalizados")
+
+    colunas_fotoweb = [
+        "obra",
+        "componente",
+        "volume",
+        "capitulo",
+        "keywords",
+        "status",
+        "retranca",
+        "img_file",
+        "descricao",
+        "usuario",
+        "etapa",
+        "retranca_lower",
+        "descricao_flat",
+    ]
+    aba_fotoweb.append(colunas_fotoweb)
+
+    for imagem in imagens_finalizadas:
         descricao = imagem.descricao
-        trechos = list(descricao.trechos.filter(ativo=True).order_by("ordem"))
+        trechos = list(
+            descricao.trechos
+            .filter(ativo=True)
+            .order_by("ordem")
+        )
 
         trechos_json = [
-            {"lang": _lang_tag(t.idioma_codigo), "text": t.texto}
+            {
+                "lang": _lang_tag(t.idioma_codigo),
+                "text": t.texto,
+            }
             for t in trechos
         ]
         descricao_flat = " ".join(t.texto for t in trechos)
@@ -2241,29 +5384,42 @@ def relatorios_exportar(request):
         usuario = descricao.descritor or imagem.responsavel
         usuario_login = usuario.username if usuario else ""
 
-        aba.append([
+        aba_fotoweb.append([
             imagem.nome_obra,
-            imagem.componente_curricular,
+            imagem.componente_curricular.nome if imagem.componente_curricular else "",
             imagem.volume_ano_modulo,
             imagem.capitulo_unidade,
-            "",  # keywords — o Dito! ainda não tem esse campo (TODO se for necessário)
+            "",
             imagem.status.nome if imagem.status else "",
             imagem.retranca,
             imagem.url_fotoweb,
-            _json.dumps(trechos_json, ensure_ascii=False) if trechos_json else None,
+            _json.dumps(
+                trechos_json,
+                ensure_ascii=False,
+            ) if trechos_json else None,
             usuario_login,
             f"Etapa: {imagem.etapa}",
             imagem.retranca.lower(),
             descricao_flat or None,
         ])
 
-    for i, largura in enumerate([16, 14, 8, 10, 10, 14, 24, 40, 40, 14, 12, 24, 40], start=1):
-        aba.column_dimensions[aba.cell(row=1, column=i).column_letter].width = largura
+    for i, largura in enumerate(
+        [16, 14, 8, 10, 10, 14, 24, 40, 40, 14, 12, 24, 40],
+        start=1,
+    ):
+        aba_fotoweb.column_dimensions[
+            aba_fotoweb.cell(row=1, column=i).column_letter
+        ].width = largura
 
     resposta = HttpResponse(
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        content_type=(
+            "application/vnd.openxmlformats-officedocument."
+            "spreadsheetml.sheet"
+        )
     )
-    resposta["Content-Disposition"] = 'attachment; filename="relatorio_dito.xlsx"'
+    resposta["Content-Disposition"] = (
+        'attachment; filename="relatorio_geral_dito.xlsx"'
+    )
     wb.save(resposta)
     return resposta
 
@@ -2342,14 +5498,23 @@ def lote_alterar_status(request, lote_id):
     Altera manualmente o status de TODAS as imagens de um lote.
 
     Atalho operacional para coordenação/administração — não passa pelas
-    regras do motor de workflow (avancar_status). Serve para corrigir um
-    lote que ficou preso na etapa errada ou para demonstrar o fluxo.
-    Cada imagem gera registro no histórico, preservando a rastreabilidade.
+    regras normais do motor de workflow. Além do status, mantém o responsável
+    coerente com o perfil configurado no status de destino:
+
+    - se o destino pertence à Coordenação, quem executou a ação assume;
+    - se o responsável atual já pertence ao perfil do destino, ele é mantido;
+    - caso contrário, o responsável é limpo para evitar uma atribuição
+      incompatível com a nova etapa.
+
+    Cada imagem gera registro no histórico.
     """
     from .models import HistoricoItem, Lote
 
     if not _apenas_coordenador(request.user):
-        messages.error(request, "Você não tem permissão para alterar o status de um lote.")
+        messages.error(
+            request,
+            "Você não tem permissão para alterar o status de um lote.",
+        )
         return redirect("lotes_lista")
 
     lote = get_object_or_404(Lote, pk=lote_id)
@@ -2360,37 +5525,131 @@ def lote_alterar_status(request, lote_id):
         return redirect(request.POST.get("next", "lotes_lista"))
 
     try:
-        novo_status = StatusWorkflow.objects.get(pk=destino_id, ativo=True)
+        novo_status = StatusWorkflow.objects.get(
+            pk=destino_id,
+            ativo=True,
+        )
     except StatusWorkflow.DoesNotExist:
         messages.error(request, "Status inválido.")
         return redirect(request.POST.get("next", "lotes_lista"))
 
-    imagens = list(Imagem.objects.filter(lote=lote, ativo=True).exclude(status=novo_status))
+    imagens = list(
+        Imagem.objects
+        .filter(lote=lote, ativo=True)
+        .select_related("status", "responsavel", "descricao")
+        .exclude(status=novo_status)
+    )
 
     if not imagens:
-        messages.info(request, f"Nenhuma imagem do lote '{lote.nome}' precisou ser alterada.")
+        messages.info(
+            request,
+            f"Nenhuma imagem do lote '{lote.nome}' precisou ser alterada.",
+        )
         return redirect(request.POST.get("next", "lotes_lista"))
+
+    perfil_operacional = _perfil_operacional(request.user)
 
     with transaction.atomic():
         for img in imagens:
             status_anterior = img.status
+            responsavel_anterior = img.responsavel
+
+            # ----------------------------------------------------
+            # Responsável coerente com o status de destino
+            # ----------------------------------------------------
+            if novo_status.perfil_responsavel == perfil_operacional:
+                novo_responsavel = request.user
+            elif (
+                responsavel_anterior
+                and responsavel_anterior.tipo
+                == novo_status.perfil_responsavel
+            ):
+                novo_responsavel = responsavel_anterior
+            else:
+                novo_responsavel = None
+
             img.status = novo_status
-            img.pronto_para_lote = False
-            img.save()
+            img.responsavel = novo_responsavel
+            img.save(
+                update_fields=[
+                    "status",
+                    "responsavel",
+                    "atualizado_em",
+                ]
+            )
 
             descricao = getattr(img, "descricao", None)
-            if descricao:
-                # Ao voltar o lote para uma etapa anterior, reabre o acesso
-                # de quem precisa atuar nela de novo.
-                if novo_status.perfil_responsavel == Usuario.Tipo.DESCRITOR:
-                    descricao.descritor_bloqueado = False
-                elif novo_status.perfil_responsavel == Usuario.Tipo.REVISOR:
-                    descricao.revisor_bloqueado = False
 
-                # Mantém o marcador de finalização coerente com o status —
-                # é ele que alimenta os relatórios.
-                descricao.finalizado = bool(novo_status.is_final)
-                descricao.save()
+            if descricao:
+                campos_descricao = []
+
+                # Reabre a etapa apenas quando o status representa uma etapa
+                # operacional daquele perfil.
+                if (
+                    novo_status.perfil_responsavel
+                    == Usuario.Tipo.DESCRITOR
+                    and (
+                        novo_status.permite_edicao
+                        or novo_status.avanca_ao_abrir
+                    )
+                ):
+                    if descricao.descritor_bloqueado:
+                        descricao.descritor_bloqueado = False
+                        campos_descricao.append("descritor_bloqueado")
+
+                    if (
+                        novo_responsavel
+                        and descricao.descritor_id != novo_responsavel.id
+                    ):
+                        descricao.descritor = novo_responsavel
+                        campos_descricao.append("descritor")
+
+                elif (
+                    novo_status.perfil_responsavel
+                    == Usuario.Tipo.REVISOR
+                    and (
+                        novo_status.permite_edicao
+                        or novo_status.avanca_ao_abrir
+                    )
+                ):
+                    if descricao.revisor_bloqueado:
+                        descricao.revisor_bloqueado = False
+                        campos_descricao.append("revisor_bloqueado")
+
+                    if (
+                        novo_responsavel
+                        and descricao.revisor_id != novo_responsavel.id
+                    ):
+                        descricao.revisor = novo_responsavel
+                        campos_descricao.append("revisor")
+
+                elif (
+                    novo_status.perfil_responsavel
+                    == Usuario.Tipo.COORDENADOR
+                    and novo_responsavel
+                    and descricao.coordenador_id != novo_responsavel.id
+                ):
+                    descricao.coordenador = novo_responsavel
+                    campos_descricao.append("coordenador")
+
+                finalizado = bool(novo_status.is_final)
+                if descricao.finalizado != finalizado:
+                    descricao.finalizado = finalizado
+                    campos_descricao.append("finalizado")
+
+                if campos_descricao:
+                    descricao.save(update_fields=campos_descricao)
+
+            responsavel_antes_txt = (
+                str(responsavel_anterior)
+                if responsavel_anterior
+                else "sem responsável"
+            )
+            responsavel_depois_txt = (
+                str(novo_responsavel)
+                if novo_responsavel
+                else "sem responsável"
+            )
 
             HistoricoItem.objects.create(
                 imagem=img,
@@ -2401,12 +5660,21 @@ def lote_alterar_status(request, lote_id):
                 novo_status=novo_status,
                 observacao=(
                     f"Alteração manual de status do lote '{lote.nome}' "
-                    f"por {request.user.get_full_name() or request.user.email}."
+                    f"por {request.user.get_full_name() or request.user.email}. "
+                    f"Responsável: {responsavel_antes_txt} → "
+                    f"{responsavel_depois_txt}."
                 ),
             )
 
+    lote.sincronizar_data_efetiva()
+
     messages.success(
         request,
-        f"{len(imagens)} imagem(ns) do lote '{lote.nome}' alterada(s) para '{novo_status.nome}'.",
+        (
+            f"{len(imagens)} imagem(ns) do lote '{lote.nome}' "
+            f"alterada(s) para '{novo_status.nome}', com os responsáveis "
+            "ajustados conforme o perfil do status."
+        ),
     )
     return redirect(request.POST.get("next", "lotes_lista"))
+

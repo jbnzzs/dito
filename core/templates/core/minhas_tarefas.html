@@ -6,12 +6,25 @@
 
 {% block content %}
 
+{# ---- Navegação ---- #}
+<div class="mb-3">
+    <a href="{{ url_voltar }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i> Voltar
+    </a>
+</div>
+
 {# ---- Cabeçalho ---- #}
 <div class="d-flex align-items-start justify-content-between mb-4 flex-wrap gap-3">
     <div>
         <h2 class="mb-1">{{ titulo_secao }}</h2>
         <p class="text-secondary mb-0" style="font-size:0.875rem;">
-            {{ total }} tarefa{{ total|pluralize }} encontrada{{ total|pluralize }}
+            {% if pode_atribuir_avulsas %}
+                {{ total }} imagem{{ total|pluralize }} sem lote
+                &nbsp;·&nbsp;
+                atribua cada imagem ao responsável da etapa atual
+            {% else %}
+                {{ total }} tarefa{{ total|pluralize }} encontrada{{ total|pluralize }}
+            {% endif %}
         </p>
     </div>
 </div>
@@ -22,7 +35,7 @@
     {% for slug, count in contadores.items %}
     {% if count > 0 or slug in slugs_ativos or mostrar_todos_status %}
     <div class="col-4">
-        <a href="?status={{ slug }}"
+        <a href="?status={{ slug }}{% if lote_atual %}&lote={{ lote_atual.pk }}{% elif sem_lote %}&sem_lote=1{% endif %}&next={{ url_voltar|urlencode }}"
            class="card text-decoration-none {% if slug == status_slug_ativo %}border-primary{% endif %}"
            style="{% if slug == status_slug_ativo %}border-color:#B8860B !important; border-width:1.5px !important;{% endif %}">
             <div class="card-body py-2 px-3">
@@ -45,6 +58,13 @@
     <div class="card-body py-2 px-3">
         <form method="get" class="d-flex align-items-center gap-3 flex-wrap">
 
+            {% if lote_atual %}
+            <input type="hidden" name="lote" value="{{ lote_atual.pk }}">
+            {% elif sem_lote %}
+            <input type="hidden" name="sem_lote" value="1">
+            {% endif %}
+            <input type="hidden" name="next" value="{{ url_voltar }}">
+
             <div class="dito-search flex-grow-1" style="max-width:360px;">
                 <i class="bi bi-search text-secondary"></i>
                 <input type="text" name="busca" value="{{ busca }}"
@@ -53,7 +73,14 @@
 
             <select name="status" class="form-select"
                     style="max-width:220px; font-size:0.875rem;">
-                <option value="">Todos os status</option>
+                <option
+                    value=""
+                    disabled
+                    hidden
+                    {% if not status_slug_ativo %}selected{% endif %}
+                >
+                    Filtrar por status...
+                </option>
                 {% for s in status_list %}
                 <option value="{{ s.slug }}"
                     {% if s.slug == status_slug_ativo %}selected{% endif %}>
@@ -67,7 +94,7 @@
             </button>
 
             {% if busca or status_slug_ativo %}
-            <a href="{% url 'minhas_tarefas' %}"
+            <a href="{% url 'minhas_tarefas' %}?{% if lote_atual %}lote={{ lote_atual.pk }}&{% elif sem_lote %}sem_lote=1&{% endif %}next={{ url_voltar|urlencode }}"
                class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-x me-1"></i> Limpar
             </a>
@@ -86,7 +113,7 @@
                 <thead>
                     <tr>
                         <th class="ps-3">Retranca</th>
-                        <th>Obra</th>
+                        <th>Projeto</th>
                         <th>Disciplina</th>
                         <th>Etapa</th>
                         <th>Status</th>
@@ -94,7 +121,11 @@
                         {% if request.user.tipo == 'coordenador' or request.user.tipo == 'administrador' %}
                         <th>Responsável</th>
                         {% endif %}
-                        <th></th>
+                        <th class="text-end pe-3">
+                            {% if pode_atribuir_avulsas %}
+                                Atribuição / ação
+                            {% endif %}
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
@@ -135,17 +166,151 @@
                         </td>
                         {% endif %}
                         <td class="text-end pe-3">
-                            {% if img.status.slug in slugs_ativos %}
-                            <a href="{% url 'descricao_imagem' img.pk %}"
-                               class="btn btn-sm btn-primary">
-                                <i class="bi {{ acao_icon }} me-1"></i>{{ acao_label }}
-                            </a>
+
+                            {% if pode_atribuir_avulsas %}
+
+                                <div
+                                    class="d-flex align-items-center justify-content-end gap-2 flex-wrap"
+                                >
+
+                                    {% if img.status.is_inicial and img.status.ativo and img.status.perfil_responsavel == 'descritor' and img.status.exige_atribuicao %}
+
+                                    <form
+                                        method="post"
+                                        action="{% url 'atribuir_descritor' img.pk %}"
+                                        class="d-flex align-items-center gap-2"
+                                    >
+                                        {% csrf_token %}
+
+                                        <input
+                                            type="hidden"
+                                            name="next"
+                                            value="{{ request.get_full_path }}"
+                                        >
+
+                                        <select
+                                            name="descritor_id"
+                                            class="form-select form-select-sm"
+                                            required
+                                            style="
+                                                width:190px;
+                                                min-height:32px;
+                                            "
+                                        >
+                                            <option
+                                                value=""
+                                                disabled
+                                                hidden
+                                                {% if not img.responsavel_id %}selected{% endif %}
+                                            >
+                                                Selecione o descritor...
+                                            </option>
+
+                                            {% for d in descritores %}
+                                            <option
+                                                value="{{ d.pk }}"
+                                                {% if img.responsavel_id == d.pk %}selected{% endif %}
+                                            >
+                                                {{ d.get_full_name|default:d.email }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+
+                                        <button
+                                            type="submit"
+                                            class="btn btn-sm btn-primary"
+                                            title="Atribuir descrição desta imagem"
+                                        >
+                                            <i class="bi bi-person-check me-1"></i>
+                                            Atribuir
+                                        </button>
+                                    </form>
+
+                                    {% elif img.status.descricao_concluida %}
+
+                                    <form
+                                        method="post"
+                                        action="{% url 'liberar_conferencia' img.pk %}"
+                                        class="d-flex align-items-center gap-2"
+                                    >
+                                        {% csrf_token %}
+
+                                        <input
+                                            type="hidden"
+                                            name="next"
+                                            value="{{ request.get_full_path }}"
+                                        >
+
+                                        <select
+                                            name="revisor_id"
+                                            class="form-select form-select-sm"
+                                            required
+                                            style="
+                                                width:190px;
+                                                min-height:32px;
+                                            "
+                                        >
+                                            <option
+                                                value=""
+                                                disabled
+                                                hidden
+                                                selected
+                                            >
+                                                Selecione o revisor...
+                                            </option>
+
+                                            {% for r in revisores %}
+                                            <option value="{{ r.pk }}">
+                                                {{ r.get_full_name|default:r.email }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+
+                                        <button
+                                            type="submit"
+                                            class="btn btn-sm btn-primary"
+                                            title="Liberar esta imagem para conferência"
+                                        >
+                                            <i class="bi bi-send-check me-1"></i>
+                                            Atribuir
+                                        </button>
+                                    </form>
+
+                                    {% endif %}
+
+                                    <a
+                                        href="{% url 'descricao_imagem' img.pk %}?next={{ request.get_full_path|urlencode }}"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        title="Abrir imagem"
+                                    >
+                                        <i class="bi bi-eye me-1"></i>
+                                        Ver
+                                    </a>
+
+                                </div>
+
                             {% else %}
-                            <a href="{% url 'descricao_imagem' img.pk %}"
-                               class="btn btn-sm btn-outline-secondary">
-                                <i class="bi bi-eye me-1"></i>Ver
-                            </a>
+
+                                {% if img.status.slug in slugs_ativos %}
+                                <a
+                                    href="{% url 'descricao_imagem' img.pk %}?next={{ request.get_full_path|urlencode }}"
+                                    class="btn btn-sm btn-primary"
+                                >
+                                    <i class="bi {{ acao_icon }} me-1"></i>
+                                    {{ acao_label }}
+                                </a>
+                                {% else %}
+                                <a
+                                    href="{% url 'descricao_imagem' img.pk %}?next={{ request.get_full_path|urlencode }}"
+                                    class="btn btn-sm btn-outline-secondary"
+                                >
+                                    <i class="bi bi-eye me-1"></i>
+                                    Ver
+                                </a>
+                                {% endif %}
+
                             {% endif %}
+
                         </td>
                     </tr>
                     {% endfor %}
@@ -164,11 +329,11 @@
             <div class="d-flex gap-1 align-items-center">
 
                 {% if pagina_obj.has_previous %}
-                <a href="?pagina=1{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}"
+                <a href="?pagina=1{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}{% if lote_atual %}&lote={{ lote_atual.pk }}{% elif sem_lote %}&sem_lote=1{% endif %}&next={{ url_voltar|urlencode }}"
                    class="btn btn-outline-secondary btn-sm" title="Primeira">
                     <i class="bi bi-chevron-double-left"></i>
                 </a>
-                <a href="?pagina={{ pagina_obj.previous_page_number }}{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}"
+                <a href="?pagina={{ pagina_obj.previous_page_number }}{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}{% if lote_atual %}&lote={{ lote_atual.pk }}{% elif sem_lote %}&sem_lote=1{% endif %}&next={{ url_voltar|urlencode }}"
                    class="btn btn-outline-secondary btn-sm" title="Anterior">
                     <i class="bi bi-chevron-left"></i>
                 </a>
@@ -178,17 +343,17 @@
                     {% if pagina_obj.number == num %}
                     <button class="btn btn-primary btn-sm">{{ num }}</button>
                     {% elif num > pagina_obj.number|add:"-3" and num < pagina_obj.number|add:"3" %}
-                    <a href="?pagina={{ num }}{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}"
+                    <a href="?pagina={{ num }}{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}{% if lote_atual %}&lote={{ lote_atual.pk }}{% elif sem_lote %}&sem_lote=1{% endif %}&next={{ url_voltar|urlencode }}"
                        class="btn btn-outline-secondary btn-sm">{{ num }}</a>
                     {% endif %}
                 {% endfor %}
 
                 {% if pagina_obj.has_next %}
-                <a href="?pagina={{ pagina_obj.next_page_number }}{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}"
+                <a href="?pagina={{ pagina_obj.next_page_number }}{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}{% if lote_atual %}&lote={{ lote_atual.pk }}{% elif sem_lote %}&sem_lote=1{% endif %}&next={{ url_voltar|urlencode }}"
                    class="btn btn-outline-secondary btn-sm" title="Próxima">
                     <i class="bi bi-chevron-right"></i>
                 </a>
-                <a href="?pagina={{ pagina_obj.paginator.num_pages }}{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}"
+                <a href="?pagina={{ pagina_obj.paginator.num_pages }}{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}{% if lote_atual %}&lote={{ lote_atual.pk }}{% elif sem_lote %}&sem_lote=1{% endif %}&next={{ url_voltar|urlencode }}"
                    class="btn btn-outline-secondary btn-sm" title="Última">
                     <i class="bi bi-chevron-double-right"></i>
                 </a>
@@ -197,6 +362,8 @@
                 <form method="get" class="d-flex align-items-center gap-1 ms-2">
                     {% if status_slug_ativo %}<input type="hidden" name="status" value="{{ status_slug_ativo }}">{% endif %}
                     {% if busca %}<input type="hidden" name="busca" value="{{ busca }}">{% endif %}
+                    {% if lote_atual %}<input type="hidden" name="lote" value="{{ lote_atual.pk }}">{% elif sem_lote %}<input type="hidden" name="sem_lote" value="1">{% endif %}
+                    <input type="hidden" name="next" value="{{ url_voltar }}">
                     <input type="number" name="pagina" min="1"
                            max="{{ pagina_obj.paginator.num_pages }}"
                            placeholder="{{ pagina_obj.number }}"
@@ -217,11 +384,15 @@
                 {% if busca or status_slug_ativo %}
                     Nenhuma tarefa encontrada com os filtros aplicados.
                 {% else %}
-                    Nenhuma tarefa atribuída a você no momento.
+                    {% if pode_atribuir_avulsas %}
+                        Nenhuma imagem avulsa encontrada no momento.
+                    {% else %}
+                        Nenhuma tarefa atribuída a você no momento.
+                    {% endif %}
                 {% endif %}
             </p>
             {% if busca or status_slug_ativo %}
-            <a href="{% url 'minhas_tarefas' %}" class="btn btn-outline-primary mt-2">
+            <a href="{% url 'minhas_tarefas' %}?{% if lote_atual %}lote={{ lote_atual.pk }}&{% elif sem_lote %}sem_lote=1&{% endif %}next={{ url_voltar|urlencode }}" class="btn btn-outline-primary mt-2">
                 <i class="bi bi-x me-1"></i> Limpar filtros
             </a>
             {% endif %}

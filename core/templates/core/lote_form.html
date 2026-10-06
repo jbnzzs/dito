@@ -6,11 +6,20 @@
 
 {% block content %}
 
-<div class="d-flex align-items-center justify-content-between mb-4">
-    <h2 class="mb-0">Editar lote</h2>
-    <a href="{% url 'imagens_lista' %}?lote={{ lote.pk }}" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left me-1"></i> Voltar para imagens
+<div class="mb-4">
+    <a href="{% url 'lotes_lista' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>
+        Voltar
     </a>
+</div>
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <h2 class="mb-1">Editar lote</h2>
+        <p class="text-secondary mb-0" style="font-size:0.875rem;">
+            {{ lote.nome }}
+        </p>
+    </div>
 </div>
 
 {% if messages %}
@@ -19,35 +28,465 @@
     {% endfor %}
 {% endif %}
 
-<div class="card" style="max-width:520px;">
+<div class="card mb-4" style="max-width:720px;">
     <div class="card-body p-4">
         <form method="post">
             {% csrf_token %}
+
             <div class="mb-3">
-                <label class="form-label fw-bold" style="font-size:0.875rem;">Nome do lote</label>
-                <input type="text" name="nome" class="form-control" value="{{ lote.nome }}" required>
+                <label class="form-label fw-bold" style="font-size:0.875rem;">
+                    Nome do lote
+                </label>
+                <input
+                    type="text"
+                    name="nome"
+                    class="form-control"
+                    value="{{ lote.nome }}"
+                    required
+                >
             </div>
+
             <div class="mb-3">
-                <label class="form-label fw-bold" style="font-size:0.875rem;">Descrição</label>
-                <input type="text" name="descricao" class="form-control" value="{{ lote.descricao }}">
+                <label class="form-label fw-bold" style="font-size:0.875rem;">
+                    Descrição
+                </label>
+                <input
+                    type="text"
+                    name="descricao"
+                    class="form-control"
+                    value="{{ lote.descricao }}"
+                >
             </div>
-            <div class="mb-3">
-                <label class="form-label fw-bold" style="font-size:0.875rem;">Prazo do lote</label>
-                <input type="date" name="prazo" class="form-control"
-                       value="{{ lote.prazo|date:'Y-m-d' }}">
-                <small class="text-secondary" style="font-size:0.75rem;">
-                    Ao salvar, este prazo será aplicado a todas as imagens do lote.
-                </small>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold" style="font-size:0.875rem;">
+                        Data prevista
+                    </label>
+                    <input
+                        type="date"
+                        name="data_prevista"
+                        class="form-control"
+                        value="{{ lote.data_prevista|date:'Y-m-d' }}"
+                    >
+                    <small class="text-secondary" style="font-size:0.75rem;">
+                        Previsão de conclusão do lote.
+                    </small>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-bold" style="font-size:0.875rem;">
+                        Data efetiva
+                    </label>
+                    <input
+                        type="date"
+                        name="data_efetiva"
+                        class="form-control"
+                        value="{{ lote.data_efetiva|date:'Y-m-d' }}"
+                    >
+                    <small class="text-secondary" style="font-size:0.75rem;">
+                        Preenchida automaticamente quando todas as imagens chegam ao status final.
+                    </small>
+                </div>
             </div>
+
             <div class="form-check mb-4">
-                <input type="checkbox" name="ativo" class="form-check-input" id="ativoCheck" {% if lote.ativo %}checked{% endif %}>
-                <label class="form-check-label" for="ativoCheck">Lote ativo</label>
+                <input
+                    type="checkbox"
+                    name="ativo"
+                    class="form-check-input"
+                    id="ativoCheck"
+                    {% if lote.ativo %}checked{% endif %}
+                >
+                <label class="form-check-label" for="ativoCheck">
+                    Lote ativo
+                </label>
             </div>
+
             <button type="submit" class="btn btn-primary">
-                <i class="bi bi-check-lg me-1"></i> Salvar alterações
+                <i class="bi bi-check-lg me-1"></i>
+                Salvar alterações
             </button>
         </form>
     </div>
 </div>
+
+<div class="card" style="max-width:1180px;">
+    <div class="card-body p-0">
+        <div class="d-flex align-items-center justify-content-between px-4 py-3 border-bottom flex-wrap gap-3">
+            <div>
+                <h5 class="mb-1">Imagens do lote</h5>
+                <p class="text-secondary mb-0" style="font-size:0.8rem;">
+                    {{ imagens_lote|length }} imagem{{ imagens_lote|length|pluralize }} ativa{{ imagens_lote|length|pluralize }} neste lote
+                </p>
+            </div>
+        </div>
+
+        {% if imagens_lote %}
+        <form method="post" id="formGerenciarImagens">
+            {% csrf_token %}
+
+            <div class="px-4 py-3 border-bottom">
+                <div class="d-flex align-items-end gap-3 flex-wrap">
+                    <div class="flex-grow-1" style="min-width:260px; max-width:420px;">
+                        <label class="form-label fw-bold mb-1" style="font-size:0.8rem;">
+                            Buscar por retranca
+                        </label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-white">
+                                <i class="bi bi-search text-secondary"></i>
+                            </span>
+                            <input
+                                type="text"
+                                id="buscaRetranca"
+                                class="form-control"
+                                placeholder="Digite parte da retranca..."
+                                autocomplete="off"
+                            >
+                        </div>
+                    </div>
+
+                    <div style="min-width:220px;">
+                        <label class="form-label fw-bold mb-1" style="font-size:0.8rem;">
+                            Filtrar por status
+                        </label>
+                        <select id="filtroStatus" class="form-select form-select-sm">
+                            <option
+                                value=""
+                                disabled
+                                hidden
+                                selected
+                            >
+                                Filtrar por status...
+                            </option>
+                        </select>
+                    </div>
+
+                    <button
+                        type="button"
+                        class="btn btn-outline-secondary btn-sm"
+                        id="limparFiltros"
+                    >
+                        <i class="bi bi-x-lg me-1"></i>
+                        Limpar filtros
+                    </button>
+                </div>
+
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-3">
+                    <span class="text-secondary" style="font-size:0.78rem;">
+                        <span id="contadorVisiveis">{{ imagens_lote|length }}</span>
+                        de {{ imagens_lote|length }} imagem{{ imagens_lote|length|pluralize }} exibida{{ imagens_lote|length|pluralize }}
+                        &nbsp;·&nbsp;
+                        <strong id="contadorSelecionadas">0</strong> selecionada(s)
+                    </span>
+
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button
+                            type="button"
+                            class="btn btn-outline-primary btn-sm"
+                            id="selecionarVisiveis"
+                        >
+                            <i class="bi bi-check2-square me-1"></i>
+                            Selecionar visíveis
+                        </button>
+
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary btn-sm"
+                            id="limparSelecao"
+                        >
+                            <i class="bi bi-square me-1"></i>
+                            Limpar seleção
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table mb-0 align-middle" style="font-size:0.875rem;">
+                    <thead>
+                        <tr>
+                            <th style="width:48px;" class="text-center">
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    id="selecionarTodas"
+                                    title="Selecionar todas"
+                                >
+                            </th>
+                            <th>Retranca</th>
+                            <th>Projeto</th>
+                            <th>Status</th>
+                            <th>Responsável</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for imagem in imagens_lote %}
+                        <tr
+                            class="imagem-lote-row"
+                            data-retranca="{{ imagem.retranca|lower }}"
+                            data-status-id="{% if imagem.status %}{{ imagem.status.pk }}{% endif %}"
+                            data-status-nome="{% if imagem.status %}{{ imagem.status.nome }}{% endif %}"
+                        >
+                            <td class="text-center">
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input imagem-check"
+                                    name="imagens_selecionadas"
+                                    value="{{ imagem.pk }}"
+                                >
+                            </td>
+                            <td>
+                                <span class="dito-retranca">{{ imagem.retranca }}</span>
+                            </td>
+                            <td>
+                                {{ imagem.nome_obra|default:"—" }}
+                            </td>
+                            <td>
+                                {% if imagem.status %}
+                                <span class="dito-status dito-status-{{ imagem.status.slug }}">
+                                    {{ imagem.status.nome }}
+                                </span>
+                                {% else %}
+                                <span class="text-secondary">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if imagem.responsavel %}
+                                    {{ imagem.responsavel.get_full_name|default:imagem.responsavel.email }}
+                                {% else %}
+                                    <span class="text-secondary">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="border-top px-4 py-3">
+                <div class="d-flex align-items-end gap-3 flex-wrap">
+                    <div>
+                        <label class="form-label fw-bold mb-1" style="font-size:0.8rem;">
+                            Mover selecionadas para
+                        </label>
+                        <select
+                            name="lote_destino"
+                            class="form-select form-select-sm"
+                            style="min-width:240px;"
+                        >
+                            <option
+                                value=""
+                                disabled
+                                hidden
+                                selected
+                            >
+                                Selecione o lote de destino...
+                            </option>
+                            {% for destino in lotes_destino %}
+                            <option value="{{ destino.pk }}">
+                                {{ destino.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <button
+                        type="submit"
+                        name="acao_imagens"
+                        value="mover"
+                        class="btn btn-primary btn-sm"
+                        onclick="return confirmarMovimentacao('mover');"
+                    >
+                        <i class="bi bi-arrow-left-right me-1"></i>
+                        Mover selecionadas
+                    </button>
+
+                    <button
+                        type="submit"
+                        name="acao_imagens"
+                        value="remover"
+                        class="btn btn-outline-danger btn-sm"
+                        onclick="return confirmarMovimentacao('remover');"
+                    >
+                        <i class="bi bi-box-arrow-up-right me-1"></i>
+                        Deixar avulsas
+                    </button>
+                </div>
+
+                <p class="text-secondary mt-2 mb-0" style="font-size:0.75rem;">
+                    Essas ações alteram apenas o lote das imagens. Status, responsável, descrição e pagamentos são mantidos.
+                </p>
+            </div>
+        </form>
+        {% else %}
+        <div class="dito-empty-state py-5">
+            <i class="bi bi-images"></i>
+            <p>Este lote não possui imagens ativas.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if imagens_lote %}
+<script>
+(function () {
+    const buscaRetranca = document.getElementById("buscaRetranca");
+    const filtroStatus = document.getElementById("filtroStatus");
+    const limparFiltros = document.getElementById("limparFiltros");
+    const selecionarTodas = document.getElementById("selecionarTodas");
+    const selecionarVisiveis = document.getElementById("selecionarVisiveis");
+    const limparSelecao = document.getElementById("limparSelecao");
+    const contadorVisiveis = document.getElementById("contadorVisiveis");
+    const contadorSelecionadas = document.getElementById("contadorSelecionadas");
+
+    const linhas = Array.from(document.querySelectorAll(".imagem-lote-row"));
+    const checks = Array.from(document.querySelectorAll(".imagem-check"));
+
+    const statusDisponiveis = new Map();
+    linhas.forEach(function (linha) {
+        const statusId = linha.dataset.statusId || "";
+        const statusNome = linha.dataset.statusNome || "";
+
+        if (statusId && statusNome) {
+            statusDisponiveis.set(statusId, statusNome);
+        }
+    });
+
+    Array.from(statusDisponiveis.entries())
+        .sort(function (a, b) {
+            return a[1].localeCompare(b[1], "pt-BR");
+        })
+        .forEach(function ([statusId, statusNome]) {
+            const option = document.createElement("option");
+            option.value = statusId;
+            option.textContent = statusNome;
+            filtroStatus.appendChild(option);
+        });
+
+    function linhasVisiveis() {
+        return linhas.filter(function (linha) {
+            return linha.style.display !== "none";
+        });
+    }
+
+    function atualizarContadores() {
+        contadorVisiveis.textContent = linhasVisiveis().length;
+        contadorSelecionadas.textContent = checks.filter(check => check.checked).length;
+    }
+
+    function atualizarSelecionarTodas() {
+        const visiveis = linhasVisiveis();
+        const checksVisiveis = visiveis.map(linha => linha.querySelector(".imagem-check"));
+
+        if (!checksVisiveis.length) {
+            selecionarTodas.checked = false;
+            selecionarTodas.indeterminate = false;
+            selecionarTodas.disabled = true;
+            return;
+        }
+
+        selecionarTodas.disabled = false;
+
+        const marcadas = checksVisiveis.filter(check => check.checked).length;
+        selecionarTodas.checked = marcadas === checksVisiveis.length;
+        selecionarTodas.indeterminate = marcadas > 0 && marcadas < checksVisiveis.length;
+    }
+
+    function aplicarFiltros() {
+        const termo = buscaRetranca.value.trim().toLowerCase();
+        const statusId = filtroStatus.value;
+
+        linhas.forEach(function (linha) {
+            const retranca = linha.dataset.retranca || "";
+            const statusLinha = linha.dataset.statusId || "";
+
+            const bateRetranca = !termo || retranca.includes(termo);
+            const bateStatus = !statusId || statusLinha === statusId;
+
+            linha.style.display = bateRetranca && bateStatus ? "" : "none";
+        });
+
+        atualizarContadores();
+        atualizarSelecionarTodas();
+    }
+
+    selecionarTodas.addEventListener("change", function () {
+        linhasVisiveis().forEach(function (linha) {
+            const check = linha.querySelector(".imagem-check");
+            check.checked = selecionarTodas.checked;
+        });
+
+        atualizarContadores();
+        atualizarSelecionarTodas();
+    });
+
+    selecionarVisiveis.addEventListener("click", function () {
+        linhasVisiveis().forEach(function (linha) {
+            linha.querySelector(".imagem-check").checked = true;
+        });
+
+        atualizarContadores();
+        atualizarSelecionarTodas();
+    });
+
+    limparSelecao.addEventListener("click", function () {
+        checks.forEach(function (check) {
+            check.checked = false;
+        });
+
+        atualizarContadores();
+        atualizarSelecionarTodas();
+    });
+
+    limparFiltros.addEventListener("click", function () {
+        buscaRetranca.value = "";
+        filtroStatus.selectedIndex = 0;
+        aplicarFiltros();
+        buscaRetranca.focus();
+    });
+
+    buscaRetranca.addEventListener("input", aplicarFiltros);
+    filtroStatus.addEventListener("change", aplicarFiltros);
+
+    checks.forEach(function (check) {
+        check.addEventListener("change", function () {
+            atualizarContadores();
+            atualizarSelecionarTodas();
+        });
+    });
+
+    atualizarContadores();
+    atualizarSelecionarTodas();
+})();
+
+function confirmarMovimentacao(acao) {
+    const selecionadas = document.querySelectorAll(".imagem-check:checked").length;
+
+    if (!selecionadas) {
+        alert("Selecione pelo menos uma imagem.");
+        return false;
+    }
+
+    if (acao === "mover") {
+        const destino = document.querySelector("select[name='lote_destino']");
+        if (!destino.value) {
+            alert("Escolha o lote de destino.");
+            return false;
+        }
+
+        return confirm(
+            `Mover ${selecionadas} imagem(ns) para o lote selecionado? ` +
+            "O status e o responsável serão mantidos."
+        );
+    }
+
+    return confirm(
+        `Remover ${selecionadas} imagem(ns) deste lote e deixá-la(s) como avulsa(s)? ` +
+        "O status e o responsável serão mantidos."
+    );
+}
+</script>
+{% endif %}
 
 {% endblock %}

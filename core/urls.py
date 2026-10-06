@@ -10,6 +10,7 @@ urlpatterns = [
     path("imagens/nova/", views.imagem_criar, name="imagem_criar"),
     path("imagens/importar/", views.importar_imagens, name="importar_imagens"),
     path("imagens/importar/<uuid:importacao_id>/lotes/", views.organizar_lotes, name="organizar_lotes"),
+    path("imagens/<int:pk>/pdf/", views.abrir_pdf_rede, name="abrir_pdf_rede"),
     path("imagens/<int:pk>/editar/", views.imagem_editar, name="imagem_editar"),
     path("imagens/<int:pk>/excluir/", views.imagem_excluir, name="imagem_excluir"),
     path("imagens/<int:pk>/descrever/", views.descricao_imagem, name="descricao_imagem"),
@@ -37,6 +38,18 @@ urlpatterns = [
     path("usuarios/<int:pk>/aprovar/", views.aprovar_solicitacao, name="aprovar_solicitacao"),
     path("usuarios/<int:pk>/recusar/", views.recusar_solicitacao, name="recusar_solicitacao"),
 
+    # ---- Projetos ----
+    path("projetos/", views.projeto_lista, name="projeto_lista"),
+    path("projetos/novo/", views.projeto_criar, name="projeto_criar"),
+    path("projetos/<int:pk>/editar/", views.projeto_editar, name="projeto_editar"),
+    path("projetos/<int:pk>/toggle-ativo/", views.projeto_toggle_ativo, name="projeto_toggle_ativo"),
+
+    # ---- Componentes curriculares ----
+    path("componentes/", views.componente_lista, name="componente_lista"),
+    path("componentes/novo/", views.componente_criar, name="componente_criar"),
+    path("componentes/<int:pk>/editar/", views.componente_editar, name="componente_editar"),
+    path("componentes/<int:pk>/toggle-ativo/", views.componente_toggle_ativo, name="componente_toggle_ativo"),
+
     # ---- Status do workflow ----
     path("status/", views.status_lista, name="status_lista"),
     path("status/novo/", views.status_criar, name="status_criar"),
@@ -47,6 +60,11 @@ urlpatterns = [
     # ---- Relatórios ----
     path("relatorios/", views.relatorios_lista, name="relatorios_lista"),
     path("relatorios/exportar/", views.relatorios_exportar, name="relatorios_exportar"),
+    path(
+        "relatorios/exportar-fotoweb/",
+        views.relatorios_exportar_fotoweb,
+        name="relatorios_exportar_fotoweb",
+    ),
 
     # ---- Buscar retranca ----
     path("buscar/", views.buscar_retranca, name="buscar_retranca"),

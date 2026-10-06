@@ -12,6 +12,300 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lora:wght@600;700&family=Manrope:wght@400;500;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'css/dito-theme.css' %}">
+
+    <style>
+        /* ============================================================
+           PADRÃO GLOBAL — PLACEHOLDERS DOS SELECTS
+           O texto de instrução fica com o mesmo cinza suave usado
+           nos placeholders dos campos de texto.
+           ============================================================ */
+
+        .form-select:has(option:checked:disabled[hidden]) {
+            color: #6C757D;
+        }
+
+        .form-select option:not([disabled]) {
+            color: #212529;
+        }
+
+        .form-select option:disabled[hidden] {
+            color: #6C757D;
+        }
+
+
+        /* ============================================================
+           PADRÃO GLOBAL — BOTÕES PRIMÁRIOS
+           Normal: fundo azul e texto branco.
+           Hover / foco / clique: fundo branco e texto azul.
+           ============================================================ */
+
+        .btn-primary {
+            --bs-btn-color: #FFFFFF;
+            --bs-btn-bg: #1B3A5C;
+            --bs-btn-border-color: #1B3A5C;
+
+            --bs-btn-hover-color: #1B3A5C;
+            --bs-btn-hover-bg: #FFFFFF;
+            --bs-btn-hover-border-color: #1B3A5C;
+
+            --bs-btn-focus-shadow-rgb: 27, 58, 92;
+
+            --bs-btn-active-color: #1B3A5C;
+            --bs-btn-active-bg: #FFFFFF;
+            --bs-btn-active-border-color: #1B3A5C;
+
+            --bs-btn-disabled-color: #FFFFFF;
+            --bs-btn-disabled-bg: #1B3A5C;
+            --bs-btn-disabled-border-color: #1B3A5C;
+
+            transition:
+                color 0.15s ease-in-out,
+                background-color 0.15s ease-in-out,
+                border-color 0.15s ease-in-out,
+                box-shadow 0.15s ease-in-out;
+        }
+
+        .btn-primary:hover,
+        .btn-primary:focus-visible,
+        .btn-primary:active,
+        .btn-primary.active,
+        .show > .btn-primary.dropdown-toggle {
+            color: #1B3A5C;
+            background-color: #FFFFFF;
+            border-color: #1B3A5C;
+        }
+
+
+        /* ============================================================
+           SIDEBAR RECOLHIDA — CENTRALIZAÇÃO TOTAL DOS ÍCONES
+           Remove sobras de padding/margem que deslocavam os ícones
+           para a esquerda ou para a direita.
+           ============================================================ */
+
+        .dito-sidebar.collapsed .dito-sidebar-nav {
+            align-items: stretch;
+        }
+
+        .dito-sidebar.collapsed .dito-nav-item {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            text-align: center;
+        }
+
+        .dito-sidebar.collapsed .dito-nav-item > i {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-width: 0;
+            margin: 0 !important;
+            padding: 0 !important;
+            line-height: 1;
+            text-align: center;
+        }
+
+        .dito-sidebar.collapsed .dito-collapse-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            text-align: center;
+        }
+
+        .dito-sidebar.collapsed .dito-collapse-btn > i {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            margin: 0 !important;
+            padding: 0 !important;
+            line-height: 1;
+        }
+
+
+
+        /* ============================================================
+           PADRÃO GLOBAL — BORDAS E CONTORNOS
+           Evita o efeito de "cantos abertos" causado por bordas de
+           meio pixel e mantém os componentes levemente arredondados.
+           ============================================================ */
+
+        :root {
+            --bs-border-width: 1px;
+            --bs-border-radius: 8px;
+            --bs-border-radius-sm: 6px;
+            --bs-border-radius-lg: 10px;
+        }
+
+        .card {
+            border-width: 1px !important;
+            border-style: solid;
+            border-color: #DAD6CD;
+            border-radius: 8px !important;
+            background-clip: border-box;
+        }
+
+        /* Cards com tabelas ou conteúdo encostado nas bordas:
+           recorta o conteúdo exatamente no arredondamento do card. */
+        .card > .card-body.p-0 {
+            overflow: hidden;
+            border-radius: 7px;
+        }
+
+        .card > .card-body.p-0 > .table-responsive {
+            border-radius: 7px;
+        }
+
+        .card > .card-body.p-0 > .table-responsive > .table {
+            margin-bottom: 0;
+        }
+
+        /* Mantém as linhas internas das tabelas nítidas e contínuas. */
+        .table > :not(caption) > * > * {
+            border-bottom-width: 1px;
+            border-color: #E1DDD5;
+        }
+
+        /* Componentes próprios do Dito! que ainda usavam 0.5px. */
+        .dito-logout-btn,
+        .dito-search,
+        .dito-status-card,
+        .dito-datas-popover,
+        .dito-acao-massa,
+        .dito-contador-badge {
+            border-width: 1px !important;
+        }
+
+        .dito-search,
+        .dito-status-card,
+        .dito-datas-popover,
+        .dito-acao-massa {
+            border-radius: 8px;
+        }
+
+        /* Inputs e selects seguem o mesmo acabamento dos cards. */
+        .form-control,
+        .form-select,
+        .input-group-text {
+            border-width: 1px;
+            border-radius: 8px;
+        }
+
+
+
+        /* ============================================================
+           TABELAS DENTRO DE CARDS
+           Status, Histórico e demais tabelas que ficam diretamente
+           dentro de um card passam a ter o contorno realmente fechado.
+           ============================================================ */
+
+        .card:has(> .table-responsive) {
+            border: 1px solid #D6D1C8 !important;
+            border-radius: 6px !important;
+            overflow: hidden;
+            background: #FFFFFF;
+        }
+
+        .card:has(> .table-responsive) > .table-responsive {
+            border-radius: 5px;
+        }
+
+        .card:has(> .table-responsive) > .table-responsive > .table {
+            margin-bottom: 0;
+        }
+
+        .card:has(> .table-responsive) > .table-responsive > .table > thead > tr:first-child > th:first-child {
+            border-top-left-radius: 5px;
+        }
+
+        .card:has(> .table-responsive) > .table-responsive > .table > thead > tr:first-child > th:last-child {
+            border-top-right-radius: 5px;
+        }
+
+
+        /* ============================================================
+           PADRÃO GLOBAL — FILTROS DE PESQUISA
+           Todo formulário GET da área principal recebe o mesmo
+           acabamento visual, independentemente da tela.
+           ============================================================ */
+
+        .dito-content form[method="get"] .form-control,
+        .dito-content form[method="get"] .form-select {
+            min-height: 38px;
+            border: 1px solid #D6D1C8;
+            border-radius: 8px;
+            background-color: #FFFFFF;
+            font-size: 0.875rem;
+            color: #212529;
+            box-shadow: none;
+        }
+
+        .dito-content form[method="get"] .form-control::placeholder {
+            color: #8A9199;
+            opacity: 1;
+        }
+
+        .dito-content form[method="get"] .form-select:has(option:checked:disabled[hidden]) {
+            color: #8A9199;
+        }
+
+        .dito-content form[method="get"] .form-control:focus,
+        .dito-content form[method="get"] .form-select:focus {
+            border-color: #7F96AB;
+            box-shadow: 0 0 0 0.2rem rgba(27, 58, 92, 0.08);
+        }
+
+        .dito-content form[method="get"] .dito-search {
+            min-height: 38px;
+            border: 1px solid #D6D1C8 !important;
+            border-radius: 8px;
+            background: #FFFFFF;
+            box-shadow: none;
+        }
+
+        .dito-content form[method="get"] .dito-search:focus-within {
+            border-color: #7F96AB !important;
+            box-shadow: 0 0 0 0.2rem rgba(27, 58, 92, 0.08);
+        }
+
+        .dito-content form[method="get"] .dito-search input {
+            color: #212529;
+        }
+
+        .dito-content form[method="get"] .dito-search input::placeholder {
+            color: #8A9199;
+            opacity: 1;
+        }
+
+        .dito-content form[method="get"] .btn {
+            min-height: 38px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dito-content .card:has(form[method="get"]) {
+            border: 1px solid #D6D1C8 !important;
+            border-radius: 8px !important;
+            background: #FFFFFF;
+        }
+
+        /* Formulários de filtro que não estão dentro de card,
+           como na organização de lotes. */
+        .dito-content > form[method="get"] {
+            padding: 1rem;
+            margin-bottom: 1rem !important;
+            border: 1px solid #D6D1C8;
+            border-radius: 8px;
+            background: #FFFFFF;
+        }
+    </style>
 </head>
 <body>
 
@@ -72,9 +366,19 @@
             <!-- Seção gestão (Status do fluxo é livre pra todos; Usuários só administrador) -->
             <span class="dito-nav-section">Gestão</span>
 
+            <a href="{% url 'projeto_lista' %}" class="dito-nav-item {% block nav_projetos %}{% endblock %}">
+                <i class="bi bi-folder2-open"></i>
+                <span class="dito-nav-label">Projetos</span>
+            </a>
+
+            <a href="{% url 'componente_lista' %}" class="dito-nav-item {% block nav_componentes %}{% endblock %}">
+                <i class="bi bi-journal-bookmark"></i>
+                <span class="dito-nav-label">Componentes</span>
+            </a>
+
             <a href="{% url 'status_lista' %}" class="dito-nav-item {% block nav_status %}{% endblock %}">
                 <i class="bi bi-signpost-split"></i>
-                <span class="dito-nav-label">Gerenciador de Status</span>
+                <span class="dito-nav-label">Status do workflow</span>
             </a>
 
             {% if request.user.tipo == 'administrador' %}
@@ -109,15 +413,9 @@
     <!-- ==================== ÁREA PRINCIPAL ==================== -->
     <div class="dito-main">
 
-        <!-- Header -->
+        <!-- Header de conta -->
         <header class="dito-header">
-            <div class="dito-header-left">
-                <span class="dito-header-title">
-                    {% block page_title %}Dito!{% endblock %}
-                </span>
-            </div>
-
-            <div class="dito-header-right">
+            <div class="dito-header-right ms-auto">
                 <a href="{% url 'minha_conta' %}" class="dito-user-info" style="text-decoration:none; color:inherit;">
                     <span class="dito-user-name">
                         {{ request.user.get_full_name|default:request.user.email }}

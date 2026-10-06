@@ -12,6 +12,25 @@
     {% endfor %}
 {% endif %}
 
+{% if request.GET.origem == "importacao" %}
+<div class="mb-3">
+    <button
+        type="button"
+        class="btn btn-outline-secondary btn-sm"
+        onclick="
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.location.href = '{% url 'importar_imagens' %}';
+            }
+        "
+    >
+        <i class="bi bi-arrow-left me-1"></i>
+        Voltar
+    </button>
+</div>
+{% endif %}
+
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
     <div>
         <h2 class="mb-1">Imagens</h2>
@@ -38,334 +57,1278 @@
     <div class="card-body py-3 px-3">
         <div class="dito-search dito-search-lg">
             <i class="bi bi-search text-secondary"></i>
-            <input type="text" id="inputBuscaRetranca" name="busca" form="formFiltros"
-                   value="{{ busca }}" placeholder="Buscar por retranca...">
+            <input
+                type="text"
+                id="inputBuscaRetranca"
+                name="busca"
+                form="formFiltros"
+                value="{{ busca }}"
+                placeholder="Buscar por retranca..."
+            >
         </div>
     </div>
 
-    <button type="button" class="dito-filtros-toggle" id="toggleFiltrosAvancados">
+    <button
+        type="button"
+        class="dito-filtros-toggle"
+        id="toggleFiltrosAvancados"
+    >
         <i class="bi bi-funnel me-2"></i>
         <span>Filtros avançados</span>
-        <i class="bi bi-chevron-down ms-auto" id="iconeChevronFiltros"></i>
+        <i
+            class="bi bi-chevron-down ms-auto"
+            id="iconeChevronFiltros"
+        ></i>
     </button>
 
-    <div class="card-body py-3 px-3 border-top" id="painelFiltrosAvancados"
-         style="display:{% if tem_filtro %}block{% else %}none{% endif %};">
+    <div
+        class="card-body py-3 px-3 border-top"
+        id="painelFiltrosAvancados"
+        style="display:{% if tem_filtro %}block{% else %}none{% endif %};"
+    >
 
-        <form method="get" id="formFiltros" class="row g-3">
+        <form
+            method="get"
+            id="formFiltros"
+            class="row g-3"
+        >
 
-            <div class="col-6 col-md-3">
-                <label class="dito-filtro-label">Obra</label>
-                <input type="text" name="obra" class="form-control" list="listaObras"
-                       placeholder="Digite ou selecione..." value="{{ obra_f }}">
-                <datalist id="listaObras">
-                    {% for o in obras_disponiveis %}<option value="{{ o }}">{% endfor %}
-                </datalist>
-            </div>
-
-            <div class="col-6 col-md-3">
-                <label class="dito-filtro-label">Componente</label>
-                <input type="text" name="componente" class="form-control" list="listaComponentes"
-                       placeholder="Digite ou selecione..." value="{{ componente_f }}">
-                <datalist id="listaComponentes">
-                    {% for c in componentes_disponiveis %}<option value="{{ c }}">{% endfor %}
-                </datalist>
-            </div>
-
-            <div class="col-6 col-md-3">
-                <label class="dito-filtro-label">Status</label>
-                <input type="text" name="status" class="form-control" list="listaStatus"
-                       placeholder="Digite ou selecione..." value="{{ status_f }}">
-                <datalist id="listaStatus">
-                    {% for s in status_list %}<option value="{{ s.nome }}">{% endfor %}
-                </datalist>
-            </div>
-
+            {# 1. PROJETO #}
             <div class="col-6 col-md-3">
                 <label class="dito-filtro-label">
-                    Lote
-                    <a href="#" id="btnEditarLote" class="float-end"
-                       data-url-template="{% url 'lote_editar' 0 %}"
-                       style="display:none;" title="Editar lote selecionado">
-                        <i class="bi bi-pencil-square"></i> editar
-                    </a>
+                    Projeto
                 </label>
-                <input type="text" name="lote" id="inputLote" class="form-control" list="listaLotes"
-                       placeholder="Digite ou selecione..." value="{{ lote_f }}">
+
+                <input
+                    type="text"
+                    name="projeto"
+                    class="form-control"
+                    list="listaProjetos"
+                    placeholder="Digite ou selecione..."
+                    value="{{ projeto_f }}"
+                >
+
+                <datalist id="listaProjetos">
+                    {% for projeto in projetos_disponiveis %}
+                    <option value="{{ projeto.nome }}">
+                    {% endfor %}
+                </datalist>
+            </div>
+
+
+            {# 2. OBRA #}
+            <div class="col-6 col-md-3">
+                <label class="dito-filtro-label">
+                    Obra
+                </label>
+
+                <input
+                    type="text"
+                    name="obra"
+                    class="form-control"
+                    list="listaObras"
+                    placeholder="Digite ou selecione..."
+                    value="{{ obra_f }}"
+                >
+
+                <datalist id="listaObras">
+                    {% for o in obras_disponiveis %}
+                    <option value="{{ o }}">
+                    {% endfor %}
+                </datalist>
+            </div>
+
+
+            {# 3. COMPONENTE #}
+            <div class="col-6 col-md-3">
+                <label class="dito-filtro-label">
+                    Componente
+                </label>
+
+                <input
+                    type="text"
+                    name="componente"
+                    class="form-control"
+                    list="listaComponentes"
+                    placeholder="Digite ou selecione..."
+                    value="{{ componente_f }}"
+                >
+
+                <datalist id="listaComponentes">
+                    {% for c in componentes_disponiveis %}
+                    <option value="{{ c }}">
+                    {% endfor %}
+                </datalist>
+            </div>
+
+
+            {# 4. LOTE #}
+            <div class="col-6 col-md-3">
+
+                <label class="dito-filtro-label">
+                    Lote
+                </label>
+
+                <input
+                    type="text"
+                    name="lote"
+                    id="inputLote"
+                    class="form-control"
+                    list="listaLotes"
+                    placeholder="Digite ou selecione..."
+                    value="{{ lote_f }}"
+                    autocomplete="off"
+                >
+
                 <datalist id="listaLotes">
-                    {% for l in lotes %}<option value="{{ l.nome }}">{% endfor %}
+                    {% for l in lotes %}
+                    <option value="{{ l.nome }}">
+                    {% endfor %}
                 </datalist>
             </div>
 
+
+            {# 5. STATUS #}
             <div class="col-6 col-md-3">
-                <label class="dito-filtro-label">Responsável Descrição</label>
-                <input type="text" name="resp_descricao" class="form-control" list="listaDescritores"
-                       placeholder="Digite ou selecione..." value="{{ resp_descricao_f }}">
+                <label class="dito-filtro-label">
+                    Status
+                </label>
+
+                <input
+                    type="text"
+                    name="status"
+                    class="form-control"
+                    list="listaStatus"
+                    placeholder="Digite ou selecione..."
+                    value="{{ status_f }}"
+                >
+
+                <datalist id="listaStatus">
+                    {% for s in status_list %}
+                    <option value="{{ s.nome }}">
+                    {% endfor %}
+                </datalist>
+            </div>
+
+
+            {# 6. RESPONSÁVEL DESCRIÇÃO #}
+            <div class="col-6 col-md-3">
+                <label class="dito-filtro-label">
+                    Responsável Descrição
+                </label>
+
+                <input
+                    type="text"
+                    name="resp_descricao"
+                    class="form-control"
+                    list="listaDescritores"
+                    placeholder="Digite ou selecione..."
+                    value="{{ resp_descricao_f }}"
+                >
+
                 <datalist id="listaDescritores">
-                    {% for d in descritores %}<option value="{{ d.get_full_name|default:d.email }}">{% endfor %}
+                    {% for d in descritores %}
+                    <option value="{{ d.get_full_name|default:d.email }}">
+                    {% endfor %}
                 </datalist>
             </div>
 
+
+            {# 7. RESPONSÁVEL REVISÃO #}
             <div class="col-6 col-md-3">
-                <label class="dito-filtro-label">Responsável Revisão</label>
-                <input type="text" name="resp_revisao" class="form-control" list="listaRevisores"
-                       placeholder="Digite ou selecione..." value="{{ resp_revisao_f }}">
+                <label class="dito-filtro-label">
+                    Responsável Revisão
+                </label>
+
+                <input
+                    type="text"
+                    name="resp_revisao"
+                    class="form-control"
+                    list="listaRevisores"
+                    placeholder="Digite ou selecione..."
+                    value="{{ resp_revisao_f }}"
+                >
+
                 <datalist id="listaRevisores">
-                    {% for r in revisores %}<option value="{{ r.get_full_name|default:r.email }}">{% endfor %}
+                    {% for r in revisores %}
+                    <option value="{{ r.get_full_name|default:r.email }}">
+                    {% endfor %}
                 </datalist>
             </div>
 
+
+            {# 8. PAGAMENTO DESCRITOR #}
             <div class="col-6 col-md-3">
-                <label class="dito-filtro-label">Pagamento Descritor</label>
-                <input type="text" name="pagamento_descritor" class="form-control" list="listaPagamentos"
-                       placeholder="Digite ou selecione..." value="{{ pagamento_descritor_f }}">
+                <label class="dito-filtro-label">
+                    Pagamento Descritor
+                </label>
+
+                <input
+                    type="text"
+                    name="pagamento_descritor"
+                    class="form-control"
+                    list="listaPagamentos"
+                    placeholder="Digite ou selecione..."
+                    value="{{ pagamento_descritor_f }}"
+                >
             </div>
 
+
+            {# 9. PAGAMENTO REVISOR #}
             <div class="col-6 col-md-3">
-                <label class="dito-filtro-label">Pagamento Revisor</label>
-                <input type="text" name="pagamento_revisor" class="form-control" list="listaPagamentos"
-                       placeholder="Digite ou selecione..." value="{{ pagamento_revisor_f }}">
+                <label class="dito-filtro-label">
+                    Pagamento Revisor
+                </label>
+
+                <input
+                    type="text"
+                    name="pagamento_revisor"
+                    class="form-control"
+                    list="listaPagamentos"
+                    placeholder="Digite ou selecione..."
+                    value="{{ pagamento_revisor_f }}"
+                >
             </div>
+
 
             <datalist id="listaPagamentos">
-                {% for valor, label in status_pagamento_choices %}<option value="{{ label }}">{% endfor %}
+                {% for valor, label in status_pagamento_choices %}
+                <option value="{{ label }}">
+                {% endfor %}
             </datalist>
 
-            <div class="col-12 d-flex align-items-center justify-content-end gap-3 pt-1 border-top flex-wrap">
+
+            <div
+                class="col-12 d-flex align-items-center justify-content-end gap-3 pt-1 border-top flex-wrap"
+            >
+
                 {% if pode_atribuir_lote %}
                 <div class="form-check form-switch mb-0 me-auto">
-                    <input type="checkbox" name="mostrar_inativas" value="1" class="form-check-input" id="mostrarInativas" {% if mostrar_inativas %}checked{% endif %}>
-                    <label class="form-check-label text-secondary" for="mostrarInativas" style="font-size:0.8rem;">
+                    <input
+                        type="checkbox"
+                        name="mostrar_inativas"
+                        value="1"
+                        class="form-check-input"
+                        id="mostrarInativas"
+                        {% if mostrar_inativas %}checked{% endif %}
+                    >
+
+                    <label
+                        class="form-check-label text-secondary"
+                        for="mostrarInativas"
+                        style="font-size:0.8rem;"
+                    >
                         Mostrar apenas inativas
                     </label>
                 </div>
                 {% endif %}
 
+
                 {% if pode_atribuir_lote %}
-                <a href="{% url 'organizar_lotes_geral' %}" class="btn btn-outline-primary btn-sm px-3">
-                    <i class="bi bi-collection me-1"></i> Criar Lote
+                <a
+                    href="{% url 'organizar_lotes_geral' %}"
+                    class="btn btn-outline-primary btn-sm px-3"
+                >
+                    <i class="bi bi-collection me-1"></i>
+                    Criar Lote
                 </a>
                 {% endif %}
 
+
                 {% if tem_filtro %}
-                <a href="{% url 'imagens_lista' %}" class="btn btn-outline-secondary btn-sm px-3">
-                    <i class="bi bi-x me-1"></i> Limpar
+                <a
+                    href="{% url 'imagens_lista' %}"
+                    class="btn btn-outline-secondary btn-sm px-3"
+                >
+                    <i class="bi bi-x me-1"></i>
+                    Limpar
                 </a>
                 {% endif %}
-                <button type="submit" class="btn btn-primary btn-sm px-4">
-                    <i class="bi bi-funnel me-1"></i> Aplicar filtros
+
+
+                <button
+                    type="submit"
+                    class="btn btn-primary btn-sm px-4"
+                >
+                    <i class="bi bi-funnel me-1"></i>
+                    Aplicar filtros
                 </button>
+
             </div>
 
         </form>
+
     </div>
 </div>
 
+
 {# ---- Tabela ---- #}
+
+<style>
+    /* ============================================================
+       TABELA DE IMAGENS — ORGANIZAÇÃO VISUAL
+       Identificação → Fluxo → Operação
+       ============================================================ */
+
+    .dito-tabela-imagens {
+        width: 100%;
+        min-width: 1380px;
+        table-layout: fixed;
+        font-size: 0.8rem;
+    }
+
+    .dito-tabela-imagens thead th {
+        padding: 0.78rem 0.65rem;
+        background: #FAF8F4;
+        color: #4F5963;
+        border-bottom: 1px solid #D8D3C9;
+        font-size: 0.68rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.045em;
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+
+    .dito-tabela-imagens thead th {
+        position: relative;
+    }
+
+    .dito-tabela-imagens thead th:not(:first-child)::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 24%;
+        bottom: 24%;
+        width: 1px;
+        background: #E3DED6;
+    }
+
+    .dito-tabela-imagens tbody td {
+        padding: 0.78rem 0.65rem;
+        vertical-align: middle;
+        border-bottom-color: #E4E0D8;
+        background: #FFFFFF;
+    }
+
+    .dito-tabela-imagens tbody tr {
+        transition: background-color 0.15s ease-in-out;
+    }
+
+    .dito-tabela-imagens tbody tr:hover td {
+        background: #FCFAF5;
+    }
+
+    .dito-tabela-imagens tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+
+    /* ------------------------------------------------------------
+       Largura e alinhamento das colunas
+       ------------------------------------------------------------ */
+
+    .dito-tabela-imagens .col-retranca,
+    .dito-tabela-imagens .col-projeto,
+    .dito-tabela-imagens .col-obra,
+    .dito-tabela-imagens .col-status,
+    .dito-tabela-imagens .col-responsaveis,
+    .dito-tabela-imagens .col-pagamentos,
+    .dito-tabela-imagens .col-arquivos,
+    .dito-tabela-imagens .col-datas,
+    .dito-tabela-imagens .col-acoes {
+        text-align: center;
+    }
+
+    /* ------------------------------------------------------------
+       Identificação
+       ------------------------------------------------------------ */
+
+    .dito-tabela-imagens .dito-retranca {
+        display: inline-block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    .dito-organizacao-bloco,
+    .dito-editorial-bloco {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.24rem;
+        max-width: 100%;
+        text-align: left;
+    }
+
+    .dito-info-linha {
+        display: flex;
+        align-items: baseline;
+        gap: 0.28rem;
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    .dito-info-rotulo {
+        flex: 0 0 auto;
+        color: #7A8188;
+        font-size: 0.69rem;
+        font-weight: 700;
+    }
+
+    .dito-info-valor {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #40474E;
+        font-size: 0.76rem;
+        font-weight: 600;
+    }
+
+    .dito-organizacao-bloco .dito-info-valor {
+        color: #1B3A5C;
+    }
+
+    .dito-info-valor-secundario {
+        color: #5F6871;
+        font-weight: 500;
+    }
+
+
+    /* ------------------------------------------------------------
+       Fluxo
+       ------------------------------------------------------------ */
+
+    .dito-status-celula {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 32px;
+    }
+
+    .dito-status-celula .dito-status {
+        max-width: 100%;
+        white-space: normal;
+        text-align: center;
+        line-height: 1.2;
+    }
+
+    .dito-responsaveis-bloco {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .dito-responsavel-linha {
+        display: grid;
+        grid-template-columns: 52px minmax(0, 1fr);
+        gap: 0.35rem;
+        align-items: baseline;
+        justify-content: center;
+        min-width: 0;
+        text-align: left;
+    }
+
+    .dito-responsavel-linha .rotulo {
+        color: #7A8188;
+        font-size: 0.7rem;
+        font-weight: 700;
+    }
+
+    .dito-responsavel-linha .valor {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #40474E;
+        font-size: 0.76rem;
+    }
+
+
+    /* ------------------------------------------------------------
+       Pagamentos
+       ------------------------------------------------------------ */
+
+    .dito-pagamentos-celula {
+        display: inline-flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        min-width: 160px;
+    }
+
+    .dito-pagamento-linha {
+        display: grid;
+        grid-template-columns: 34px 122px;
+        gap: 0.45rem;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .dito-pagamento-rotulo {
+        color: #7A8188;
+        font-size: 0.66rem;
+        font-weight: 800;
+        text-align: right;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .dito-pagamento-linha form {
+        margin: 0;
+    }
+
+    .dito-pagamento-linha .form-select {
+        width: 122px;
+        min-width: 122px;
+        min-height: 30px;
+        padding-top: 0.2rem;
+        padding-bottom: 0.2rem;
+        font-size: 0.72rem;
+    }
+
+    .dito-pagamento-pago {
+        color: #286844 !important;
+        border-color: #A8CEB7 !important;
+        background-color: #F2FAF5 !important;
+    }
+
+
+    /* ------------------------------------------------------------
+       Arquivos, datas e ações
+       ------------------------------------------------------------ */
+
+    .dito-arquivos-celula,
+    .dito-datas-celula {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.3rem;
+    }
+
+    .dito-arquivos-celula .btn,
+    .dito-datas-celula .btn {
+        width: 31px;
+        height: 31px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+    }
+
+    .dito-acoes-celula {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.45rem;
+    }
+
+    .dito-acoes-botoes {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.3rem;
+    }
+
+    .dito-acoes-botoes .btn {
+        width: 31px;
+        height: 31px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+    }
+
+
+    @media (max-width: 1400px) {
+        .dito-tabela-imagens {
+            min-width: 1320px;
+        }
+    }
+</style>
+
+
 <div class="card dito-card-flush">
+
     <div class="card-body p-0">
+
         {% if imagens %}
+
         <div class="table-responsive">
-            <table class="table table-sm mb-0 dito-tabela">
+
+            <table class="table table-sm mb-0 dito-tabela dito-tabela-imagens align-middle">
+
+                <colgroup>
+                    <col style="width:12%;">
+                    <col style="width:13%;">
+                    <col style="width:12%;">
+                    <col style="width:12%;">
+                    <col style="width:13%;">
+                    <col style="width:14%;">
+                    <col style="width:7%;">
+                    <col style="width:6%;">
+                    <col style="width:11%;">
+                </colgroup>
+
                 <thead>
                     <tr>
-                        <th>Retranca</th>
-                        <th>Obra/Comp.</th>
-                        <th>Responsáveis</th>
-                        <th>Arquivos</th>
-                        <th>Status</th>
-                        <th>Pagamento Desc.</th>
-                        <th>Pagamento Rev.</th>
-                        <th>Datas</th>
-                        <th>Ações</th>
+                        <th class="col-retranca">
+                            Retranca
+                        </th>
+
+                        <th class="col-projeto">
+                            Organização
+                        </th>
+
+                        <th class="col-obra">
+                            Dados editoriais
+                        </th>
+
+                        <th class="col-status">
+                            Status
+                        </th>
+
+                        <th class="col-responsaveis">
+                            Responsáveis
+                        </th>
+
+                        <th class="col-pagamentos">
+                            Pagamentos
+                        </th>
+
+                        <th class="col-arquivos">
+                            Arquivos
+                        </th>
+
+                        <th class="col-datas">
+                            Datas
+                        </th>
+
+                        <th class="col-acoes">
+                            Ações
+                        </th>
                     </tr>
                 </thead>
-                </thead>
+
+
                 <tbody>
+
                     {% for img in imagens %}
+
                     <tr>
-                        <td>
-                            <a href="{% url 'descricao_imagem' img.pk %}" class="dito-retranca" style="text-decoration:none;">
+
+                        {# IDENTIFICAÇÃO #}
+
+                        <td class="col-retranca">
+
+                            <a
+                                href="{% url 'descricao_imagem' img.pk %}"
+                                class="dito-retranca"
+                                title="{{ img.retranca }}"
+                                style="text-decoration:none;"
+                            >
                                 {{ img.retranca }}
                             </a>
+
                         </td>
 
-                        <td>
-                            <div class="dito-celula-dupla">
-                                <span class="principal" title="{{ img.nome_obra }}">{{ img.nome_obra|default:"—" }}</span>
-                                <span class="secundaria" title="{{ img.componente_curricular }}">{{ img.componente_curricular|default:"—" }}</span>
-                            </div>
-                        </td>
 
-                        <td>
-                            <div class="dito-celula-dupla">
-                                <span class="dito-responsavel-linha">
-                                    <span class="rotulo">Descritor:</span>
-                                    {% if img.descricao.descritor %}{{ img.descricao.descritor.get_full_name|default:img.descricao.descritor.email }}{% else %}—{% endif %}
-                                </span>
-                                <span class="dito-responsavel-linha">
-                                    <span class="rotulo">Revisor:</span>
-                                    {% if img.descricao.revisor %}{{ img.descricao.revisor.get_full_name|default:img.descricao.revisor.email }}{% else %}—{% endif %}
-                                </span>
-                            </div>
-                        </td>
+                        <td class="col-projeto">
 
-                        <td>
-                            {% if img.link_fotoweb %}
-                            <a href="{{ img.link_fotoweb }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary dito-btn-acao" title="Ver imagem no FotoWeb">
-                                <i class="bi bi-image"></i>
-                            </a>
-                            {% else %}
-                            <span class="btn btn-sm btn-outline-secondary disabled"><i class="bi bi-image"></i></span>
-                            {% endif %}
-                            {% if img.url_pdf %}
-                            <a href="{{ img.url_pdf }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary dito-btn-acao" title="Ver PDF">
-                                <i class="bi bi-file-earmark-pdf"></i>
-                            </a>
-                            {% else %}
-                            <span class="btn btn-sm btn-outline-secondary disabled"><i class="bi bi-file-earmark-pdf"></i></span>
-                            {% endif %}
-                        </td>
+                            <div class="dito-organizacao-bloco">
 
-                        <td>
-                            <span class="dito-status dito-status-{{ img.status.slug }}">{{ img.status.nome }}</span>
-                        </td>
+                                <div class="dito-info-linha">
 
-                        <td>
-                            {% if pode_atribuir_lote %}
-                            <form method="post" action="{% url 'atualizar_pagamento' img.pk %}" class="d-inline">
-                                {% csrf_token %}
-                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                <input type="hidden" name="tipo" value="descritor">
-                                <select name="status_pagamento" class="form-select form-select-sm" onchange="this.form.submit()">
-                                    <option value="contabilizado" {% if img.pagamento_descritor == "contabilizado" %}selected{% endif %}>Contabilizado</option>
-                                    <option value="pago" {% if img.pagamento_descritor == "pago" %}selected{% endif %}>Pago</option>
-                                </select>
-                            </form>
-                            {% else %}
-                            <span class="dito-status {% if img.pagamento_descritor == 'pago' %}dito-status-finalizado{% else %}dito-status-revisando{% endif %}">
-                                {{ img.get_pagamento_descritor_display }}
-                            </span>
-                            {% endif %}
-                        </td>
+                                    <span class="dito-info-rotulo">
+                                        Projeto:
+                                    </span>
 
-                        <td>
-                            {% if pode_atribuir_lote %}
-                            <form method="post" action="{% url 'atualizar_pagamento' img.pk %}" class="d-inline">
-                                {% csrf_token %}
-                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                <input type="hidden" name="tipo" value="revisor">
-                                <select name="status_pagamento" class="form-select form-select-sm" onchange="this.form.submit()">
-                                    <option value="contabilizado" {% if img.pagamento_revisor == "contabilizado" %}selected{% endif %}>Contabilizado</option>
-                                    <option value="pago" {% if img.pagamento_revisor == "pago" %}selected{% endif %}>Pago</option>
-                                </select>
-                            </form>
-                            {% else %}
-                            <span class="dito-status {% if img.pagamento_revisor == 'pago' %}dito-status-finalizado{% else %}dito-status-revisando{% endif %}">
-                                {{ img.get_pagamento_revisor_display }}
-                            </span>
-                            {% endif %}
-                        </td>
+                                    <span
+                                        class="dito-info-valor"
+                                        title="{% if img.projeto %}{{ img.projeto.nome }}{% endif %}"
+                                    >
+                                        {% if img.projeto %}
+                                            {{ img.projeto.nome }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </span>
 
-                        <td class="position-relative">
-                            <button type="button" class="btn btn-sm btn-outline-secondary dito-datas-btn dito-btn-acao" data-target="datas-{{ img.pk }}" title="Ver datas">
-                                <i class="bi bi-clock-history"></i>
-                            </button>
-                            <div id="datas-{{ img.pk }}" class="dito-datas-popover">
-                                <div class="dito-datas-popover-item"><span>Início Desc.</span><strong>{{ img.descricao.inicio_descricao|date:"d/m/Y H:i"|default:"—" }}</strong></div>
-                                <div class="dito-datas-popover-item"><span>Entregue Desc.</span><strong>{{ img.descricao.fim_descricao|date:"d/m/Y H:i"|default:"—" }}</strong></div>
-                                <div class="dito-datas-popover-item"><span>Início Rev.</span><strong>{{ img.descricao.inicio_conferencia|date:"d/m/Y H:i"|default:"—" }}</strong></div>
-                                <div class="dito-datas-popover-item"><span>Entregue Rev.</span><strong>{{ img.descricao.fim_conferencia|date:"d/m/Y H:i"|default:"—" }}</strong></div>
-                                <div class="dito-datas-popover-item"><span>Data Final</span><strong>{{ img.prazo|date:"d/m/Y"|default:"—" }}</strong></div>
-                            </div>
-                        </td>
+                                </div>
 
-                        <td>
-                            {% if request.user.tipo == 'coordenador' or request.user.tipo == 'administrador' %}
-                            <div class="dito-acoes-celula">
 
-                                {% if img.status.slug == 'liberado-descricao' %}
-                                <form method="post" action="{% url 'atribuir_descritor' img.pk %}" id="formAtribuir{{ img.pk }}">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <select name="descritor_id" class="form-select form-select-sm" required>
-                                        <option value="">Descritor...</option>
-                                        {% for d in descritores %}<option value="{{ d.pk }}">{{ d.get_full_name|default:d.email }}</option>{% endfor %}
-                                    </select>
-                                </form>
+                                <div class="dito-info-linha">
 
-                                {% elif img.status.slug == 'descrito' %}
-                                <form method="post" action="{% url 'liberar_conferencia' img.pk %}" id="formAtribuir{{ img.pk }}">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <select name="revisor_id" class="form-select form-select-sm" required>
-                                        <option value="">Revisor...</option>
-                                        {% for r in revisores %}<option value="{{ r.pk }}">{{ r.get_full_name|default:r.email }}</option>{% endfor %}
-                                    </select>
-                                </form>
-                                {% endif %}
+                                    <span class="dito-info-rotulo">
+                                        Lote:
+                                    </span>
 
-                                <div class="dito-acoes-botoes">
-                                    {% if img.status.slug == 'liberado-descricao' %}
-                                    <button type="submit" form="formAtribuir{{ img.pk }}" class="btn btn-sm btn-primary" title="Atribuir descritor">
-                                        <i class="bi bi-person-check"></i>
-                                    </button>
-                                    {% elif img.status.slug == 'descrito' %}
-                                    <button type="submit" form="formAtribuir{{ img.pk }}" class="btn btn-sm btn-primary" title="Liberar para revisor">
-                                        <i class="bi bi-send-check"></i>
-                                    </button>
-                                    {% endif %}
+                                    <span
+                                        class="dito-info-valor dito-info-valor-secundario"
+                                        title="{% if img.lote %}{{ img.lote.nome }}{% else %}Avulsa{% endif %}"
+                                    >
+                                        {% if img.lote %}
+                                            {{ img.lote.nome }}
+                                        {% else %}
+                                            Avulsa
+                                        {% endif %}
+                                    </span>
 
-                                    <a href="{% url 'imagem_editar' img.pk %}" class="btn btn-sm btn-outline-secondary dito-btn-acao" title="Editar">
-                                        <i class="bi bi-pencil"></i>
-                                    </a>
-                                    <a href="{% url 'imagem_excluir' img.pk %}" class="btn btn-sm btn-outline-danger" title="Excluir">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
                                 </div>
 
                             </div>
-                            {% endif %}
+
                         </td>
+
+
+                        <td class="col-obra">
+
+                            <div class="dito-editorial-bloco">
+
+                                <div class="dito-info-linha">
+
+                                    <span class="dito-info-rotulo">
+                                        Obra:
+                                    </span>
+
+                                    <span
+                                        class="dito-info-valor"
+                                        title="{{ img.nome_obra }}"
+                                    >
+                                        {{ img.nome_obra|default:"—" }}
+                                    </span>
+
+                                </div>
+
+
+                                <div class="dito-info-linha">
+
+                                    <span class="dito-info-rotulo">
+                                        Comp.:
+                                    </span>
+
+                                    <span
+                                        class="dito-info-valor dito-info-valor-secundario"
+                                        title="{{ img.componente_curricular }}"
+                                    >
+                                        {{ img.componente_curricular|default:"—" }}
+                                    </span>
+
+                                </div>
+
+                            </div>
+
+                        </td>
+
+
+                        {# FLUXO #}
+
+                        <td class="col-status">
+
+                            <div class="dito-status-celula">
+
+                                <span
+                                    class="dito-status dito-status-{{ img.status.slug }}"
+                                >
+                                    {{ img.status.nome }}
+                                </span>
+
+                            </div>
+
+                        </td>
+
+
+                        <td class="col-responsaveis">
+
+                            <div class="dito-responsaveis-bloco">
+
+                                <span class="dito-responsavel-linha">
+
+                                    <span class="rotulo">
+                                        Descritor
+                                    </span>
+
+                                    <span
+                                        class="valor"
+                                        title="{% if img.descricao.descritor %}{{ img.descricao.descritor.get_full_name|default:img.descricao.descritor.email }}{% endif %}"
+                                    >
+                                        {% if img.descricao.descritor %}
+                                            {{ img.descricao.descritor.get_full_name|default:img.descricao.descritor.email }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </span>
+
+                                </span>
+
+
+                                <span class="dito-responsavel-linha">
+
+                                    <span class="rotulo">
+                                        Revisor
+                                    </span>
+
+                                    <span
+                                        class="valor"
+                                        title="{% if img.descricao.revisor %}{{ img.descricao.revisor.get_full_name|default:img.descricao.revisor.email }}{% endif %}"
+                                    >
+                                        {% if img.descricao.revisor %}
+                                            {{ img.descricao.revisor.get_full_name|default:img.descricao.revisor.email }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </span>
+
+                                </span>
+
+                            </div>
+
+                        </td>
+
+
+                        {# OPERAÇÃO #}
+
+                        <td class="col-pagamentos">
+
+                            <div class="dito-pagamentos-celula">
+
+                                <div class="dito-pagamento-linha">
+
+                                    <span class="dito-pagamento-rotulo">
+                                        Desc.
+                                    </span>
+
+                                    {% if pode_atribuir_lote %}
+
+                                    <form
+                                        method="post"
+                                        action="{% url 'atualizar_pagamento' img.pk %}"
+                                    >
+                                        {% csrf_token %}
+
+                                        <input
+                                            type="hidden"
+                                            name="next"
+                                            value="{{ request.get_full_path }}"
+                                        >
+
+                                        <input
+                                            type="hidden"
+                                            name="tipo"
+                                            value="descritor"
+                                        >
+
+                                        <select
+                                            name="status_pagamento"
+                                            class="form-select form-select-sm {% if img.pagamento_descritor == 'pago' %}dito-pagamento-pago{% endif %}"
+                                            onchange="this.form.submit()"
+                                            aria-label="Pagamento do descritor"
+                                        >
+
+                                            <option
+                                                value="contabilizado"
+                                                {% if img.pagamento_descritor == "contabilizado" %}selected{% endif %}
+                                            >
+                                                Contabilizado
+                                            </option>
+
+                                            <option
+                                                value="pago"
+                                                {% if img.pagamento_descritor == "pago" %}selected{% endif %}
+                                            >
+                                                Pago
+                                            </option>
+
+                                        </select>
+
+                                    </form>
+
+                                    {% else %}
+
+                                    <span
+                                        class="dito-status {% if img.pagamento_descritor == 'pago' %}dito-status-finalizado{% else %}dito-status-revisando{% endif %}"
+                                    >
+                                        {{ img.get_pagamento_descritor_display }}
+                                    </span>
+
+                                    {% endif %}
+
+                                </div>
+
+
+                                <div class="dito-pagamento-linha">
+
+                                    <span class="dito-pagamento-rotulo">
+                                        Rev.
+                                    </span>
+
+                                    {% if pode_atribuir_lote %}
+
+                                    <form
+                                        method="post"
+                                        action="{% url 'atualizar_pagamento' img.pk %}"
+                                    >
+                                        {% csrf_token %}
+
+                                        <input
+                                            type="hidden"
+                                            name="next"
+                                            value="{{ request.get_full_path }}"
+                                        >
+
+                                        <input
+                                            type="hidden"
+                                            name="tipo"
+                                            value="revisor"
+                                        >
+
+                                        <select
+                                            name="status_pagamento"
+                                            class="form-select form-select-sm {% if img.pagamento_revisor == 'pago' %}dito-pagamento-pago{% endif %}"
+                                            onchange="this.form.submit()"
+                                            aria-label="Pagamento do revisor"
+                                        >
+
+                                            <option
+                                                value="contabilizado"
+                                                {% if img.pagamento_revisor == "contabilizado" %}selected{% endif %}
+                                            >
+                                                Contabilizado
+                                            </option>
+
+                                            <option
+                                                value="pago"
+                                                {% if img.pagamento_revisor == "pago" %}selected{% endif %}
+                                            >
+                                                Pago
+                                            </option>
+
+                                        </select>
+
+                                    </form>
+
+                                    {% else %}
+
+                                    <span
+                                        class="dito-status {% if img.pagamento_revisor == 'pago' %}dito-status-finalizado{% else %}dito-status-revisando{% endif %}"
+                                    >
+                                        {{ img.get_pagamento_revisor_display }}
+                                    </span>
+
+                                    {% endif %}
+
+                                </div>
+
+                            </div>
+
+                        </td>
+
+
+                        <td class="col-arquivos">
+
+                            <div class="dito-arquivos-celula">
+
+                                {% if img.url_fotoweb %}
+
+                                <a
+                                    href="{{ img.url_fotoweb }}"
+                                    target="_blank"
+                                    rel="noopener"
+                                    class="btn btn-sm btn-outline-secondary dito-btn-acao"
+                                    title="Ver imagem no FotoWeb"
+                                >
+                                    <i class="bi bi-image"></i>
+                                </a>
+
+                                {% else %}
+
+                                <span
+                                    class="btn btn-sm btn-outline-secondary disabled"
+                                    title="Imagem indisponível"
+                                >
+                                    <i class="bi bi-image"></i>
+                                </span>
+
+                                {% endif %}
+
+
+                                {% if img.url_pdf %}
+
+                                <a
+                                    href="{% url 'abrir_pdf_rede' img.pk %}"
+                                    target="_blank"
+                                    rel="noopener"
+                                    class="btn btn-sm btn-outline-secondary dito-btn-acao"
+                                    title="Abrir PDF da rede"
+                                >
+                                    <i class="bi bi-file-earmark-pdf"></i>
+                                </a>
+
+                                {% else %}
+
+                                <span
+                                    class="btn btn-sm btn-outline-secondary disabled"
+                                    title="PDF indisponível"
+                                >
+                                    <i class="bi bi-file-earmark-pdf"></i>
+                                </span>
+
+                                {% endif %}
+
+                            </div>
+
+                        </td>
+
+
+                        <td class="col-datas position-relative">
+
+                            <div class="dito-datas-celula">
+
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline-secondary dito-datas-btn dito-btn-acao"
+                                    data-target="datas-{{ img.pk }}"
+                                    title="Ver datas"
+                                >
+                                    <i class="bi bi-clock-history"></i>
+                                </button>
+
+
+                                <div
+                                    id="datas-{{ img.pk }}"
+                                    class="dito-datas-popover"
+                                >
+
+                                    <div class="dito-datas-popover-item">
+                                        <span>Início Desc.</span>
+                                        <strong>{{ img.descricao.inicio_descricao|date:"d/m/Y H:i"|default:"—" }}</strong>
+                                    </div>
+
+                                    <div class="dito-datas-popover-item">
+                                        <span>Entregue Desc.</span>
+                                        <strong>{{ img.descricao.fim_descricao|date:"d/m/Y H:i"|default:"—" }}</strong>
+                                    </div>
+
+                                    <div class="dito-datas-popover-item">
+                                        <span>Início Rev.</span>
+                                        <strong>{{ img.descricao.inicio_conferencia|date:"d/m/Y H:i"|default:"—" }}</strong>
+                                    </div>
+
+                                    <div class="dito-datas-popover-item">
+                                        <span>Entregue Rev.</span>
+                                        <strong>{{ img.descricao.fim_conferencia|date:"d/m/Y H:i"|default:"—" }}</strong>
+                                    </div>
+
+                                    <div class="dito-datas-popover-item">
+                                        <span>Data Final</span>
+                                        <strong>{{ img.prazo|date:"d/m/Y"|default:"—" }}</strong>
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </td>
+
+
+                        <td class="col-acoes">
+
+                            {% if request.user.tipo == 'coordenador' or request.user.tipo == 'administrador' %}
+
+                            <div class="dito-acoes-celula">
+
+                                <div class="dito-acoes-botoes">
+
+                                    <a
+                                        href="{% url 'imagem_editar' img.pk %}"
+                                        class="btn btn-sm btn-outline-secondary dito-btn-acao"
+                                        title="Editar imagem"
+                                    >
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+
+
+                                    <a
+                                        href="{% url 'imagem_excluir' img.pk %}"
+                                        class="btn btn-sm btn-outline-danger"
+                                        title="Excluir imagem"
+                                    >
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+
+                                </div>
+
+                            </div>
+
+                            {% endif %}
+
+                        </td>
+
                     </tr>
+
                     {% endfor %}
+
                 </tbody>
+
             </table>
+
         </div>
+
+
         {% else %}
+
         <div class="dito-empty-state py-5">
+
             <i class="bi bi-images"></i>
-            <p>Nenhuma imagem encontrada com os filtros aplicados.</p>
+
+            <p>
+                Nenhuma imagem encontrada com os filtros aplicados.
+            </p>
+
         </div>
+
         {% endif %}
+
     </div>
+
 
     {% if pagina_obj.has_other_pages %}
-    <div class="d-flex align-items-center justify-content-between px-3 py-2 border-top" style="font-size:0.875rem;">
-        <span class="text-secondary">
-            Página {{ pagina_obj.number }} de {{ pagina_obj.paginator.num_pages }} &nbsp;·&nbsp; {{ total }} imagem{{ total|pluralize }}
-        </span>
+
+    <div
+        class="d-flex align-items-center justify-content-between px-3 py-2 border-top"
+        style="font-size:0.875rem;"
+    >
+
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+
+            <span class="text-secondary">
+                Página {{ pagina_obj.number }} de {{ pagina_obj.paginator.num_pages }}
+                &nbsp;·&nbsp;
+                {{ total }} imagem{{ total|pluralize }}
+            </span>
+
+
+            <div class="d-flex align-items-center gap-2">
+
+                <label
+                    for="selectPorPagina"
+                    class="text-secondary mb-0"
+                    style="
+                        font-size:0.78rem;
+                        white-space:nowrap;
+                    "
+                >
+                    Exibir
+                </label>
+
+                <select
+                    id="selectPorPagina"
+                    class="form-select form-select-sm"
+                    style="
+                        width:auto;
+                        min-width:88px;
+                    "
+                    aria-label="Quantidade de imagens por página"
+                >
+                    {% for opcao in por_pagina_opcoes %}
+                    <option
+                        value="{{ opcao }}"
+                        {% if opcao == por_pagina %}selected{% endif %}
+                    >
+                        {{ opcao }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <span
+                    class="text-secondary"
+                    style="
+                        font-size:0.78rem;
+                        white-space:nowrap;
+                    "
+                >
+                    por página
+                </span>
+
+            </div>
+
+        </div>
+
+
         <div class="d-flex gap-1 align-items-center">
+
             {% if pagina_obj.has_previous %}
-            <a href="?{{ qs_sem_pagina }}&pagina=1" class="btn btn-outline-secondary btn-sm" title="Primeira página"><i class="bi bi-chevron-double-left"></i></a>
-            <a href="?{{ qs_sem_pagina }}&pagina={{ pagina_obj.previous_page_number }}" class="btn btn-outline-secondary btn-sm" title="Anterior"><i class="bi bi-chevron-left"></i></a>
+
+            <a
+                href="?{{ qs_sem_pagina }}&pagina=1"
+                class="btn btn-outline-secondary btn-sm"
+                title="Primeira página"
+            >
+                <i class="bi bi-chevron-double-left"></i>
+            </a>
+
+            <a
+                href="?{{ qs_sem_pagina }}&pagina={{ pagina_obj.previous_page_number }}"
+                class="btn btn-outline-secondary btn-sm"
+                title="Anterior"
+            >
+                <i class="bi bi-chevron-left"></i>
+            </a>
+
             {% endif %}
+
 
             {% for num in pagina_obj.paginator.page_range %}
+
                 {% if pagina_obj.number == num %}
-                <button class="btn btn-primary btn-sm">{{ num }}</button>
+
+                <button class="btn btn-primary btn-sm">
+                    {{ num }}
+                </button>
+
                 {% elif num > pagina_obj.number|add:"-3" and num < pagina_obj.number|add:"3" %}
-                <a href="?{{ qs_sem_pagina }}&pagina={{ num }}" class="btn btn-outline-secondary btn-sm">{{ num }}</a>
+
+                <a
+                    href="?{{ qs_sem_pagina }}&pagina={{ num }}"
+                    class="btn btn-outline-secondary btn-sm"
+                >
+                    {{ num }}
+                </a>
+
                 {% endif %}
+
             {% endfor %}
 
+
             {% if pagina_obj.has_next %}
-            <a href="?{{ qs_sem_pagina }}&pagina={{ pagina_obj.next_page_number }}" class="btn btn-outline-secondary btn-sm" title="Próxima"><i class="bi bi-chevron-right"></i></a>
-            <a href="?{{ qs_sem_pagina }}&pagina={{ pagina_obj.paginator.num_pages }}" class="btn btn-outline-secondary btn-sm" title="Última"><i class="bi bi-chevron-double-right"></i></a>
+
+            <a
+                href="?{{ qs_sem_pagina }}&pagina={{ pagina_obj.next_page_number }}"
+                class="btn btn-outline-secondary btn-sm"
+                title="Próxima"
+            >
+                <i class="bi bi-chevron-right"></i>
+            </a>
+
+            <a
+                href="?{{ qs_sem_pagina }}&pagina={{ pagina_obj.paginator.num_pages }}"
+                class="btn btn-outline-secondary btn-sm"
+                title="Última página"
+            >
+                <i class="bi bi-chevron-double-right"></i>
+            </a>
+
             {% endif %}
+
         </div>
+
     </div>
+
     {% endif %}
+
 </div>
 
 <script>
@@ -391,26 +1354,6 @@ document.getElementById("toggleFiltrosAvancados")?.addEventListener("click", fun
     icone.classList.toggle("bi-chevron-up", !aberto);
 });
 
-var inputLote = document.getElementById("inputLote");
-var btnEditarLote = document.getElementById("btnEditarLote");
-var lotesMapa = {
-    {% for l in lotes %}"{{ l.nome|escapejs }}": {{ l.pk }}{% if not forloop.last %},{% endif %}{% endfor %}
-};
-
-function ditoAtualizarBtnEditarLote() {
-    if (!inputLote || !btnEditarLote) return;
-    var id = lotesMapa[inputLote.value.trim()];
-    if (id) {
-        btnEditarLote.href = btnEditarLote.getAttribute("data-url-template").replace("0", id);
-        btnEditarLote.style.display = "inline";
-    } else {
-        btnEditarLote.style.display = "none";
-    }
-}
-
-inputLote?.addEventListener("input", ditoAtualizarBtnEditarLote);
-ditoAtualizarBtnEditarLote();
-
 // Abre a lista de opções (datalist) assim que o campo recebe o clique
 document.querySelectorAll("#formFiltros input[list]").forEach(function (campo) {
     campo.addEventListener("click", function () {
@@ -420,6 +1363,25 @@ document.querySelectorAll("#formFiltros input[list]").forEach(function (campo) {
             // Navegadores sem suporte ignoram silenciosamente (a lista ainda abre ao digitar)
         }
     });
+});
+
+var selectPorPagina = document.getElementById("selectPorPagina");
+
+selectPorPagina?.addEventListener("change", function () {
+    var url = new URL(window.location.href);
+
+    url.searchParams.set(
+        "por_pagina",
+        this.value
+    );
+
+    // Ao alterar a quantidade, volta para a primeira página.
+    url.searchParams.set(
+        "pagina",
+        "1"
+    );
+
+    window.location.href = url.toString();
 });
 </script>
 

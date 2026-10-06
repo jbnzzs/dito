@@ -1,58 +1,910 @@
 {% extends "base.html" %}
+
 {% block title %}Relatórios — Dito!{% endblock %}
 {% block page_title %}Relatórios{% endblock %}
 {% block nav_relatorios %}active{% endblock %}
 
 {% block content %}
 
+{% if messages %}
+    {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }} mb-3">
+        {{ msg }}
+    </div>
+    {% endfor %}
+{% endif %}
+
+
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+
     <div>
-        <h2 class="mb-1">Relatórios</h2>
-        <p class="text-secondary mb-0" style="font-size:0.875rem;">
-            {{ total }} imagem{{ total|pluralize }} com descrição finalizada
+        <h2 class="mb-1">Relatório geral</h2>
+
+        <p
+            class="text-secondary mb-0"
+            style="font-size:0.875rem;"
+        >
+            Filtre as imagens e exporte exatamente o resultado exibido.
         </p>
     </div>
-    <a href="{% url 'relatorios_exportar' %}?obra={{ obra_selecionada }}&lote={{ lote_selecionado }}"
-       class="btn btn-primary">
-        <i class="bi bi-download me-1"></i> Exportar .xlsx
-    </a>
-</div>
 
-<div class="card dito-card-flush mb-3">
-    <div class="card-body py-3 px-3">
-        <form method="get" class="d-flex align-items-center gap-3 flex-wrap">
-            <select name="obra" class="form-select form-select-sm" style="max-width:220px;" onchange="this.form.submit()">
-                <option value="">Todas as obras</option>
-                {% for obra in obras %}
-                <option value="{{ obra }}" {% if obra == obra_selecionada %}selected{% endif %}>{{ obra }}</option>
-                {% endfor %}
-            </select>
 
-            <select name="lote" class="form-select form-select-sm" style="max-width:220px;" onchange="this.form.submit()">
-                <option value="">Todos os lotes</option>
-                {% for lote in lotes %}
-                <option value="{{ lote.pk }}" {% if lote.pk|stringformat:"s" == lote_selecionado %}selected{% endif %}>{{ lote.nome }}</option>
-                {% endfor %}
-            </select>
-        </form>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+
+        <a
+            href="{% url 'relatorios_exportar' %}{% if filtros_query %}?{{ filtros_query }}{% endif %}"
+            class="btn btn-primary"
+        >
+            <i class="bi bi-file-earmark-excel me-1"></i>
+            Exportar relatório Dito
+        </a>
+
+        <a
+            href="{% url 'relatorios_exportar_fotoweb' %}{% if filtros_query %}?{{ filtros_query }}{% endif %}"
+            class="btn btn-outline-primary"
+        >
+            <i class="bi bi-file-earmark-arrow-down me-1"></i>
+            Exportar para FotoWeb
+        </a>
+
     </div>
+
 </div>
 
-<div class="card">
+
+{# RESUMO #}
+<div class="row g-3 mb-4">
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body py-3">
+
+                <div
+                    class="text-secondary mb-1"
+                    style="
+                        font-family:'Manrope', sans-serif;
+                        font-size:0.72rem;
+                        text-transform:uppercase;
+                        letter-spacing:0.05em;
+                        font-weight:700;
+                    "
+                >
+                    Resultado
+                </div>
+
+                <div
+                    class="fw-bold"
+                    style="
+                        font-family:'Lora', serif;
+                        font-size:1.6rem;
+                        font-weight:700;
+                        color:var(--dito-vinho-escuro);
+                    "
+                >
+                    {{ total }}
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body py-3">
+
+                <div
+                    class="text-secondary mb-1"
+                    style="
+                        font-family:'Manrope', sans-serif;
+                        font-size:0.72rem;
+                        text-transform:uppercase;
+                        letter-spacing:0.05em;
+                        font-weight:700;
+                    "
+                >
+                    Em andamento
+                </div>
+
+                <div
+                    class="fw-bold"
+                    style="
+                        font-family:'Lora', serif;
+                        font-size:1.6rem;
+                        font-weight:700;
+                    "
+                >
+                    {{ em_andamento }}
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body py-3">
+
+                <div
+                    class="text-secondary mb-1"
+                    style="
+                        font-family:'Manrope', sans-serif;
+                        font-size:0.72rem;
+                        text-transform:uppercase;
+                        letter-spacing:0.05em;
+                        font-weight:700;
+                    "
+                >
+                    Finalizadas
+                </div>
+
+                <div
+                    class="fw-bold"
+                    style="
+                        font-family:'Lora', serif;
+                        font-size:1.6rem;
+                        font-weight:700;
+                        color:#2F7D4F;
+                    "
+                >
+                    {{ finalizadas }}
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+
+    <div class="col-sm-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body py-3">
+
+                <div
+                    class="text-secondary mb-1"
+                    style="
+                        font-family:'Manrope', sans-serif;
+                        font-size:0.72rem;
+                        text-transform:uppercase;
+                        letter-spacing:0.05em;
+                        font-weight:700;
+                    "
+                >
+                    Sem lote
+                </div>
+
+                <div
+                    class="fw-bold"
+                    style="
+                        font-family:'Lora', serif;
+                        font-size:1.6rem;
+                        font-weight:700;
+                    "
+                >
+                    {{ sem_lote }}
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+</div>
+
+
+{# FILTROS #}
+<div class="card mb-3">
+
     <div class="card-body">
-        <p class="mb-2" style="font-size:0.875rem;">
-            <strong>O que entra no relatório:</strong> só imagens cuja descrição já está
-            <span class="badge" style="background:#2F7D4F;">finalizada</span> — ou seja, passou
-            pelo fluxo completo (descrita, conferida e revisada). Enquanto o fluxo não terminar,
-            a imagem não aparece aqui.
-        </p>
-        <p class="mb-0 text-secondary" style="font-size:0.8rem;">
-            O arquivo exportado segue o mesmo formato de colunas usado pelo FotoWeb
-            (obra, componente, volume, capítulo, keywords, status, retranca, img_file,
-            descricao, usuario, etapa, retranca_lower, descricao_flat), pronto pra
-            reimportar no sistema de origem.
-        </p>
+
+        <div
+            class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2"
+        >
+
+            <div>
+
+                <div class="fw-bold">
+                    Filtros do relatório
+                </div>
+
+                <div
+                    class="text-secondary"
+                    style="font-size:0.78rem;"
+                >
+                    Os filtros podem ser combinados. A exportação respeita todos eles.
+                </div>
+
+            </div>
+
+
+            {% if filtros_ativos %}
+            <a
+                href="{% url 'relatorios_lista' %}"
+                class="btn btn-outline-secondary btn-sm"
+            >
+                <i class="bi bi-x-lg me-1"></i>
+                Limpar filtros
+            </a>
+            {% endif %}
+
+        </div>
+
+
+        <form method="get">
+
+            <div class="row g-3">
+
+                {# 1. RETRANCA #}
+                <div class="col-md-6 col-xl-3">
+
+                    <label
+                        for="filtro-retranca"
+                        class="form-label mb-1"
+                    >
+                        Retranca
+                    </label>
+
+                    <input
+                        id="filtro-retranca"
+                        type="search"
+                        name="retranca"
+                        value="{{ retranca_selecionada }}"
+                        class="form-control form-control-sm"
+                        placeholder="Digite a retranca..."
+                        autocomplete="off"
+                    >
+
+                </div>
+
+
+                {# 2. PROJETO #}
+                <div class="col-md-6 col-xl-3">
+
+                    <label
+                        for="filtro-projeto"
+                        class="form-label mb-1"
+                    >
+                        Projeto
+                    </label>
+
+                    <select
+                        id="filtro-projeto"
+                        name="projeto"
+                        class="form-select form-select-sm"
+                    >
+
+                        <option
+                            value=""
+                            disabled
+                            hidden
+                            {% if not projeto_selecionado %}selected{% endif %}
+                        >
+                            Filtrar por projeto...
+                        </option>
+
+                        <option
+                            value="sem_projeto"
+                            {% if projeto_selecionado == "sem_projeto" %}selected{% endif %}
+                        >
+                            Sem projeto
+                        </option>
+
+                        {% for projeto in projetos %}
+                        <option
+                            value="{{ projeto.pk }}"
+                            {% if projeto.pk|stringformat:"s" == projeto_selecionado %}selected{% endif %}
+                        >
+                            {{ projeto.nome }}
+                        </option>
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+
+                {# 3. OBRA #}
+                <div class="col-md-6 col-xl-3">
+
+                    <label
+                        for="filtro-obra"
+                        class="form-label mb-1"
+                    >
+                        Obra
+                    </label>
+
+                    <select
+                        id="filtro-obra"
+                        name="obra"
+                        class="form-select form-select-sm"
+                    >
+
+                        <option
+                            value=""
+                            disabled
+                            hidden
+                            {% if not obra_selecionada %}selected{% endif %}
+                        >
+                            Filtrar por obra...
+                        </option>
+
+                        {% for obra in obras %}
+                        <option
+                            value="{{ obra }}"
+                            {% if obra == obra_selecionada %}selected{% endif %}
+                        >
+                            {{ obra }}
+                        </option>
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+
+                {# 4. COMPONENTE #}
+                <div class="col-md-6 col-xl-3">
+
+                    <label
+                        for="filtro-componente"
+                        class="form-label mb-1"
+                    >
+                        Componente curricular
+                    </label>
+
+                    <select
+                        id="filtro-componente"
+                        name="componente"
+                        class="form-select form-select-sm"
+                    >
+
+                        <option
+                            value=""
+                            disabled
+                            hidden
+                            {% if not componente_selecionado %}selected{% endif %}
+                        >
+                            Filtrar por componente...
+                        </option>
+
+                        {% for componente in componentes %}
+                        <option
+                            value="{{ componente }}"
+                            {% if componente == componente_selecionado %}selected{% endif %}
+                        >
+                            {{ componente }}
+                        </option>
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+
+                {# 5. LOTE #}
+                <div class="col-md-6 col-xl-3">
+
+                    <label
+                        for="filtro-lote"
+                        class="form-label mb-1"
+                    >
+                        Lote
+                    </label>
+
+                    <select
+                        id="filtro-lote"
+                        name="lote"
+                        class="form-select form-select-sm"
+                    >
+
+                        <option
+                            value=""
+                            disabled
+                            hidden
+                            {% if not lote_selecionado %}selected{% endif %}
+                        >
+                            Filtrar por lote...
+                        </option>
+
+                        <option
+                            value="avulsas"
+                            {% if lote_selecionado == "avulsas" %}selected{% endif %}
+                        >
+                            Imagens avulsas
+                        </option>
+
+                        {% for lote in lotes %}
+                        <option
+                            value="{{ lote.pk }}"
+                            {% if lote.pk|stringformat:"s" == lote_selecionado %}selected{% endif %}
+                        >
+                            {{ lote.nome }}
+                        </option>
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+
+                {# 6. STATUS #}
+                <div class="col-md-6 col-xl-3">
+
+                    <label
+                        for="filtro-status"
+                        class="form-label mb-1"
+                    >
+                        Status
+                    </label>
+
+                    <select
+                        id="filtro-status"
+                        name="status"
+                        class="form-select form-select-sm"
+                    >
+
+                        <option
+                            value=""
+                            disabled
+                            hidden
+                            {% if not status_selecionado %}selected{% endif %}
+                        >
+                            Filtrar por status...
+                        </option>
+
+                        {% for status in status_disponiveis %}
+                        <option
+                            value="{{ status.pk }}"
+                            {% if status.pk|stringformat:"s" == status_selecionado %}selected{% endif %}
+                        >
+                            {{ status.nome }}
+                        </option>
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+
+                {# 7. RESPONSÁVEL #}
+                <div class="col-md-6 col-xl-3">
+
+                    <label
+                        for="filtro-responsavel"
+                        class="form-label mb-1"
+                    >
+                        Responsável atual
+                    </label>
+
+                    <select
+                        id="filtro-responsavel"
+                        name="responsavel"
+                        class="form-select form-select-sm"
+                    >
+
+                        <option
+                            value=""
+                            disabled
+                            hidden
+                            {% if not responsavel_selecionado %}selected{% endif %}
+                        >
+                            Filtrar por responsável...
+                        </option>
+
+                        <option
+                            value="sem_responsavel"
+                            {% if responsavel_selecionado == "sem_responsavel" %}selected{% endif %}
+                        >
+                            Sem responsável
+                        </option>
+
+                        {% for usuario in responsaveis %}
+                        <option
+                            value="{{ usuario.pk }}"
+                            {% if usuario.pk|stringformat:"s" == responsavel_selecionado %}selected{% endif %}
+                        >
+                            {{ usuario.get_full_name|default:usuario.email }}
+                        </option>
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+
+                {# 8. PAGAMENTO DESCRITOR #}
+                <div class="col-md-6 col-xl-3">
+
+                    <label
+                        for="filtro-pagamento-descritor"
+                        class="form-label mb-1"
+                    >
+                        Pagamento descritor
+                    </label>
+
+                    <select
+                        id="filtro-pagamento-descritor"
+                        name="pagamento_descritor"
+                        class="form-select form-select-sm"
+                    >
+
+                        <option
+                            value=""
+                            disabled
+                            hidden
+                            {% if not pagamento_descritor_selecionado %}selected{% endif %}
+                        >
+                            Filtrar pagamento do descritor...
+                        </option>
+
+                        {% for valor, nome in pagamentos %}
+                        <option
+                            value="{{ valor }}"
+                            {% if valor == pagamento_descritor_selecionado %}selected{% endif %}
+                        >
+                            {{ nome }}
+                        </option>
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+
+                {# 9. PAGAMENTO REVISOR #}
+                <div class="col-md-6 col-xl-3">
+
+                    <label
+                        for="filtro-pagamento-revisor"
+                        class="form-label mb-1"
+                    >
+                        Pagamento revisor
+                    </label>
+
+                    <select
+                        id="filtro-pagamento-revisor"
+                        name="pagamento_revisor"
+                        class="form-select form-select-sm"
+                    >
+
+                        <option
+                            value=""
+                            disabled
+                            hidden
+                            {% if not pagamento_revisor_selecionado %}selected{% endif %}
+                        >
+                            Filtrar pagamento do revisor...
+                        </option>
+
+                        {% for valor, nome in pagamentos %}
+                        <option
+                            value="{{ valor }}"
+                            {% if valor == pagamento_revisor_selecionado %}selected{% endif %}
+                        >
+                            {{ nome }}
+                        </option>
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+
+                {# 10. DATA INICIAL #}
+                <div class="col-md-6 col-xl-3">
+
+                    <label
+                        for="filtro-data-inicio"
+                        class="form-label mb-1"
+                    >
+                        Cadastrada a partir de
+                    </label>
+
+                    <input
+                        id="filtro-data-inicio"
+                        type="date"
+                        name="data_inicio"
+                        value="{{ data_inicio_selecionada }}"
+                        class="form-control form-control-sm"
+                    >
+
+                </div>
+
+
+                {# 11. DATA FINAL #}
+                <div class="col-md-6 col-xl-3">
+
+                    <label
+                        for="filtro-data-fim"
+                        class="form-label mb-1"
+                    >
+                        Cadastrada até
+                    </label>
+
+                    <input
+                        id="filtro-data-fim"
+                        type="date"
+                        name="data_fim"
+                        value="{{ data_fim_selecionada }}"
+                        class="form-control form-control-sm"
+                    >
+
+                </div>
+
+            </div>
+
+
+            <div class="d-flex align-items-center gap-2 mt-3 flex-wrap">
+
+                <button
+                    type="submit"
+                    class="btn btn-primary btn-sm"
+                >
+                    <i class="bi bi-funnel me-1"></i>
+                    Aplicar filtros
+                </button>
+
+                {% if filtros_ativos %}
+                <a
+                    href="{% url 'relatorios_lista' %}"
+                    class="btn btn-outline-secondary btn-sm"
+                >
+                    <i class="bi bi-x-lg me-1"></i>
+                    Limpar filtros
+                </a>
+                {% endif %}
+
+                <span
+                    class="text-secondary ms-auto"
+                    style="font-size:0.78rem;"
+                >
+                    {{ total }}
+                    {% if total == 1 %}imagem encontrada{% else %}imagens encontradas{% endif %}
+                </span>
+
+            </div>
+
+        </form>
+
     </div>
+
+</div>
+
+
+{# TABELA GERAL #}
+<div class="card">
+
+    <div class="card-body p-0">
+
+        {% if pagina_obj.object_list %}
+
+        <div class="table-responsive">
+
+            <table class="table table-sm mb-0 align-middle">
+
+                <thead>
+                    <tr>
+                        <th class="ps-3">Retranca</th>
+                        <th>Obra</th>
+                        <th>Componente</th>
+                        <th>Lote</th>
+                        <th>Status</th>
+                        <th>Responsável</th>
+                        <th>Pag. descritor</th>
+                        <th>Pag. revisor</th>
+                        <th>Prevista</th>
+                        <th>Efetiva</th>
+                        <th>Atualizada</th>
+                        <th></th>
+                    </tr>
+                </thead>
+
+
+                <tbody>
+
+                    {% for img in pagina_obj %}
+
+                    <tr>
+
+                        <td class="ps-3">
+                            <span class="dito-retranca">
+                                {{ img.retranca }}
+                            </span>
+                        </td>
+
+
+                        <td style="font-size:0.82rem;">
+                            {{ img.nome_obra|default:"—" }}
+                        </td>
+
+
+                        <td style="font-size:0.82rem;">
+                            {{ img.componente_curricular|default:"—" }}
+                        </td>
+
+
+                        <td style="font-size:0.82rem;">
+                            {% if img.lote %}
+                                {{ img.lote.nome }}
+                            {% else %}
+                                <span class="text-secondary">
+                                    Avulsa
+                                </span>
+                            {% endif %}
+                        </td>
+
+
+                        <td>
+                            <span
+                                class="dito-status dito-status-{{ img.status.slug }}"
+                                style="font-size:0.68rem;"
+                            >
+                                {{ img.status.nome }}
+                            </span>
+                        </td>
+
+
+                        <td style="font-size:0.82rem;">
+                            {% if img.responsavel %}
+                                {{ img.responsavel.get_full_name|default:img.responsavel.email }}
+                            {% else %}
+                                <span class="text-secondary">—</span>
+                            {% endif %}
+                        </td>
+
+
+                        <td style="font-size:0.78rem;">
+                            {{ img.get_pagamento_descritor_display }}
+                        </td>
+
+
+                        <td style="font-size:0.78rem;">
+                            {{ img.get_pagamento_revisor_display }}
+                        </td>
+
+
+                        <td
+                            class="text-secondary"
+                            style="font-size:0.78rem;"
+                        >
+                            {% if img.lote and img.lote.data_prevista %}
+                                {{ img.lote.data_prevista|date:"d/m/Y" }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+
+
+                        <td
+                            class="text-secondary"
+                            style="font-size:0.78rem;"
+                        >
+                            {% if img.lote and img.lote.data_efetiva %}
+                                {{ img.lote.data_efetiva|date:"d/m/Y" }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+
+
+                        <td
+                            class="text-secondary"
+                            style="font-size:0.78rem;"
+                        >
+                            {{ img.atualizado_em|date:"d/m/Y H:i" }}
+                        </td>
+
+
+                        <td class="text-end pe-3">
+
+                            <a
+                                href="{% url 'descricao_imagem' img.pk %}?next={{ request.get_full_path|urlencode }}"
+                                class="btn btn-sm btn-outline-secondary dito-btn-acao"
+                                title="Abrir imagem"
+                            >
+                                <i class="bi bi-eye"></i>
+                            </a>
+
+                        </td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+
+        {% if pagina_obj.has_other_pages %}
+
+        <div
+            class="d-flex align-items-center justify-content-between px-3 py-2 border-top flex-wrap gap-2"
+            style="font-size:0.82rem;"
+        >
+
+            <span class="text-secondary">
+                Página {{ pagina_obj.number }}
+                de {{ pagina_obj.paginator.num_pages }}
+                &nbsp;·&nbsp;
+                {{ total }} {% if total == 1 %}imagem{% else %}imagens{% endif %}
+            </span>
+
+
+            <div class="d-flex gap-1">
+
+                {% if pagina_obj.has_previous %}
+                <a
+                    href="?{% if filtros_query %}{{ filtros_query }}&{% endif %}pagina={{ pagina_obj.previous_page_number }}"
+                    class="btn btn-outline-secondary btn-sm"
+                    title="Página anterior"
+                >
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+                {% endif %}
+
+
+                {% if pagina_obj.has_next %}
+                <a
+                    href="?{% if filtros_query %}{{ filtros_query }}&{% endif %}pagina={{ pagina_obj.next_page_number }}"
+                    class="btn btn-outline-secondary btn-sm"
+                    title="Próxima página"
+                >
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+                {% endif %}
+
+            </div>
+
+        </div>
+
+        {% endif %}
+
+
+        {% else %}
+
+        <div class="dito-empty-state py-5">
+
+            <i class="bi bi-bar-chart"></i>
+
+            <p>
+                Nenhuma imagem encontrada com os filtros atuais.
+            </p>
+
+        </div>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+
+<div class="card mt-3">
+
+    <div class="card-body py-3">
+
+        <p
+            class="mb-1"
+            style="font-size:0.82rem;"
+        >
+            <strong>Exportação filtrada:</strong>
+            o botão de Excel exporta todas as imagens do resultado atual,
+            e não apenas as 50 exibidas na página.
+        </p>
+
+        <p
+            class="mb-0 text-secondary"
+            style="font-size:0.78rem;"
+        >
+            A aba <strong>Geral</strong> respeita todos os filtros.
+            A aba <strong>FotoWeb - Finalizados</strong> contém somente as
+            imagens desse mesmo resultado que já estão finalizadas.
+        </p>
+
+    </div>
+
 </div>
 
 {% endblock %}

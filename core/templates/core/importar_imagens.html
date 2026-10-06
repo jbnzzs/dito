@@ -7,222 +7,926 @@
 {% block content %}
 
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+
     <div>
         <h2 class="mb-1">Importar imagens</h2>
-        <p class="text-secondary mb-0" style="font-size:0.875rem;">
-            Carregue um arquivo <strong>.xlsx</strong> para importar imagens e descrições automaticamente.
+
+        <p
+            class="text-secondary mb-0"
+            style="font-size:0.875rem;"
+        >
+            Configure o Projeto, o FotoWeb e o PDF da rede antes de carregar
+            o arquivo <strong>.xlsx</strong>.
         </p>
     </div>
-    <a href="{% url 'imagens_lista' %}" class="btn btn-outline-primary">
-        <i class="bi bi-arrow-left me-1"></i> Voltar para imagens
+
+    <a
+        href="{% url 'imagens_lista' %}"
+        class="btn btn-outline-secondary btn-sm"
+    >
+        <i class="bi bi-arrow-left me-1"></i>
+        Voltar
     </a>
+
 </div>
 
+
 {% if messages %}
+
     {% for msg in messages %}
+
     <div class="alert alert-danger mb-3">
-        <i class="bi bi-exclamation-circle me-1"></i> {{ msg }}
+        <i class="bi bi-exclamation-circle me-1"></i>
+        {{ msg }}
     </div>
+
     {% endfor %}
+
 {% endif %}
+
 
 {% if not resultado %}
 
-{# ---- Formulário de upload ---- #}
-<div class="row g-4">
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-body p-4">
-                <h6 class="fw-bold mb-1">
-                    <i class="bi bi-file-earmark-arrow-up me-2 text-secondary"></i>
-                    Selecionar arquivo
-                </h6>
-                <p class="text-secondary mb-3" style="font-size:0.8rem;">
-                    O arquivo deve estar no formato <strong>.xlsx</strong> com as colunas padrão do sistema.
-                </p>
+{# ============================================================
+   FORMULÁRIO DE IMPORTAÇÃO
+   ============================================================ #}
 
-                <form method="post" enctype="multipart/form-data" id="formImport">
-                    {% csrf_token %}
+<div
+    class="mx-auto"
+    style="max-width:780px;"
+>
 
-                    <div class="mb-3">
-                        <label for="arquivo" class="form-label fw-bold" style="font-size:0.875rem;">
-                            Arquivo Excel (.xlsx)
-                        </label>
-                        <input
-                            type="file"
-                            class="form-control"
-                            id="arquivo"
-                            name="arquivo"
-                            accept=".xlsx"
-                            required
-                        >
-                    </div>
+    <div
+        class="card shadow-sm"
+        style="
+            border:1px solid #E2D9CB;
+            border-radius:12px;
+            overflow:hidden;
+        "
+    >
 
-                    <button type="submit" class="btn btn-primary w-100" id="btnImportar">
-                        <i class="bi bi-upload me-1"></i>
-                        Importar imagens
-                    </button>
-                </form>
+        <div
+            style="
+                height:4px;
+                background:#D9A521;
+            "
+        ></div>
 
-            </div>
-        </div>
-    </div>
+        <div class="card-body p-4 p-lg-5">
 
-    <div class="col-lg-6">
-        <div class="card h-100">
-            <div class="card-body p-4">
-                <h6 class="fw-bold mb-3">
-                    <i class="bi bi-info-circle me-2 text-secondary"></i>
-                    Colunas esperadas no arquivo
-                </h6>
-                <div class="d-flex flex-column gap-2">
-                    {% for col, desc in colunas %}
-                    <div class="d-flex align-items-start gap-2" style="font-size:0.8rem;">
-                        <span class="dito-retranca" style="flex-shrink:0;">{{ col }}</span>
-                        <span class="text-secondary">{{ desc }}</span>
-                    </div>
-                    {% empty %}
-                    {% for item in colunas_info %}
-                    <div class="d-flex align-items-start gap-2" style="font-size:0.8rem;">
-                        <span class="dito-retranca" style="flex-shrink:0;">{{ item.0 }}</span>
-                        <span class="text-secondary">{{ item.1 }}</span>
-                    </div>
-                    {% endfor %}
-                    {% endfor %}
+            <div
+                class="d-flex align-items-start gap-3 mb-4"
+            >
+
+                <div
+                    class="d-flex align-items-center justify-content-center flex-shrink-0"
+                    style="
+                        width:46px;
+                        height:46px;
+                        border-radius:10px;
+                        background:#F5ECD9;
+                        color:#1B3A5C;
+                        font-size:1.15rem;
+                    "
+                >
+                    <i class="bi bi-file-earmark-arrow-up"></i>
                 </div>
+
+                <div>
+
+                    <h5
+                        class="mb-1"
+                        style="
+                            font-family:'Lora', serif;
+                            font-weight:700;
+                            color:#1B3A5C;
+                        "
+                    >
+                        Importar novo grupo de imagens
+                    </h5>
+
+                    <p
+                        class="text-secondary mb-0"
+                        style="
+                            font-size:0.84rem;
+                            line-height:1.5;
+                        "
+                    >
+                        Selecione o projeto de destino e informe os dados
+                        necessários para gerar automaticamente os links dos arquivos.
+                    </p>
+
+                </div>
+
             </div>
+
+
+            {% if projetos %}
+
+            <form
+                method="post"
+                enctype="multipart/form-data"
+                id="formImport"
+            >
+
+                {% csrf_token %}
+
+
+                <div class="mb-4">
+
+                    <label
+                        for="projeto"
+                        class="form-label fw-bold mb-2"
+                        style="
+                            font-size:0.875rem;
+                            color:#24384A;
+                        "
+                    >
+                        Projeto
+                        <span class="text-danger">*</span>
+                    </label>
+
+                    <select
+                        class="form-select"
+                        id="projeto"
+                        name="projeto"
+                        required
+                        style="
+                            min-height:44px;
+                            border-color:#D9D2C7;
+                        "
+                    >
+
+                        <option
+                            value=""
+                            disabled
+                            hidden
+                            {% if not projeto_selecionado_id %}selected{% endif %}
+                        >
+                            Selecione o projeto...
+                        </option>
+
+                        {% for projeto in projetos %}
+
+                        <option
+                            value="{{ projeto.pk }}"
+                            {% if projeto.pk|stringformat:"s" == projeto_selecionado_id %}selected{% endif %}
+                        >
+                            {{ projeto.nome }}
+                        </option>
+
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+
+                <div class="mb-4">
+
+                    <label
+                        for="acervo_fotoweb"
+                        class="form-label fw-bold mb-2"
+                        style="
+                            font-size:0.875rem;
+                            color:#24384A;
+                        "
+                    >
+                        Acervo FotoWeb
+                        <span class="text-danger">*</span>
+                    </label>
+
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="acervo_fotoweb"
+                        name="acervo_fotoweb"
+                        value="{{ acervo_fotoweb }}"
+                        placeholder="Ex.: 5101-G28-EF2-AUDIODESC"
+                        autocomplete="off"
+                        required
+                        style="
+                            min-height:44px;
+                            border-color:#D9D2C7;
+                        "
+                    >
+
+                    <div
+                        class="form-text"
+                        style="font-size:0.76rem;"
+                    >
+                        Informe somente o nome do Acervo. A URL do FotoWeb
+                        será gerada automaticamente para cada retranca.
+                    </div>
+
+                </div>
+
+
+                <div
+                    class="row g-3 mb-4"
+                >
+
+                    <div class="col-md-8">
+
+                        <label
+                            for="projeto_editorial_pdf"
+                            class="form-label fw-bold mb-2"
+                            style="
+                                font-size:0.875rem;
+                                color:#24384A;
+                            "
+                        >
+                            Projeto Editorial — Rede
+                            <span class="text-danger">*</span>
+                        </label>
+
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="projeto_editorial_pdf"
+                            name="projeto_editorial_pdf"
+                            value="{{ projeto_editorial_pdf }}"
+                            placeholder="Ex.: G28_E002_EF2"
+                            autocomplete="off"
+                            required
+                            style="
+                                min-height:44px;
+                                border-color:#D9D2C7;
+                            "
+                        >
+
+                        <div
+                            class="form-text"
+                            style="font-size:0.76rem;"
+                        >
+                            Pasta do projeto dentro de
+                            <code>\\arara\HTML</code>.
+                        </div>
+
+                    </div>
+
+
+                    <div class="col-md-4">
+
+                        <label
+                            for="numero_projeto_pdf"
+                            class="form-label fw-bold mb-2"
+                            style="
+                                font-size:0.875rem;
+                                color:#24384A;
+                            "
+                        >
+                            Projeto Scriba
+                            <span class="text-danger">*</span>
+                        </label>
+
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="numero_projeto_pdf"
+                            name="numero_projeto_pdf"
+                            value="{{ numero_projeto_pdf }}"
+                            placeholder="Ex.: p013"
+                            autocomplete="off"
+                            required
+                            style="
+                                min-height:44px;
+                                border-color:#D9D2C7;
+                            "
+                        >
+
+                        <div
+                            class="form-text"
+                            style="font-size:0.76rem;"
+                        >
+                            Número usado no nome do PDF.
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div
+                    class="mb-4 p-3"
+                    style="
+                        border:1px solid #DDE3E8;
+                        border-radius:8px;
+                        background:#F8FAFC;
+                    "
+                >
+
+                    <div
+                        class="fw-bold mb-1"
+                        style="
+                            color:#1B3A5C;
+                            font-size:0.8rem;
+                        "
+                    >
+                        Padrão do PDF
+                    </div>
+
+                    <div
+                        class="text-secondary"
+                        style="
+                            font-size:0.76rem;
+                            line-height:1.55;
+                        "
+                    >
+                        O Dito usará o componente e o ano do relatório para montar
+                        automaticamente o Manual do Professor em:
+                        <br>
+                        <code>
+                            \\arara\HTML\PROJETO\COMP\PDFs\ANO\GRAVADOS\arquivo_mp.pdf
+                        </code>
+                    </div>
+
+                </div>
+
+
+                <div class="mb-4">
+
+                    <label
+                        for="arquivo"
+                        class="form-label fw-bold mb-2"
+                        style="
+                            font-size:0.875rem;
+                            color:#24384A;
+                        "
+                    >
+                        Arquivo Excel (.xlsx)
+                        <span class="text-danger">*</span>
+                    </label>
+
+                    <input
+                        type="file"
+                        class="form-control"
+                        id="arquivo"
+                        name="arquivo"
+                        accept=".xlsx"
+                        required
+                        style="
+                            min-height:44px;
+                            border-color:#D9D2C7;
+                        "
+                    >
+
+                </div>
+
+
+                <div
+                    class="d-flex align-items-start gap-3 mb-4"
+                    style="
+                        padding:0.9rem 1rem;
+                        border:1px solid #E8DFC9;
+                        border-left:3px solid #D9A521;
+                        border-radius:8px;
+                        background:#FCF9F2;
+                    "
+                >
+
+                    <i
+                        class="bi bi-info-circle mt-1"
+                        style="
+                            color:#B8860B;
+                            font-size:0.95rem;
+                        "
+                    ></i>
+
+                    <div
+                        style="
+                            color:#5D6670;
+                            font-size:0.8rem;
+                            line-height:1.5;
+                        "
+                    >
+                        <strong style="color:#3B4650;">
+                            Como funciona:
+                        </strong>
+
+                        o arquivo é utilizado apenas para importar os dados.
+                        As imagens novas recebem automaticamente o link de pesquisa
+                        do FotoWeb e o caminho do Manual do Professor na rede interna,
+                        usando o componente e o ano informados no relatório.
+                    </div>
+
+                </div>
+
+
+                <button
+                    type="submit"
+                    class="btn btn-primary w-100"
+                    id="btnImportar"
+                    style="
+                        min-height:44px;
+                        font-weight:700;
+                    "
+                >
+                    <i class="bi bi-upload me-2"></i>
+                    Importar imagens
+                </button>
+
+            </form>
+
+
+            {% else %}
+
+            <div
+                class="alert alert-warning mb-3"
+                style="font-size:0.875rem;"
+            >
+
+                <i class="bi bi-exclamation-triangle me-1"></i>
+
+                Não existe nenhum projeto ativo.
+                Cadastre um projeto antes de importar as imagens.
+
+            </div>
+
+
+            <a
+                href="{% url 'projeto_criar' %}"
+                class="btn btn-primary"
+            >
+                <i class="bi bi-plus-lg me-1"></i>
+                Criar projeto
+            </a>
+
+            {% endif %}
+
         </div>
+
     </div>
+
 </div>
 
-{# ---- Loading overlay ---- #}
-<div id="loadingOverlay" style="display:none; position:fixed; inset:0; background:rgba(89,5,21,0.7); z-index:9999; align-items:center; justify-content:center; flex-direction:column; gap:1rem;">
-    <div class="spinner-border text-light" role="status" style="width:3rem; height:3rem;"></div>
-    <p style="color:#B8C6D6; font-weight:700; font-size:1rem; margin:0;">Processando arquivo, aguarde...</p>
+
+{# ============================================================
+   LOADING
+   ============================================================ #}
+
+<div
+    id="loadingOverlay"
+    style="
+        display:none;
+        position:fixed;
+        inset:0;
+        background:rgba(27,58,92,0.78);
+        z-index:9999;
+        align-items:center;
+        justify-content:center;
+        flex-direction:column;
+        gap:1rem;
+    "
+>
+
+    <div
+        class="spinner-border text-light"
+        role="status"
+        style="width:3rem; height:3rem;"
+    ></div>
+
+    <p
+        style="
+            color:#FFFFFF;
+            font-weight:700;
+            font-size:1rem;
+            margin:0;
+        "
+    >
+        Processando arquivo, aguarde...
+    </p>
+
 </div>
+
+
+{% if projetos %}
 
 <script>
-    document.getElementById("formImport").addEventListener("submit", function () {
-        document.getElementById("loadingOverlay").style.display = "flex";
-        document.getElementById("btnImportar").disabled = true;
-    });
+
+    document
+        .getElementById("formImport")
+        .addEventListener("submit", function (event) {
+
+            const projetoSelect =
+                document.getElementById("projeto");
+
+            const projetoNome =
+                projetoSelect.options[
+                    projetoSelect.selectedIndex
+                ].text;
+
+            const acervoFotoweb =
+                document.getElementById("acervo_fotoweb");
+
+            const projetoEditorialPdf =
+                document.getElementById("projeto_editorial_pdf");
+
+            const numeroProjetoPdf =
+                document.getElementById("numero_projeto_pdf");
+
+            const arquivo =
+                document.getElementById("arquivo");
+
+            if (
+                !projetoSelect.value
+                || !acervoFotoweb.value.trim()
+                || !projetoEditorialPdf.value.trim()
+                || !numeroProjetoPdf.value.trim()
+                || !arquivo.files.length
+            ) {
+                return;
+            }
+
+            const confirmado = window.confirm(
+                'Importar as imagens novas deste arquivo para o projeto "' +
+                projetoNome +
+                '"?\n\n' +
+                'FotoWeb: ' +
+                acervoFotoweb.value.trim() +
+                '\nPDF na rede: ' +
+                projetoEditorialPdf.value.trim() +
+                ' / ' +
+                numeroProjetoPdf.value.trim()
+            );
+
+            if (!confirmado) {
+                event.preventDefault();
+                return;
+            }
+
+            document
+                .getElementById("loadingOverlay")
+                .style.display = "flex";
+
+            document
+                .getElementById("btnImportar")
+                .disabled = true;
+        });
+
 </script>
+
+{% endif %}
+
 
 {% else %}
 
-{# ---- Resultado da importação ---- #}
+{# ============================================================
+   RESULTADO DESTA IMPORTAÇÃO
+   ============================================================ #}
+
+<div class="card mb-4">
+
+    <div class="card-body py-3">
+
+        <div
+            class="d-flex align-items-center justify-content-between gap-3 flex-wrap"
+        >
+
+            <div>
+
+                <div
+                    class="text-secondary"
+                    style="
+                        font-size:0.72rem;
+                        text-transform:uppercase;
+                        letter-spacing:0.05em;
+                        font-weight:700;
+                    "
+                >
+                    Resultado desta importação
+                </div>
+
+                <div class="fw-bold mt-1">
+                    Projeto:
+                    {{ projeto_importacao.nome }}
+                </div>
+
+                <div
+                    class="text-secondary mt-1"
+                    style="font-size:0.82rem;"
+                >
+                    Acervo FotoWeb:
+                    <strong>{{ acervo_fotoweb }}</strong>
+                </div>
+
+                <div
+                    class="text-secondary mt-1"
+                    style="font-size:0.82rem;"
+                >
+                    PDF na rede:
+                    <strong>
+                        {{ projeto_editorial_pdf }} / {{ numero_projeto_pdf }}
+                    </strong>
+                </div>
+
+            </div>
+
+            <span class="badge text-bg-light border">
+                Somente imagens novas foram vinculadas
+            </span>
+
+        </div>
+
+    </div>
+
+</div>
+
+
 <div class="row g-3 mb-4">
+
     <div class="col-md-4">
+
         <div class="card">
+
             <div class="card-body dito-stat-card">
-                <div class="dito-stat-icon" style="background:#D1FAE5; color:#2E7A52;">
+
+                <div
+                    class="dito-stat-icon"
+                    style="
+                        background:#D1FAE5;
+                        color:#2E7A52;
+                    "
+                >
                     <i class="bi bi-check-circle"></i>
                 </div>
+
                 <div>
-                    <div class="dito-stat-number">{{ criadas }}</div>
-                    <div class="dito-stat-label">Importadas com sucesso</div>
+
+                    <div class="dito-stat-number">
+                        {{ criadas }}
+                    </div>
+
+                    <div class="dito-stat-label">
+                        Importadas com sucesso
+                    </div>
+
                 </div>
+
             </div>
+
         </div>
+
     </div>
+
+
     <div class="col-md-4">
+
         <div class="card">
+
             <div class="card-body dito-stat-card">
-                <div class="dito-stat-icon" style="background:#F3F4F6; color:#6B7280;">
+
+                <div
+                    class="dito-stat-icon"
+                    style="
+                        background:#F3F4F6;
+                        color:#6B7280;
+                    "
+                >
                     <i class="bi bi-dash-circle"></i>
                 </div>
+
                 <div>
-                    <div class="dito-stat-number">{{ puladas }}</div>
-                    <div class="dito-stat-label">Puladas (já existiam)</div>
+
+                    <div class="dito-stat-number">
+                        {{ puladas }}
+                    </div>
+
+                    <div class="dito-stat-label">
+                        Puladas (já existiam)
+                    </div>
+
                 </div>
+
             </div>
+
         </div>
+
     </div>
+
+
     <div class="col-md-4">
+
         <div class="card">
+
             <div class="card-body dito-stat-card">
-                <div class="dito-stat-icon" style="background:#FEE2E2; color:#9B5050;">
+
+                <div
+                    class="dito-stat-icon"
+                    style="
+                        background:#FEE2E2;
+                        color:#9B5050;
+                    "
+                >
                     <i class="bi bi-x-circle"></i>
                 </div>
+
                 <div>
-                    <div class="dito-stat-number">{{ erros|length }}</div>
-                    <div class="dito-stat-label">Erros</div>
+
+                    <div class="dito-stat-number">
+                        {{ erros|length }}
+                    </div>
+
+                    <div class="dito-stat-label">
+                        Erros
+                    </div>
+
                 </div>
+
             </div>
+
         </div>
+
     </div>
+
 </div>
+
 
 {% if erros %}
-<div class="card mb-4">
-    <div class="card-body">
-        <h6 class="fw-bold mb-3 text-danger">
-            <i class="bi bi-exclamation-triangle me-2"></i>
-            Erros encontrados
-        </h6>
-        {% for erro in erros %}
-        <div class="d-flex align-items-start gap-2 mb-2" style="font-size:0.875rem;">
-            <span class="dito-retranca">{{ erro.retranca }}</span>
-            <span class="text-danger">{{ erro.msg }}</span>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
 
 <div class="card mb-4">
+
     <div class="card-body">
-        <h6 class="fw-bold mb-3">
-            <i class="bi bi-list-check me-2 text-secondary"></i>
-            Log completo
+
+        <h6 class="fw-bold mb-3 text-danger">
+
+            <i
+                class="bi bi-exclamation-triangle me-2"
+            ></i>
+
+            Erros encontrados
+
         </h6>
-        <div style="max-height:400px; overflow-y:auto;">
+
+
+        {% for erro in erros %}
+
+        <div
+            class="d-flex align-items-start gap-2 mb-2"
+            style="font-size:0.875rem;"
+        >
+
+            <span class="dito-retranca">
+                {{ erro.retranca }}
+            </span>
+
+            <span class="text-danger">
+                {{ erro.msg }}
+            </span>
+
+        </div>
+
+        {% endfor %}
+
+    </div>
+
+</div>
+
+{% endif %}
+
+
+<div class="card mb-4">
+
+    <div class="card-body">
+
+        <h6 class="fw-bold mb-3">
+
+            <i
+                class="bi bi-list-check me-2 text-secondary"
+            ></i>
+
+            Log desta importação
+
+        </h6>
+
+
+        <div
+            style="
+                max-height:400px;
+                overflow-y:auto;
+            "
+        >
+
             <table class="table table-sm mb-0">
+
                 <thead>
+
                     <tr>
                         <th>Retranca</th>
                         <th>Resultado</th>
                     </tr>
+
                 </thead>
+
+
                 <tbody>
+
                     {% for item in log %}
+
                     <tr>
-                        <td><span class="dito-retranca">{{ item.retranca }}</span></td>
+
                         <td>
-                            {% if item.tipo == "criada" %}
-                                <span class="dito-status dito-status-descrito">✓ {{ item.msg }}</span>
-                            {% elif item.tipo == "pulada" %}
-                                <span class="dito-status dito-status-revisando">— {{ item.msg }}</span>
-                            {% else %}
-                                <span class="dito-status dito-status-descrevendo">✗ {{ item.msg }}</span>
-                            {% endif %}
+
+                            <span class="dito-retranca">
+                                {{ item.retranca }}
+                            </span>
+
                         </td>
+
+                        <td>
+
+                            {% if item.tipo == "criada" %}
+
+                                <span
+                                    class="dito-status dito-status-descrito"
+                                >
+                                    ✓ {{ item.msg }}
+                                </span>
+
+                            {% elif item.tipo == "pulada" %}
+
+                                <span
+                                    class="dito-status dito-status-revisando"
+                                >
+                                    — {{ item.msg }}
+                                </span>
+
+                            {% else %}
+
+                                <span
+                                    class="dito-status dito-status-descrevendo"
+                                >
+                                    ✗ {{ item.msg }}
+                                </span>
+
+                            {% endif %}
+
+                        </td>
+
                     </tr>
+
                     {% endfor %}
-                    {% if log_truncado %}
-                        <p class="text-secondary mt-2" style="font-size:0.8rem;">
-                            <i class="bi bi-info-circle me-1"></i>
-                            Exibindo as primeiras 200 entradas de {{ total_log }} total.
-                        </p>
-                    {% endif %}
+
                 </tbody>
+
             </table>
+
+
+            {% if log_truncado %}
+
+            <p
+                class="text-secondary mt-2 mb-0"
+                style="font-size:0.8rem;"
+            >
+
+                <i class="bi bi-info-circle me-1"></i>
+
+                Exibindo as primeiras 200 entradas
+                de {{ total_log }} desta importação.
+
+            </p>
+
+            {% endif %}
+
         </div>
+
     </div>
+
 </div>
 
-<div class="d-flex gap-3">
+
+<div class="d-flex gap-3 flex-wrap">
+
     {% if importacao_id %}
-    <a href="{% url 'organizar_lotes' importacao_id=importacao_id %}" class="btn btn-primary">
-        <i class="bi bi-collection me-1"></i> Organizar em lotes
+
+    <a
+        href="{% url 'organizar_lotes' importacao_id=importacao_id %}"
+        class="btn btn-primary"
+    >
+        <i class="bi bi-collection me-1"></i>
+        Organizar em lotes
     </a>
+
     {% endif %}
-    <a href="{% url 'imagens_lista' %}" class="btn btn-outline-primary">
-        <i class="bi bi-images me-1"></i> Ver imagens importadas
+
+
+    <a
+        href="{% url 'imagens_lista' %}?origem=importacao"
+        class="btn btn-outline-primary"
+    >
+        <i class="bi bi-images me-1"></i>
+        Ver imagens
     </a>
-    <a href="{% url 'importar_imagens' %}" class="btn btn-outline-primary">
-        <i class="bi bi-upload me-1"></i> Importar outro arquivo
+
+
+    <a
+        href="{% url 'importar_imagens' %}"
+        class="btn btn-outline-primary"
+    >
+        <i class="bi bi-upload me-1"></i>
+        Importar outro arquivo
     </a>
+
 </div>
 
 {% endif %}

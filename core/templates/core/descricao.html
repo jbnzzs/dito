@@ -193,19 +193,14 @@
 .trecho-preview-item:last-child { border-bottom: none; }
 </style>
 
-{# ---- Cabeçalho ---- #}
-<div class="d-flex align-items-start justify-content-between mb-4 flex-wrap gap-3">
-    <div>
-        <div class="d-flex align-items-center gap-2 mb-1">
-            <a href="{% url 'imagens_lista' %}" class="text-secondary" style="font-size:0.875rem;">
-                <i class="bi bi-arrow-left me-1"></i>Imagens
-            </a>
-            <span class="text-secondary">/</span>
-            <span class="dito-retranca">{{ imagem.retranca }}</span>
-        </div>
-        <h2 class="mb-0">{{ imagem.nome_obra }}</h2>
-    </div>
-    <span class="dito-status dito-status-{{ imagem.status.slug }}" id="badgeStatus">
+{# ---- Navegação e status ---- #}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <a href="{{ url_voltar }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>
+        Voltar
+    </a>
+
+    <span class="dito-status" id="badgeStatus">
         {{ imagem.status.nome }}
     </span>
 </div>
@@ -227,7 +222,11 @@
 {% if somente_leitura %}
 <div class="alert alert-secondary d-flex align-items-center gap-2 mb-4" style="font-size:0.875rem;">
     <i class="bi bi-eye"></i>
-    Você está vendo esta descrição em modo somente leitura — o trabalho já foi enviado para a próxima etapa.
+    {% if pode_finalizar %}
+        Esta descrição está em modo somente leitura e pronta para finalização.
+    {% else %}
+        Você está vendo esta descrição em modo somente leitura — o trabalho já foi enviado para a próxima etapa.
+    {% endif %}
 </div>
 {% endif %}
 
@@ -259,7 +258,7 @@
                         <span class="dito-retranca">{{ imagem.retranca }}</span>
                     </div>
                     <div>
-                        <div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Obra</div>
+                        <div class="text-secondary mb-1" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Projeto</div>
                         <div class="fw-bold">{{ imagem.nome_obra|default:"—" }}</div>
                     </div>
                     {% if imagem.componente_curricular %}
@@ -293,20 +292,35 @@
                 </div>
             </div>
         </div>
-        {% if imagem.link_fotoweb or imagem.url_pdf %}
+        {% if imagem.url_fotoweb or imagem.url_pdf %}
         <div class="d-flex gap-2 mb-3">
-            {% if imagem.link_fotoweb %}
-            <a href="{{ imagem.link_fotoweb }}" target="_blank" rel="noopener noreferrer"
-               class="btn btn-outline-primary btn-sm flex-fill d-flex align-items-center justify-content-center gap-1">
-                <i class="bi bi-image"></i> Ver imagem
+
+            {% if imagem.url_fotoweb %}
+            <a
+                href="{{ imagem.url_fotoweb }}"
+                target="_blank"
+                rel="noopener"
+                class="btn btn-outline-primary btn-sm flex-fill d-flex align-items-center justify-content-center gap-1"
+                title="Abrir imagem no FotoWeb"
+            >
+                <i class="bi bi-image"></i>
+                Ver IMG
             </a>
             {% endif %}
+
             {% if imagem.url_pdf %}
-            <a href="{{ imagem.url_pdf }}" target="_blank" rel="noopener noreferrer"
-               class="btn btn-outline-secondary btn-sm flex-fill d-flex align-items-center justify-content-center gap-1">
-                <i class="bi bi-file-earmark-pdf"></i> Ver PDF
+            <a
+                href="{% url 'abrir_pdf_rede' imagem.pk %}"
+                target="_blank"
+                rel="noopener"
+                class="btn btn-outline-secondary btn-sm flex-fill d-flex align-items-center justify-content-center gap-1"
+                title="Abrir PDF da rede"
+            >
+                <i class="bi bi-file-earmark-pdf"></i>
+                Ver PDF
             </a>
             {% endif %}
+
         </div>
         {% endif %}
         {% if imagem.nome_arquivo %}
@@ -476,8 +490,9 @@
                     Status atual: {{ imagem.status.nome }}
                     {% if imagem.lote %}
                         &nbsp;·&nbsp; Lote: {{ imagem.lote.nome }}
-                        {% if lote_posicao and lote_total %}
-                        &nbsp;·&nbsp; <strong>{{ lote_posicao }}/{{ lote_total }}</strong>
+                        {% if lote_total %}
+                        &nbsp;·&nbsp; Progresso:
+                        <strong>{{ lote_progresso_atual|default:0 }}/{{ lote_total }}</strong>
                         {% endif %}
                     {% endif %}
                 </span>
@@ -495,8 +510,8 @@
                 {% endif %}
 
                 {% if imagem.lote and lote_eh_ultima %}
-                <button class="btn-workflow-avancar" onclick="salvarEDevolver()">
-                    <i class="bi bi-send-check"></i> Salvar e devolver para o coordenador
+                <button class="btn-workflow-avancar" onclick="salvarEConcluirUltima()">
+                    <i class="bi bi-check2-circle"></i> Salvar e concluir imagem
                 </button>
                 {% endif %}
 
@@ -539,6 +554,28 @@
             </div>
         </div>
 
+        {% if pode_finalizar %}
+        {# ---- Finalização individual após a revisão ---- #}
+        <div class="dito-workflow-card">
+            <div class="dito-workflow-info">
+                <strong><i class="bi bi-check2-circle me-1"></i> Finalização</strong>
+                <span>
+                    Status atual: {{ imagem.status.nome }}
+                    {% if imagem.lote %}
+                        &nbsp;·&nbsp; Lote: {{ imagem.lote.nome }}
+                    {% endif %}
+                </span>
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn-workflow-avancar" onclick="finalizarImagem()">
+                    <i class="bi bi-check2-all"></i>
+                    Finalizar imagem
+                </button>
+            </div>
+        </div>
+        {% endif %}
+
         {% endif %}
         {% if not pode_editar and not pode_visualizar %}
         <div class="dito-empty-state py-5">
@@ -553,10 +590,8 @@
 {% if pode_editar %}
 <script>
 const SALVAR_URL = "{% url 'salvar_trecho' imagem.pk %}";
-const AVANCAR_URL = "{% url 'avancar_status' imagem.pk %}";
-const PROXIMA_LOTE_URL = "{% url 'proxima_imagem_lote' imagem.pk %}";
-const DEVOLVER_URL = "{% url 'devolver_lote' imagem.pk %}";
-const LOTES_URL = "{% url 'lotes_lista' %}";
+const AVANCAR_URL = "{% url 'avancar_status' imagem.pk %}?next={{ url_voltar|urlencode }}";
+const URL_VOLTAR = "{{ url_voltar|escapejs }}";
 const CSRF = "{{ csrf_token }}";
 const IDIOMAS = {{ idiomas_json|safe }};
 const PRIORITARIOS = ["por","eng","spa","fra","deu","ita","jpn","zho","lat","ara","rus","hin","kor","grk"];
@@ -700,14 +735,34 @@ function renumerarTrechos() {
 
 // ---- Coletar e salvar ---- //
 
+function normalizarTextoDescricao(texto) {
+    // Converte aspas duplas comuns e tipográficas em aspas simples.
+    return String(texto || "").replace(/["“”„‟]/g, "'");
+}
+
 function coletarTrechos() {
     const trechos = [];
+
     document.querySelectorAll(".trecho-item").forEach((item, i) => {
-        const texto = item.querySelector(".trecho-texto").value.trim();
+        const campoTexto = item.querySelector(".trecho-texto");
+        const texto = normalizarTextoDescricao(campoTexto.value.trim());
         const codigo = item.querySelector(".idioma-codigo").value;
         const nome = item.querySelector(".idioma-nome").value;
-        if (texto) trechos.push({ ordem: i + 1, texto, idioma_codigo: codigo, idioma_nome: nome });
+
+        // Atualiza o próprio editor imediatamente, para o usuário enxergar
+        // a mesma versão que será persistida no banco.
+        campoTexto.value = texto;
+
+        if (texto) {
+            trechos.push({
+                ordem: i + 1,
+                texto,
+                idioma_codigo: codigo,
+                idioma_nome: nome,
+            });
+        }
     });
+
     return trechos;
 }
 
@@ -743,7 +798,7 @@ async function salvarEAvancar() {
     atualizarPreview(trechos);
     mostrarToast(`Enviado! Novo status: ${d2.novo_status}`, true);
     setTimeout(() => {
-        window.location.href = d2.proxima_url || "{% url 'minhas_tarefas' %}";
+        window.location.href = d2.proxima_url || URL_VOLTAR;
     }, 1200);
 }
 
@@ -754,52 +809,80 @@ async function salvarEIrParaProxima() {
     const r1 = await fetch(SALVAR_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
-        body: JSON.stringify({ trechos, marcar_pronto_lote: true }),
+        body: JSON.stringify({ trechos }),
     });
     const d1 = await r1.json();
     if (!d1.ok) { mostrarToast(d1.erro || "Erro ao salvar.", false); return; }
 
+    const r2 = await fetch(AVANCAR_URL, {
+        method: "POST",
+        headers: { "X-CSRFToken": CSRF },
+    });
+    const d2 = await r2.json();
+    if (!d2.ok) { mostrarToast(d2.erro || "Erro ao concluir a imagem.", false); return; }
+
     atualizarPreview(trechos);
-    mostrarToast("Salvo. Indo para a próxima imagem do lote...", true);
-    setTimeout(() => { window.location.href = PROXIMA_LOTE_URL; }, 800);
+    mostrarToast(`Imagem concluída. Novo status: ${d2.novo_status}`, true);
+
+    setTimeout(() => {
+        window.location.href = d2.proxima_url || URL_VOLTAR;
+    }, 1000);
 }
 
-async function salvarEDevolver() {
+async function salvarEConcluirUltima() {
     const trechos = coletarTrechos();
     if (!trechos.length) { mostrarToast("Adicione ao menos um trecho.", false); return; }
 
-    if (!confirm("Esta é a última imagem do lote. Salvar e devolver o lote inteiro ao coordenador?")) {
+    if (!confirm("Concluir esta imagem e avançá-la para a próxima etapa?")) {
         return;
     }
 
     const r1 = await fetch(SALVAR_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
-        body: JSON.stringify({ trechos, marcar_pronto_lote: true }),
+        body: JSON.stringify({ trechos }),
     });
     const d1 = await r1.json();
     if (!d1.ok) { mostrarToast(d1.erro || "Erro ao salvar.", false); return; }
 
-    const r2 = await fetch(DEVOLVER_URL, { method: "POST", headers: { "X-CSRFToken": CSRF } });
+    const r2 = await fetch(AVANCAR_URL, {
+        method: "POST",
+        headers: { "X-CSRFToken": CSRF },
+    });
     const d2 = await r2.json();
-    if (!d2.ok) { mostrarToast(d2.erro || "Erro ao devolver o lote.", false); return; }
+    if (!d2.ok) { mostrarToast(d2.erro || "Erro ao concluir a imagem.", false); return; }
 
     atualizarPreview(trechos);
-    mostrarToast(d2.mensagem, true);
-    setTimeout(() => { window.location.href = LOTES_URL; }, 2000);
+    mostrarToast(`Imagem concluída. Novo status: ${d2.novo_status}`, true);
+
+    setTimeout(() => {
+        window.location.href = d2.proxima_url || URL_VOLTAR;
+    }, 1200);
+}
+
+function escaparHTML(texto) {
+    const div = document.createElement("div");
+    div.textContent = texto;
+    return div.innerHTML;
 }
 
 function atualizarPreview(trechos) {
     const preview = document.getElementById("previewDescricao");
     const contador = document.getElementById("contadorTrechos");
-    if (contador) contador.textContent = `${trechos.length} trecho${trechos.length !== 1 ? "s" : ""}`;
+
+    if (contador) {
+        contador.textContent = `${trechos.length} trecho${trechos.length !== 1 ? "s" : ""}`;
+    }
+
     if (!trechos.length) {
         preview.innerHTML = `<div class="dito-empty-state py-3"><i class="bi bi-file-text"></i><p>Nenhuma descrição.</p></div>`;
         return;
     }
+
     const partes = trechos.map(t =>
-        `<span${t.idioma_codigo !== 'por' ? ' style="font-style:italic;"' : ''}>${t.texto}</span>`
+        `<span${t.idioma_codigo !== 'por' ? ' style="font-style:italic;"' : ''}>${escaparHTML(t.texto)}</span>`
     );
+
     preview.innerHTML = `<p class="mb-0" style="font-size:0.9375rem; line-height:1.8;">${partes.join(" ")}</p>`;
 }
 
@@ -815,6 +898,62 @@ function mostrarToast(msg, ok) {
 document.addEventListener("keydown", e => {
     if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); salvarTrechos(); }
 });
+</script>
+{% endif %}
+
+{% if pode_finalizar %}
+<script>
+const FINALIZAR_URL = "{% url 'avancar_status' imagem.pk %}?next={{ url_voltar|urlencode }}";
+const FINALIZAR_CSRF = "{{ csrf_token }}";
+const FINALIZAR_RETORNO = "{{ url_voltar|escapejs }}";
+
+function mostrarToastFinalizacao(msg, ok) {
+    const t = document.getElementById("toastFeedback");
+    t.style.background = ok ? "#1A1A1A" : "#9B5050";
+    document.getElementById("toastIcon").className = ok
+        ? "bi bi-check-circle"
+        : "bi bi-exclamation-circle";
+    document.getElementById("toastMsg").textContent = msg;
+    t.style.display = "flex";
+    setTimeout(() => t.style.display = "none", 3500);
+}
+
+async function finalizarImagem() {
+    if (!confirm("Finalizar esta imagem? Após a finalização, ela permanecerá disponível apenas para consulta.")) {
+        return;
+    }
+
+    try {
+        const resposta = await fetch(FINALIZAR_URL, {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": FINALIZAR_CSRF,
+            },
+        });
+
+        const dados = await resposta.json();
+
+        if (!dados.ok) {
+            mostrarToastFinalizacao(
+                dados.erro || "Não foi possível finalizar a imagem.",
+                false
+            );
+            return;
+        }
+
+        mostrarToastFinalizacao(
+            `Imagem finalizada. Novo status: ${dados.novo_status}`,
+            true
+        );
+
+        setTimeout(() => {
+            window.location.href = dados.proxima_url || FINALIZAR_RETORNO;
+        }, 1000);
+
+    } catch (e) {
+        mostrarToastFinalizacao("Erro de conexão ao finalizar a imagem.", false);
+    }
+}
 </script>
 {% endif %}
 

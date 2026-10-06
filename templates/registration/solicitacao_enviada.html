@@ -44,17 +44,6 @@
             line-height: 1.6;
             margin-bottom: 1.75rem;
         }
-        .ok-card a {
-            display: inline-block;
-            padding: 0.7rem 1.75rem;
-            background: #1B3A5C;
-            color: #FFFFFF;
-            border-radius: 8px;
-            font-weight: 700;
-            font-size: 0.9rem;
-            text-decoration: none;
-        }
-        .ok-card a:hover { background: #16304D; }
     </style>
 </head>
 <body>
@@ -67,7 +56,9 @@
             vai analisar sua solicitação e definir seu perfil de acesso.
             Você poderá entrar assim que for aprovado.
         </p>
-        <a href="{% url 'login' %}">Voltar para o login</a>
+        <a href="{% url 'login' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i> Voltar
+        </a>
     </div>
 </div>
 </body>
