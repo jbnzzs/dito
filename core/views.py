@@ -1,5 +1,4 @@
 import ast
-import ntpath
 import os
 import re
 import unicodedata
@@ -12,7 +11,6 @@ import pycountry
 from babel import Locale
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import FileResponse
 from django.db import transaction
 from django.shortcuts import redirect, render, get_object_or_404
 from django.urls import reverse
@@ -157,36 +155,23 @@ def _valor_excel(data, *chaves):
 
 
 # ============================================================
-# PDF — REDE INTERNA
+# PDF — SHAREPOINT
 # ============================================================
 
-PDF_REDE_RAIZ = r"\\arara\HTML"
-PDF_PASTA_ARQUIVOS = "PDFs"
-PDF_PASTA_GRAVADOS = "GRAVADOS"
+SHAREPOINT_SITE_URL = "https://ensinolivre.sharepoint.com/sites/G25Digital"
+SHAREPOINT_BIBLIOTECA = "Shared Documents"
+SHAREPOINT_PASTA_PDFS = "PDFs"
 PDF_TIPO_MATERIAL = "mp"
 
-# O nome do componente cadastrado no Dito nem sempre é exatamente o nome
-# da pasta usada pela produção na rede.
-#
-# Exemplo confirmado:
-#   componente no Dito/Excel: ARTE
-#   pasta na rede:            ART
-#
-# À medida que outros componentes forem confirmados, basta adicionar aqui.
-PDF_COMPONENTES_REDE = {
+PDF_COMPONENTES_SHAREPOINT = {
     "ARTE": "ART",
     "ART": "ART",
+    "HISTORIA": "HIS",
+    "HIS": "HIS",
 }
 
 
-def _normalizar_codigo_rede(valor):
-    """
-    Normaliza códigos usados em nomes de pastas/arquivos da rede.
-
-    Ex.:
-    - "ART" -> "ART"
-    - "Mat" -> "MAT"
-    """
+def _normalizar_codigo_sharepoint(valor):
     texto = str(valor or "").strip()
 
     texto = unicodedata.normalize(
@@ -206,34 +191,23 @@ def _normalizar_codigo_rede(valor):
     ).upper()
 
 
-def _codigo_componente_pdf_rede(valor):
-    """
-    Retorna o código de pasta usado na rede para o componente.
-
-    O cadastro editorial pode usar um nome completo (ex.: ARTE), enquanto
-    a estrutura da rede usa uma sigla (ex.: ART).
-    """
-    normalizado = _normalizar_codigo_rede(
+def _codigo_componente_pdf_sharepoint(valor):
+    normalizado = _normalizar_codigo_sharepoint(
         valor
     )
 
     if not normalizado:
         return ""
 
-    return PDF_COMPONENTES_REDE.get(
+    return PDF_COMPONENTES_SHAREPOINT.get(
         normalizado,
         normalizado,
     )
 
 
-def _normalizar_projeto_editorial_rede(valor):
-    """
-    Mantém o projeto editorial no padrão de pasta.
-
-    Ex.: G28_E002_EF2
-    """
+def _normalizar_projeto_editorial_sharepoint(valor):
     partes = [
-        _normalizar_codigo_rede(parte)
+        _normalizar_codigo_sharepoint(parte)
         for parte in str(valor or "").strip().split("_")
         if str(parte or "").strip()
     ]
@@ -246,15 +220,10 @@ def _normalizar_projeto_editorial_rede(valor):
 
 
 def _normalizar_numero_projeto_pdf(valor):
-    """
-    Aceita '013' ou 'p013' e devolve 'p013'.
-    """
-    texto = str(valor or "").strip().lower()
-
     numeros = re.sub(
         r"\D",
         "",
-        texto,
+        str(valor or ""),
     )
 
     if not numeros:
@@ -264,19 +233,9 @@ def _normalizar_numero_projeto_pdf(valor):
 
 
 def _extrair_ano_pdf(valor):
-    """
-    Extrai o ano/série do valor vindo do relatório.
-
-    Exemplos:
-    - 9 -> 9
-    - 9ANO -> 9
-    - 9º ANO -> 9
-    """
-    texto = str(valor or "").strip()
-
     encontrado = re.search(
         r"\d{1,2}",
-        texto,
+        str(valor or ""),
     )
 
     if not encontrado:
@@ -286,12 +245,7 @@ def _extrair_ano_pdf(valor):
 
 
 def _prefixo_arquivo_pdf(projeto_editorial):
-    """
-    Do projeto editorial G28_E002_EF2, usa G28_E002 no nome do arquivo.
-
-    Resultado: g28_e002
-    """
-    projeto = _normalizar_projeto_editorial_rede(
+    projeto = _normalizar_projeto_editorial_sharepoint(
         projeto_editorial
     )
 
@@ -309,45 +263,50 @@ def _prefixo_arquivo_pdf(projeto_editorial):
     ).lower()
 
 
-def _montar_caminho_pdf_rede(
+def _montar_url_pdf_sharepoint(
     projeto_editorial,
     numero_projeto,
     componente,
     volume_ano,
 ):
-    r"""
-    Monta o caminho completo do Manual do Professor na rede interna.
-
-    Exemplo:
-    \\arara\HTML\G28_E002_EF2\ART\PDFs\9ANO\GRAVADOS\
-    g28_e002_9p013a_mp.pdf
-    """
-    projeto = _normalizar_projeto_editorial_rede(
-        projeto_editorial
+    projeto_editorial = (
+        _normalizar_projeto_editorial_sharepoint(
+            projeto_editorial
+        )
     )
+
+    partes = [
+        parte
+        for parte in projeto_editorial.split("_")
+        if parte
+    ]
+
+    if len(partes) < 2:
+        return ""
+
+    projeto = partes[0].lower()
+    prefixo = "_".join(partes[:2]).lower()
 
     numero = _normalizar_numero_projeto_pdf(
         numero_projeto
     )
 
-    componente_codigo = _codigo_componente_pdf_rede(
-        componente
+    componente_codigo = (
+        _codigo_componente_pdf_sharepoint(
+            componente
+        )
     )
 
     ano = _extrair_ano_pdf(
         volume_ano
     )
 
-    prefixo = _prefixo_arquivo_pdf(
-        projeto
-    )
-
     if (
         not projeto
+        or not prefixo
         or not numero
         or not componente_codigo
         or not ano
-        or not prefixo
     ):
         return ""
 
@@ -363,14 +322,23 @@ def _montar_caminho_pdf_rede(
         f"{PDF_TIPO_MATERIAL}.pdf"
     )
 
+    segmentos = [
+        SHAREPOINT_BIBLIOTECA,
+        projeto,
+        SHAREPOINT_PASTA_PDFS,
+        componente_codigo,
+        nome_pdf,
+    ]
+
+    caminho = "/".join(
+        quote(segmento, safe="")
+        for segmento in segmentos
+    )
+
     return (
-        f"{PDF_REDE_RAIZ}\\"
-        f"{projeto}\\"
-        f"{componente_codigo}\\"
-        f"{PDF_PASTA_ARQUIVOS}\\"
-        f"{ano}ANO\\"
-        f"{PDF_PASTA_GRAVADOS}\\"
-        f"{nome_pdf}"
+        f"{SHAREPOINT_SITE_URL}/"
+        f"{caminho}"
+        "?web=1"
     )
 
 
@@ -1408,7 +1376,7 @@ def importar_imagens(request):
         )
 
     # ------------------------------------------------------------
-    # PDF na rede interna
+    # PDF no SharePoint
     # ------------------------------------------------------------
     projeto_editorial_pdf = (
         request.POST.get(
@@ -1427,7 +1395,7 @@ def importar_imagens(request):
     )
 
     projeto_editorial_pdf = (
-        _normalizar_projeto_editorial_rede(
+        _normalizar_projeto_editorial_sharepoint(
             projeto_editorial_pdf
         )
     )
@@ -1441,7 +1409,7 @@ def importar_imagens(request):
     if not projeto_editorial_pdf:
         messages.error(
             request,
-            "Informe o Projeto Editorial utilizado na rede interna.",
+            "Informe o Projeto Editorial utilizado no SharePoint.",
         )
         return render(
             request,
@@ -1894,8 +1862,8 @@ def importar_imagens(request):
             )
         ).strip()
 
-        caminho_pdf_rede = (
-            _montar_caminho_pdf_rede(
+        url_pdf_sharepoint = (
+            _montar_url_pdf_sharepoint(
                 projeto_editorial_pdf,
                 numero_projeto_pdf,
                 componente_raw,
@@ -1940,9 +1908,9 @@ def importar_imagens(request):
                 retranca,
             ),
 
-            # O campo existente url_pdf passa a armazenar o caminho UNC
-            # do Manual do Professor na rede interna.
-            url_pdf=caminho_pdf_rede,
+            # O campo existente url_pdf passa a armazenar o link direto
+            # do Manual do Professor no SharePoint.
+            url_pdf=url_pdf_sharepoint,
 
             # Guarda os valores ORIGINAIS da linha do FotoWeb.
             # Na exportação específica, somente descricao e
@@ -1978,9 +1946,9 @@ def importar_imagens(request):
                 f"'{projeto_selecionado.nome}' "
                 f"com FotoWeb preparado"
                 + (
-                    " e caminho do PDF gerado"
-                    if caminho_pdf_rede
-                    else " — PDF sem dados suficientes para montar o caminho"
+                    " e link do PDF no SharePoint gerado"
+                    if url_pdf_sharepoint
+                    else " — PDF sem dados suficientes para montar o link"
                 )
             ),
         })
@@ -2905,136 +2873,6 @@ def avancar_status(request, pk):
         "novo_slug": proximo_status.slug,
         "proxima_url": proxima_url,
     })
-
-
-# ============================================================
-# PDF — ABRIR ARQUIVO DA REDE
-# ============================================================
-
-@login_required
-def abrir_pdf_rede(request, pk):
-    """
-    Entrega o PDF ao navegador por meio do Django.
-
-    Isso evita depender de links file:// no navegador, que normalmente são
-    bloqueados quando a aplicação está sendo acessada por HTTP/HTTPS.
-    """
-    imagem = get_object_or_404(
-        Imagem,
-        pk=pk,
-        ativo=True,
-    )
-
-    caminho = str(
-        imagem.url_pdf or ""
-    ).strip()
-
-    # Corrige automaticamente caminhos de imagens já importadas antes do
-    # mapeamento do componente ter sido ajustado.
-    #
-    # Exemplo:
-    #   ...\\ARTE\\PDFs\\...
-    # passa a ser:
-    #   ...\\ART\\PDFs\\...
-    componente_nome = (
-        imagem.componente_curricular.nome
-        if imagem.componente_curricular
-        else ""
-    )
-
-    componente_original = _normalizar_codigo_rede(
-        componente_nome
-    )
-    componente_rede = _codigo_componente_pdf_rede(
-        componente_nome
-    )
-
-    if (
-        caminho
-        and componente_original
-        and componente_rede
-        and componente_original != componente_rede
-    ):
-        trecho_antigo = (
-            f"\\{componente_original}\\"
-        )
-        trecho_novo = (
-            f"\\{componente_rede}\\"
-        )
-
-        caminho_corrigido = caminho.replace(
-            trecho_antigo,
-            trecho_novo,
-            1,
-        )
-
-        if caminho_corrigido != caminho:
-            caminho = caminho_corrigido
-
-            # Persiste a correção para não precisar recalcular no próximo acesso.
-            Imagem.objects.filter(
-                pk=imagem.pk
-            ).update(
-                url_pdf=caminho
-            )
-
-    if not caminho:
-        messages.error(
-            request,
-            "Esta imagem ainda não possui caminho de PDF configurado.",
-        )
-        return redirect(
-            request.META.get("HTTP_REFERER")
-            or reverse("imagens_lista")
-        )
-
-    raiz_normalizada = ntpath.normcase(
-        ntpath.normpath(
-            PDF_REDE_RAIZ
-        )
-    )
-
-    caminho_normalizado = ntpath.normcase(
-        ntpath.normpath(
-            caminho
-        )
-    )
-
-    # Segurança: só permitimos arquivos dentro da raiz definida da empresa.
-    if not (
-        caminho_normalizado == raiz_normalizada
-        or caminho_normalizado.startswith(
-            raiz_normalizada + "\\"
-        )
-    ):
-        messages.error(
-            request,
-            "O caminho do PDF está fora da pasta de rede permitida.",
-        )
-        return redirect(
-            request.META.get("HTTP_REFERER")
-            or reverse("imagens_lista")
-        )
-
-    if not os.path.isfile(caminho):
-        messages.error(
-            request,
-            f"PDF não encontrado na rede: {caminho}",
-        )
-        return redirect(
-            request.META.get("HTTP_REFERER")
-            or reverse("imagens_lista")
-        )
-
-    return FileResponse(
-        open(
-            caminho,
-            "rb",
-        ),
-        content_type="application/pdf",
-        as_attachment=False,
-        filename=ntpath.basename(caminho),
-    )
 
 
 # ============================================================

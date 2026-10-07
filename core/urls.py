@@ -10,7 +10,6 @@ urlpatterns = [
     path("imagens/nova/", views.imagem_criar, name="imagem_criar"),
     path("imagens/importar/", views.importar_imagens, name="importar_imagens"),
     path("imagens/importar/<uuid:importacao_id>/lotes/", views.organizar_lotes, name="organizar_lotes"),
-    path("imagens/<int:pk>/pdf/", views.abrir_pdf_rede, name="abrir_pdf_rede"),
     path("imagens/<int:pk>/editar/", views.imagem_editar, name="imagem_editar"),
     path("imagens/<int:pk>/excluir/", views.imagem_excluir, name="imagem_excluir"),
     path("imagens/<int:pk>/descrever/", views.descricao_imagem, name="descricao_imagem"),

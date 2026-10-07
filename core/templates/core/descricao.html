@@ -310,11 +310,11 @@
 
             {% if imagem.url_pdf %}
             <a
-                href="{% url 'abrir_pdf_rede' imagem.pk %}"
+                href="{{ imagem.url_pdf }}"
                 target="_blank"
                 rel="noopener"
                 class="btn btn-outline-secondary btn-sm flex-fill d-flex align-items-center justify-content-center gap-1"
-                title="Abrir PDF da rede"
+                title="Abrir PDF no SharePoint"
             >
                 <i class="bi bi-file-earmark-pdf"></i>
                 Ver PDF

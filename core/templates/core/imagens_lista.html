@@ -1058,11 +1058,11 @@
                                 {% if img.url_pdf %}
 
                                 <a
-                                    href="{% url 'abrir_pdf_rede' img.pk %}"
+                                    href="{{ img.url_pdf }}"
                                     target="_blank"
                                     rel="noopener"
                                     class="btn btn-sm btn-outline-secondary dito-btn-acao"
-                                    title="Abrir PDF da rede"
+                                    title="Abrir PDF no SharePoint"
                                 >
                                     <i class="bi bi-file-earmark-pdf"></i>
                                 </a>
