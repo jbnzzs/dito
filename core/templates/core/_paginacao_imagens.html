@@ -1,0 +1,132 @@
+{% if pagina_obj and total %}
+<div
+    class="d-flex align-items-center justify-content-between px-3 py-2 border-top flex-wrap gap-2"
+    style="font-size:0.82rem;"
+>
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+        <span class="text-secondary">
+            Página {{ pagina_obj.number }} de {{ pagina_obj.paginator.num_pages }}
+            &nbsp;·&nbsp;
+            {{ total }}
+            {% if total == 1 %}
+                {{ paginacao_label|default:"imagem" }}
+            {% else %}
+                {{ paginacao_label_plural|default:"imagens" }}
+            {% endif %}
+        </span>
+
+        <div class="d-flex align-items-center gap-2">
+            <label class="text-secondary mb-0" style="font-size:0.78rem;">
+                Exibir
+            </label>
+
+            <select
+                class="form-select form-select-sm dito-por-pagina"
+                style="width:auto; min-width:76px;"
+                aria-label="Quantidade por página"
+            >
+                {% for opcao in por_pagina_opcoes %}
+                <option
+                    value="{{ opcao }}"
+                    {% if opcao == por_pagina %}selected{% endif %}
+                >
+                    {{ opcao }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <div class="d-flex align-items-center gap-1 flex-wrap">
+        {% if pagina_obj.has_previous %}
+        <a
+            href="?{% if qs_sem_pagina %}{{ qs_sem_pagina }}&{% endif %}pagina=1"
+            class="btn btn-outline-secondary btn-sm"
+            title="Primeira página"
+        >
+            <i class="bi bi-chevron-double-left"></i>
+        </a>
+
+        <a
+            href="?{% if qs_sem_pagina %}{{ qs_sem_pagina }}&{% endif %}pagina={{ pagina_obj.previous_page_number }}"
+            class="btn btn-outline-secondary btn-sm"
+            title="Página anterior"
+        >
+            <i class="bi bi-chevron-left"></i>
+        </a>
+        {% endif %}
+
+        <form
+            class="d-flex align-items-center gap-1 mx-1 dito-ir-pagina-form"
+            onsubmit="return ditoIrParaPagina(event, this);"
+        >
+            <span class="text-secondary" style="font-size:0.75rem;">Página</span>
+            <input
+                type="number"
+                min="1"
+                max="{{ pagina_obj.paginator.num_pages }}"
+                value="{{ pagina_obj.number }}"
+                class="form-control form-control-sm dito-ir-pagina"
+                style="width:70px; text-align:center;"
+                aria-label="Ir para página"
+            >
+            <button
+                type="submit"
+                class="btn btn-outline-secondary btn-sm"
+                title="Ir para página"
+            >
+                Ir
+            </button>
+        </form>
+
+        {% if pagina_obj.has_next %}
+        <a
+            href="?{% if qs_sem_pagina %}{{ qs_sem_pagina }}&{% endif %}pagina={{ pagina_obj.next_page_number }}"
+            class="btn btn-outline-secondary btn-sm"
+            title="Próxima página"
+        >
+            <i class="bi bi-chevron-right"></i>
+        </a>
+
+        <a
+            href="?{% if qs_sem_pagina %}{{ qs_sem_pagina }}&{% endif %}pagina={{ pagina_obj.paginator.num_pages }}"
+            class="btn btn-outline-secondary btn-sm"
+            title="Última página"
+        >
+            <i class="bi bi-chevron-double-right"></i>
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+(function () {
+    document.querySelectorAll(".dito-por-pagina").forEach(function (select) {
+        select.addEventListener("change", function () {
+            const url = new URL(window.location.href);
+            url.searchParams.set("por_pagina", this.value);
+            url.searchParams.set("pagina", "1");
+            window.location.href = url.toString();
+        });
+    });
+})();
+
+function ditoIrParaPagina(event, form) {
+    event.preventDefault();
+
+    const input = form.querySelector(".dito-ir-pagina");
+    const pagina = parseInt(input.value, 10);
+    const maximo = parseInt(input.max, 10);
+
+    if (!pagina || pagina < 1 || pagina > maximo) {
+        input.focus();
+        return false;
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("pagina", pagina);
+    window.location.href = url.toString();
+    return false;
+}
+</script>
+{% endif %}

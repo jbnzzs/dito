@@ -9,105 +9,178 @@
 
 {% if messages %}
     {% for msg in messages %}
-    <div class="alert alert-{{ msg.tags }} mb-3">{{ msg }}</div>
+    <div class="alert alert-{{ msg.tags }} mb-3">
+        {{ msg }}
+    </div>
     {% endfor %}
 {% endif %}
 
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
     <div>
         <h2 class="mb-1">Lotes</h2>
+
         <p class="text-secondary mb-0" style="font-size:0.875rem;">
             {% if eh_coordenacao %}
-                {{ total_lotes }} lote{{ total_lotes|pluralize }}
-                {% if mostrar_inativos %}&nbsp;·&nbsp; <strong>mostrando inativos</strong>{% endif %}
+                {{ total_lotes }}
+                {% if total_lotes == 1 %}lote encontrado{% else %}lotes encontrados{% endif %}
+                {% if mostrar_inativos %}
+                    &nbsp;·&nbsp;
+                    <strong>mostrando inativos</strong>
+                {% endif %}
             {% else %}
-                {{ total_lotes }} lote{{ total_lotes|pluralize }} com tarefas suas
+                {{ total_lotes }}
+                {% if total_lotes == 1 %}lote com tarefas suas{% else %}lotes com tarefas suas{% endif %}
             {% endif %}
         </p>
     </div>
 
     {% if eh_coordenacao %}
-    <a href="{% url 'organizar_lotes_geral' %}" class="btn btn-primary">
+    <a
+        href="{% url 'organizar_lotes_geral' %}"
+        class="btn btn-primary"
+    >
         <i class="bi bi-plus-lg me-1"></i>
         Criar lote
     </a>
     {% endif %}
 </div>
 
+<div class="card mb-3">
+    <div class="card-body py-3">
+        <form method="get" class="row g-3 align-items-end">
 
-{# ---- Busca ---- #}
-<div class="card dito-card-flush mb-3">
-    <div class="card-body py-3 px-3">
-
-        <form method="get" class="d-flex align-items-center gap-3 flex-wrap">
-
-            <div class="dito-search flex-grow-1" style="max-width:360px;">
-                <i class="bi bi-search text-secondary"></i>
+            <div class="col-md-6 col-xl-3">
+                <label class="form-label mb-1">
+                    Lote
+                </label>
 
                 <input
                     type="text"
                     name="busca"
                     value="{{ busca }}"
-                    placeholder="Buscar por nome do lote..."
+                    class="form-control"
+                    placeholder="Buscar por nome..."
+                    autocomplete="off"
                 >
+            </div>
+
+            <div class="col-md-6 col-xl-3">
+                <label class="form-label mb-1">
+                    Status
+                </label>
+
+                <select
+                    name="status"
+                    class="form-select"
+                >
+                    <option value="">
+                        Todos
+                    </option>
+
+                    {% for status in status_disponiveis %}
+                    <option
+                        value="{{ status.pk }}"
+                        {% if status.pk|stringformat:"s" == status_selecionado %}selected{% endif %}
+                    >
+                        {{ status.nome }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-6 col-xl-2">
+                <label class="form-label mb-1">
+                    Data prevista
+                </label>
+
+                <input
+                    type="date"
+                    name="data_prevista"
+                    value="{{ data_prevista_selecionada }}"
+                    class="form-control"
+                >
+            </div>
+
+            <div class="col-md-6 col-xl-2">
+                <label class="form-label mb-1">
+                    Data de término
+                </label>
+
+                <input
+                    type="date"
+                    name="data_termino"
+                    value="{{ data_termino_selecionada }}"
+                    class="form-control"
+                >
+            </div>
+
+            <div class="col-md-6 col-xl-2">
+                <button
+                    type="submit"
+                    class="btn btn-primary w-100"
+                >
+                    <i class="bi bi-funnel me-1"></i>
+                    Filtrar
+                </button>
             </div>
 
             {% if eh_coordenacao %}
-            <div class="form-check form-switch mb-0">
+            <div class="col-12">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <div class="form-check form-switch mb-0">
+                        <input
+                            type="checkbox"
+                            name="mostrar_inativos"
+                            value="1"
+                            class="form-check-input"
+                            id="mostrarInativos"
+                            {% if mostrar_inativos %}checked{% endif %}
+                        >
 
-                <input
-                    type="checkbox"
-                    name="mostrar_inativos"
-                    value="1"
-                    class="form-check-input"
-                    id="mostrarInativos"
-                    {% if mostrar_inativos %}checked{% endif %}
+                        <label
+                            class="form-check-label text-secondary"
+                            for="mostrarInativos"
+                            style="font-size:0.8rem;"
+                        >
+                            Mostrar apenas inativos
+                        </label>
+                    </div>
+
+                    {% if filtros_ativos %}
+                    <a
+                        href="{% url 'lotes_lista' %}"
+                        class="btn btn-outline-secondary btn-sm"
+                    >
+                        <i class="bi bi-x-lg me-1"></i>
+                        Limpar filtros
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% elif filtros_ativos %}
+            <div class="col-12">
+                <a
+                    href="{% url 'lotes_lista' %}"
+                    class="btn btn-outline-secondary btn-sm"
                 >
-
-                <label
-                    class="form-check-label text-secondary"
-                    for="mostrarInativos"
-                    style="font-size:0.8rem;"
-                >
-                    Mostrar apenas inativos
-                </label>
-
+                    <i class="bi bi-x-lg me-1"></i>
+                    Limpar filtros
+                </a>
             </div>
             {% endif %}
 
-            <button type="submit" class="btn btn-primary btn-sm px-3">
-                <i class="bi bi-funnel me-1"></i>
-                Filtrar
-            </button>
-
-            {% if busca or mostrar_inativos %}
-            <a
-                href="{% url 'lotes_lista' %}"
-                class="btn btn-outline-secondary btn-sm px-3"
-            >
-                <i class="bi bi-x me-1"></i>
-                Limpar
-            </a>
-            {% endif %}
-
         </form>
-
     </div>
 </div>
 
-
-{# ---- Card de imagens avulsas ---- #}
 {% if total_avulsas > 0 %}
-
 <a
     href="{% url 'minhas_tarefas' %}?sem_lote=1&next={{ request.get_full_path|urlencode }}"
     class="card mb-3 dito-card-link"
     style="text-decoration:none;"
 >
     <div class="card-body d-flex align-items-center justify-content-between py-3">
-
         <div class="d-flex align-items-center gap-3">
-
             <i
                 class="bi bi-images"
                 style="font-size:1.4rem; color:var(--dito-dourado);"
@@ -130,125 +203,208 @@
                     sem lote
                 </div>
             </div>
-
         </div>
 
         <i class="bi bi-chevron-right text-secondary"></i>
-
     </div>
 </a>
-
 {% endif %}
 
-
-{# ---- Lista de lotes ---- #}
 {% if lotes_dados %}
-
 <div class="d-flex flex-column gap-3">
 
     {% for item in lotes_dados %}
-
-    <div class="card dito-card-destaque">
+    <div
+        class="card dito-card-destaque"
+        {% if item.correcoes_ativas %}
+        style="
+            border:2px solid #D9534F;
+            box-shadow:0 0 0 2px rgba(217,83,79,0.08);
+        "
+        {% endif %}
+    >
         <div class="card-body">
+
+            {% if item.correcoes_ativas %}
+            <div
+                class="d-flex align-items-center gap-2 mb-3 px-3 py-2 rounded-3"
+                style="
+                    background:#FFF0F0;
+                    color:#B42318;
+                    border:1px solid #F3B7B5;
+                    font-size:0.8rem;
+                    font-weight:700;
+                "
+            >
+                <i class="bi bi-exclamation-triangle-fill"></i>
+
+                {{ item.correcoes_ativas }}
+                {% if item.correcoes_ativas == 1 %}
+                    imagem precisa de correção
+                {% else %}
+                    imagens precisam de correção
+                {% endif %}
+            </div>
+            {% endif %}
 
             <div
                 class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-3"
             >
+                <div class="flex-grow-1">
 
-                <div>
-
-                    <h5 class="fw-bold mb-1">
-
-                        <a
-                            href="{% url 'minhas_tarefas' %}?lote={{ item.obj.pk }}&next={{ request.get_full_path|urlencode }}"
-                            style="
-                                text-decoration:none;
-                                color:var(--dito-vinho-escuro);
-                            "
-                        >
-                            {{ item.obj.nome }}
-                        </a>
+                    <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                        <h5 class="fw-bold mb-0">
+                            <a
+                                href="{% url 'minhas_tarefas' %}?lote={{ item.obj.pk }}&next={{ request.get_full_path|urlencode }}"
+                                style="text-decoration:none; color:var(--dito-vinho-escuro);"
+                            >
+                                {{ item.obj.nome }}
+                            </a>
+                        </h5>
 
                         {% if not item.obj.ativo %}
                         <span
-                            class="dito-status dito-status-descrevendo ms-1"
+                            class="dito-status dito-status-descrevendo"
                             style="font-size:0.7rem;"
                         >
                             Inativo
                         </span>
                         {% endif %}
-
-                    </h5>
-
+                    </div>
 
                     {% if item.obj.descricao %}
-
                     <p
-                        class="text-secondary mb-1"
+                        class="text-secondary mb-3"
                         style="font-size:0.8rem;"
                     >
                         {{ item.obj.descricao }}
                     </p>
-
                     {% endif %}
 
+                    <div class="row g-2 mt-1">
+
+                        <div class="col-sm-6 col-xl-3">
+                            <div
+                                class="border rounded-3 px-3 py-2 h-100"
+                                style="background:#FAFAF8;"
+                            >
+                                <div
+                                    class="text-secondary mb-1"
+                                    style="font-size:0.68rem; font-weight:700; text-transform:uppercase;"
+                                >
+                                    Responsável atual
+                                </div>
+
+                                <div
+                                    class="fw-semibold"
+                                    style="font-size:0.82rem; color:#263747;"
+                                >
+                                    {{ item.responsaveis_texto }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-sm-6 col-xl-3">
+                            <div
+                                class="border rounded-3 px-3 py-2 h-100"
+                                style="background:#FAFAF8;"
+                            >
+                                <div
+                                    class="text-secondary mb-1"
+                                    style="font-size:0.68rem; font-weight:700; text-transform:uppercase;"
+                                >
+                                    Status atual
+                                </div>
+
+                                <div
+                                    class="fw-semibold"
+                                    style="font-size:0.82rem; color:#263747;"
+                                >
+                                    {{ item.status_resumo }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-sm-6 col-xl-3">
+                            <div
+                                class="border rounded-3 px-3 py-2 h-100"
+                                style="background:#FAFAF8;"
+                            >
+                                <div
+                                    class="text-secondary mb-1"
+                                    style="font-size:0.68rem; font-weight:700; text-transform:uppercase;"
+                                >
+                                    Data prevista
+                                </div>
+
+                                <div
+                                    class="fw-semibold"
+                                    style="font-size:0.82rem; color:#263747;"
+                                >
+                                    {% if item.obj.data_prevista %}
+                                        {{ item.obj.data_prevista|date:"d/m/Y" }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-sm-6 col-xl-3">
+                            <div
+                                class="border rounded-3 px-3 py-2 h-100"
+                                style="background:#FAFAF8;"
+                            >
+                                <div
+                                    class="text-secondary mb-1"
+                                    style="font-size:0.68rem; font-weight:700; text-transform:uppercase;"
+                                >
+                                    Data de término
+                                </div>
+
+                                <div
+                                    class="fw-semibold"
+                                    style="font-size:0.82rem; color:#263747;"
+                                >
+                                    {% if item.obj.data_efetiva %}
+                                        {{ item.obj.data_efetiva|date:"d/m/Y" }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
 
                     <div
-                        class="d-flex flex-wrap gap-3 text-secondary"
-                        style="font-size:0.75rem;"
+                        class="d-flex flex-wrap gap-3 text-secondary mt-2"
+                        style="font-size:0.74rem;"
                     >
-
                         <span>
                             <i class="bi bi-images me-1"></i>
                             {{ item.total }}
                             imagem{{ item.total|pluralize }}
                         </span>
 
-
                         {% if eh_coordenacao %}
-
                         <span>
-                            <i class="bi bi-person me-1"></i>
-
+                            <i class="bi bi-person-plus me-1"></i>
+                            Criado por:
                             {{ item.obj.criado_por.get_full_name|default:item.obj.criado_por.email }}
                         </span>
 
                         <span>
                             <i class="bi bi-calendar-plus me-1"></i>
-
+                            Criado em:
                             {{ item.obj.criado_em|date:"d/m/Y" }}
                         </span>
-
                         {% endif %}
-
-
-                        {% if item.obj.data_prevista %}
-
-                        <span>
-                            <i class="bi bi-calendar-event me-1"></i>
-                            Prevista:
-                            <strong>{{ item.obj.data_prevista|date:"d/m/Y" }}</strong>
-                        </span>
-
-                        {% endif %}
-
-                        {% if item.obj.data_efetiva %}
-
-                        <span style="color:#2E7D5B;">
-                            <i class="bi bi-calendar-check-fill me-1"></i>
-                            Efetiva:
-                            <strong>{{ item.obj.data_efetiva|date:"d/m/Y" }}</strong>
-                        </span>
-
-                        {% endif %}
-
                     </div>
 
                 </div>
 
-
                 <div class="d-flex gap-2">
-
                     <a
                         href="{% url 'minhas_tarefas' %}?lote={{ item.obj.pk }}&next={{ request.get_full_path|urlencode }}"
                         class="btn btn-sm btn-primary"
@@ -257,9 +413,7 @@
                         Abrir lote
                     </a>
 
-
                     {% if eh_coordenacao %}
-
                     <a
                         href="{% url 'lote_editar' item.obj.pk %}"
                         class="btn btn-sm btn-outline-secondary dito-btn-acao"
@@ -267,40 +421,26 @@
                     >
                         <i class="bi bi-pencil"></i>
                     </a>
-
                     {% endif %}
-
                 </div>
-
             </div>
 
-
-            {# ---- Progresso: visão coordenação ---- #}
             {% if eh_coordenacao %}
 
                 {% if item.progresso %}
-
                 <div class="dito-progresso-barra mb-2">
-
                     {% for fase in item.progresso %}
-
                     <div
                         class="dito-progresso-segmento dito-progresso-{{ fase.slug }}"
                         style="width:{{ fase.percentual|unlocalize }}%;"
                         title="{{ fase.nome }}: {{ fase.quantidade }} imagem(ns)"
                     ></div>
-
                     {% endfor %}
-
                 </div>
 
-
                 <div class="d-flex flex-wrap gap-3">
-
                     {% for fase in item.progresso %}
-
                     <span class="dito-progresso-legenda">
-
                         <span
                             class="dito-progresso-ponto dito-progresso-{{ fase.slug }}"
                         ></span>
@@ -310,16 +450,10 @@
                         <strong>
                             {{ fase.quantidade }}
                         </strong>
-
                     </span>
-
                     {% endfor %}
-
                 </div>
-
-
                 {% else %}
-
                 <p
                     class="text-secondary mb-0"
                     style="font-size:0.8rem;"
@@ -327,54 +461,36 @@
                     <i class="bi bi-info-circle me-1"></i>
                     Nenhuma imagem ativa neste lote.
                 </p>
-
                 {% endif %}
 
-
-            {# ---- Progresso: descritor / revisor ---- #}
             {% elif item.meu_progresso %}
 
                 <div class="dito-progresso-barra mb-2">
-
                     <div
                         class="dito-progresso-segmento dito-progresso-finalizado"
                         style="width:{{ item.meu_progresso.percentual|unlocalize }}%;"
                         title="{{ item.meu_progresso.concluidas }} concluída(s)"
                     ></div>
-
                 </div>
 
-
                 <div class="d-flex flex-wrap gap-3 align-items-center">
-
                     <span class="dito-progresso-legenda">
-
                         <strong>
                             {{ item.meu_progresso.concluidas }}
                         </strong>
-
                         de {{ item.meu_progresso.total }}
                         concluída{{ item.meu_progresso.total|pluralize }}
-
                     </span>
 
-
                     {% if item.meu_progresso.restantes > 0 %}
-
                     <span class="dito-progresso-legenda">
-
                         <i class="bi bi-hourglass-split me-1"></i>
-
                         <strong>
                             {{ item.meu_progresso.restantes }}
                         </strong>
-
                         restante{{ item.meu_progresso.restantes|pluralize }}
-
                     </span>
-
                     {% else %}
-
                     <span
                         class="dito-progresso-legenda"
                         style="color:#2E7D5B;"
@@ -382,21 +498,15 @@
                         <i class="bi bi-check-circle me-1"></i>
                         Tudo concluído
                     </span>
-
                     {% endif %}
-
                 </div>
 
             {% endif %}
 
-
-            {# ---- Atribuição do lote ---- #}
             {% if eh_coordenacao and item.obj.ativo and item.total > 0 %}
-
             <div class="dito-lote-atribuir mt-3">
 
                 <div class="d-flex align-items-center gap-2 mb-2">
-
                     <i
                         class="bi bi-person-plus"
                         style="color:var(--dito-vinho);"
@@ -413,9 +523,7 @@
                     >
                         Atribuir lote
                     </span>
-
                 </div>
-
 
                 <div class="d-flex flex-wrap gap-3">
 
@@ -454,15 +562,11 @@
                             </option>
 
                             {% for d in descritores %}
-
                             <option value="{{ d.pk }}">
                                 {{ d.get_full_name|default:d.email }}
                             </option>
-
                             {% endfor %}
-
                         </select>
-
 
                         <button
                             type="submit"
@@ -471,9 +575,7 @@
                             <i class="bi bi-person-check me-1"></i>
                             Atribuir descrição
                         </button>
-
                     </form>
-
 
                     <form
                         method="post"
@@ -510,15 +612,11 @@
                             </option>
 
                             {% for r in revisores %}
-
                             <option value="{{ r.pk }}">
                                 {{ r.get_full_name|default:r.email }}
                             </option>
-
                             {% endfor %}
-
                         </select>
-
 
                         <button
                             type="submit"
@@ -527,29 +625,14 @@
                             <i class="bi bi-send-check me-1"></i>
                             Atribuir conferência
                         </button>
-
                     </form>
 
                 </div>
-
-
-                <p
-                    class="text-secondary mt-2 mb-0"
-                    style="font-size:0.72rem;"
-                >
-                    A ação é aplicada apenas às imagens no status elegível
-                    (Liberado para descrição → descritor; Descrito → revisor).
-                    As demais são ignoradas.
-                </p>
-
             </div>
 
-
-            {# ---- Alteração manual de status ---- #}
             <div class="dito-lote-atribuir mt-3">
 
                 <div class="d-flex align-items-center gap-2 mb-2">
-
                     <i
                         class="bi bi-arrow-repeat"
                         style="color:var(--dito-vinho);"
@@ -566,9 +649,7 @@
                     >
                         Alterar status do lote
                     </span>
-
                 </div>
-
 
                 <form
                     method="post"
@@ -599,15 +680,12 @@
                             Selecione o novo status...
                         </option>
 
-                        {% for s in status_disponiveis %}
-
-                        <option value="{{ s.pk }}">
-                            {{ s.ordem }}. {{ s.nome }}
+                        {% for status in status_disponiveis %}
+                        <option value="{{ status.pk }}">
+                            {{ status.ordem }}. {{ status.nome }}
                         </option>
-
                         {% endfor %}
                     </select>
-
 
                     <button
                         type="submit"
@@ -616,45 +694,34 @@
                         <i class="bi bi-arrow-repeat me-1"></i>
                         Aplicar a todas
                     </button>
-
                 </form>
-
-
-                <p
-                    class="text-secondary mt-2 mb-0"
-                    style="font-size:0.72rem;"
-                >
-                    Atalho manual: move todas as imagens do lote para o
-                    status escolhido, sem passar pelas regras do fluxo.
-                    Cada alteração fica registrada no histórico.
-                </p>
-
             </div>
-
             {% endif %}
 
         </div>
     </div>
-
     {% endfor %}
 
 </div>
-
-
 {% else %}
 
 <div class="card">
-
     <div class="dito-empty-state py-5">
-
         <i class="bi bi-collection"></i>
 
         {% if eh_coordenacao %}
-
         <p>
-            Nenhum lote encontrado{% if busca %} com esse nome{% endif %}.
+            Nenhum lote encontrado com os filtros atuais.
         </p>
 
+        {% if filtros_ativos %}
+        <a
+            href="{% url 'lotes_lista' %}"
+            class="btn btn-outline-secondary mt-2"
+        >
+            Limpar filtros
+        </a>
+        {% else %}
         <a
             href="{% url 'organizar_lotes_geral' %}"
             class="btn btn-outline-primary mt-2"
@@ -662,25 +729,15 @@
             <i class="bi bi-plus-lg me-1"></i>
             Criar primeiro lote
         </a>
+        {% endif %}
 
         {% else %}
 
         <p>
             Você ainda não tem lotes atribuídos.
         </p>
-
-        <p
-            class="text-secondary"
-            style="font-size:0.8rem;"
-        >
-            Assim que o coordenador atribuir um lote a você,
-            ele aparecerá aqui.
-        </p>
-
         {% endif %}
-
     </div>
-
 </div>
 
 {% endif %}

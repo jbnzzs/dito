@@ -18,7 +18,7 @@
     </a>
 </div>
 
-<div class="card" style="max-width:640px;">
+<div class="card" style="max-width:880px;">
     <div class="card-body p-4">
         <form method="post">
             {% csrf_token %}
@@ -59,30 +59,77 @@
                 <div class="form-text">Quem precisa agir para a tarefa sair deste status.</div>
             </div>
 
-            <div class="form-check mb-2">
-                <input type="checkbox" name="exige_atribuicao" class="form-check-input" id="exigeAtribuicao"
-                       {% if status.exige_atribuicao %}checked{% endif %}>
-                <label class="form-check-label" for="exigeAtribuicao">
-                    Exige atribuição do coordenador antes de avançar
-                </label>
+            <input type="hidden" name="flags_workflow_presentes" value="1">
+
+            <div class="border rounded-3 p-3 mb-3 bg-light">
+                <h6 class="fw-bold mb-1">Comportamento da tarefa</h6>
+                <p class="text-secondary small mb-3">Defina o que acontece quando uma imagem chega a este status.</p>
+
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" name="exige_atribuicao" id="exigeAtribuicao"
+                           {% if status.exige_atribuicao %}checked{% endif %}>
+                    <label class="form-check-label fw-semibold" for="exigeAtribuicao">Exige atribuição do coordenador</label>
+                    <div class="form-text mt-0">Precisa atribuir a tarefa antes de avançar.</div>
+                </div>
+
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" name="permite_edicao" id="permiteEdicao"
+                           {% if status.permite_edicao %}checked{% endif %}>
+                    <label class="form-check-label fw-semibold" for="permiteEdicao">Permite edição da descrição</label>
+                    <div class="form-text mt-0">O perfil responsável pode editar a descrição neste status.</div>
+                </div>
+
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" name="avanca_ao_abrir" id="avancaAoAbrir"
+                           {% if status.avanca_ao_abrir %}checked{% endif %}>
+                    <label class="form-check-label fw-semibold" for="avancaAoAbrir">Avança automaticamente ao abrir</label>
+                    <div class="form-text mt-0">Ao abrir a tarefa, ela passa automaticamente para o próximo status.</div>
+                </div>
             </div>
 
-            <div class="form-check mb-2">
-                <input type="checkbox" name="is_inicial" class="form-check-input" id="isInicial"
-                       {% if status.is_inicial %}checked{% endif %}>
-                <label class="form-check-label" for="isInicial">
-                    Este é o status inicial da fila
-                </label>
-                <div class="form-text">Só pode haver um. Marcar aqui desmarca automaticamente de qualquer outro status.</div>
+            <div class="border rounded-3 p-3 mb-3">
+                <h6 class="fw-bold mb-1">Marcos de conclusão</h6>
+                <p class="text-secondary small mb-3">Marque a etapa que fica concluída ao chegar a este status.</p>
+
+                <div class="row g-3">
+                    <div class="col-12 col-lg-6">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="descricao_concluida" id="descricaoConcluida"
+                                   {% if status.descricao_concluida %}checked{% endif %}>
+                            <label class="form-check-label" for="descricaoConcluida">Descrição concluída</label>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-6">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="conferencia_concluida" id="conferenciaConcluida"
+                                   {% if status.conferencia_concluida %}checked{% endif %}>
+                            <label class="form-check-label" for="conferenciaConcluida">Conferência concluída</label>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-6">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="revisao_concluida" id="revisaoConcluida"
+                                   {% if status.revisao_concluida %}checked{% endif %}>
+                            <label class="form-check-label" for="revisaoConcluida">Revisão concluída</label>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <div class="form-check mb-4">
-                <input type="checkbox" name="is_final" class="form-check-input" id="isFinal"
-                       {% if status.is_final %}checked{% endif %}>
-                <label class="form-check-label" for="isFinal">
-                    Este é o status final da fila
-                </label>
-                <div class="form-text">Só pode haver um. Marcar aqui desmarca automaticamente de qualquer outro status.</div>
+            <div class="border rounded-3 p-3 mb-4">
+                <h6 class="fw-bold mb-3">Posição no workflow</h6>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" name="is_inicial" id="isInicial"
+                           {% if status.is_inicial %}checked{% endif %}>
+                    <label class="form-check-label fw-semibold" for="isInicial">Este é o status inicial da fila</label>
+                    <div class="form-text mt-0">Só pode haver um status inicial.</div>
+                </div>
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" name="is_final" id="isFinal"
+                           {% if status.is_final %}checked{% endif %}>
+                    <label class="form-check-label fw-semibold" for="isFinal">Este é o status final da fila</label>
+                    <div class="form-text mt-0">Só pode haver um status final.</div>
+                </div>
             </div>
 
             <div class="d-flex gap-2">

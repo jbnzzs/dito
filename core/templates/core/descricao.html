@@ -205,6 +205,55 @@
     </span>
 </div>
 
+{% if correcao_ativa %}
+<div
+    class="card mb-4"
+    style="
+        border:1.5px solid #D9534F;
+        background:#FFF7F7;
+    "
+>
+    <div class="card-body">
+        <div class="d-flex align-items-start gap-3">
+            <i
+                class="bi bi-exclamation-triangle-fill"
+                style="color:#B42318; font-size:1.2rem;"
+            ></i>
+
+            <div>
+                <div
+                    class="fw-bold mb-1"
+                    style="color:#B42318;"
+                >
+                    Correção solicitada
+                </div>
+
+                <div
+                    class="mb-2"
+                    style="
+                        color:#5B2523;
+                        font-size:0.9rem;
+                        white-space:pre-line;
+                    "
+                >{{ correcao_ativa.observacao }}</div>
+
+                <div
+                    class="text-secondary"
+                    style="font-size:0.75rem;"
+                >
+                    Solicitada por
+                    <strong>
+                        {{ correcao_ativa.usuario.get_full_name|default:correcao_ativa.usuario.email }}
+                    </strong>
+                    em
+                    {{ correcao_ativa.criado_em|date:"d/m/Y H:i" }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {# ---- Bloqueio ---- #}
 {% if motivo_bloqueio %}
 <div class="card mb-4" style="border-color:#FCA5A5;">
@@ -374,7 +423,13 @@
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
                     <label class="text-secondary mb-1 d-block" style="font-size:0.7rem; font-weight:700; text-transform:uppercase;">Devolver ao descritor</label>
-                    <textarea name="observacao" class="form-control form-control-sm mb-2" rows="2" placeholder="Observação (opcional)"></textarea>
+                    <textarea
+                        name="observacao"
+                        class="form-control form-control-sm mb-2"
+                        rows="3"
+                        placeholder="Informe exatamente o que precisa ser corrigido..."
+                        required
+                    ></textarea>
                     <button type="submit" class="btn btn-sm btn-outline-danger w-100">
                         <i class="bi bi-arrow-counterclockwise me-1"></i> Devolver para correção
                     </button>
@@ -386,7 +441,13 @@
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
                     <label class="text-secondary mb-1 d-block" style="font-size:0.7rem; font-weight:700; text-transform:uppercase;">Devolver ao revisor</label>
-                    <textarea name="observacao" class="form-control form-control-sm mb-2" rows="2" placeholder="Observação (opcional)"></textarea>
+                    <textarea
+                        name="observacao"
+                        class="form-control form-control-sm mb-2"
+                        rows="3"
+                        placeholder="Informe exatamente o que precisa ser corrigido..."
+                        required
+                    ></textarea>
                     <button type="submit" class="btn btn-sm btn-outline-danger w-100">
                         <i class="bi bi-arrow-counterclockwise me-1"></i> Devolver para correção
                     </button>

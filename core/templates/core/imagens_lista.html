@@ -929,6 +929,13 @@
                                         >
 
                                             <option
+                                                value="pendente"
+                                                {% if img.pagamento_descritor == "pendente" %}selected{% endif %}
+                                            >
+                                                Pendente
+                                            </option>
+
+                                            <option
                                                 value="contabilizado"
                                                 {% if img.pagamento_descritor == "contabilizado" %}selected{% endif %}
                                             >
@@ -991,6 +998,13 @@
                                             onchange="this.form.submit()"
                                             aria-label="Pagamento do revisor"
                                         >
+
+                                            <option
+                                                value="pendente"
+                                                {% if img.pagamento_revisor == "pendente" %}selected{% endif %}
+                                            >
+                                                Pendente
+                                            </option>
 
                                             <option
                                                 value="contabilizado"
@@ -1195,139 +1209,7 @@
     </div>
 
 
-    {% if pagina_obj.has_other_pages %}
-
-    <div
-        class="d-flex align-items-center justify-content-between px-3 py-2 border-top"
-        style="font-size:0.875rem;"
-    >
-
-        <div class="d-flex align-items-center gap-3 flex-wrap">
-
-            <span class="text-secondary">
-                Página {{ pagina_obj.number }} de {{ pagina_obj.paginator.num_pages }}
-                &nbsp;·&nbsp;
-                {{ total }} imagem{{ total|pluralize }}
-            </span>
-
-
-            <div class="d-flex align-items-center gap-2">
-
-                <label
-                    for="selectPorPagina"
-                    class="text-secondary mb-0"
-                    style="
-                        font-size:0.78rem;
-                        white-space:nowrap;
-                    "
-                >
-                    Exibir
-                </label>
-
-                <select
-                    id="selectPorPagina"
-                    class="form-select form-select-sm"
-                    style="
-                        width:auto;
-                        min-width:88px;
-                    "
-                    aria-label="Quantidade de imagens por página"
-                >
-                    {% for opcao in por_pagina_opcoes %}
-                    <option
-                        value="{{ opcao }}"
-                        {% if opcao == por_pagina %}selected{% endif %}
-                    >
-                        {{ opcao }}
-                    </option>
-                    {% endfor %}
-                </select>
-
-                <span
-                    class="text-secondary"
-                    style="
-                        font-size:0.78rem;
-                        white-space:nowrap;
-                    "
-                >
-                    por página
-                </span>
-
-            </div>
-
-        </div>
-
-
-        <div class="d-flex gap-1 align-items-center">
-
-            {% if pagina_obj.has_previous %}
-
-            <a
-                href="?{{ qs_sem_pagina }}&pagina=1"
-                class="btn btn-outline-secondary btn-sm"
-                title="Primeira página"
-            >
-                <i class="bi bi-chevron-double-left"></i>
-            </a>
-
-            <a
-                href="?{{ qs_sem_pagina }}&pagina={{ pagina_obj.previous_page_number }}"
-                class="btn btn-outline-secondary btn-sm"
-                title="Anterior"
-            >
-                <i class="bi bi-chevron-left"></i>
-            </a>
-
-            {% endif %}
-
-
-            {% for num in pagina_obj.paginator.page_range %}
-
-                {% if pagina_obj.number == num %}
-
-                <button class="btn btn-primary btn-sm">
-                    {{ num }}
-                </button>
-
-                {% elif num > pagina_obj.number|add:"-3" and num < pagina_obj.number|add:"3" %}
-
-                <a
-                    href="?{{ qs_sem_pagina }}&pagina={{ num }}"
-                    class="btn btn-outline-secondary btn-sm"
-                >
-                    {{ num }}
-                </a>
-
-                {% endif %}
-
-            {% endfor %}
-
-
-            {% if pagina_obj.has_next %}
-
-            <a
-                href="?{{ qs_sem_pagina }}&pagina={{ pagina_obj.next_page_number }}"
-                class="btn btn-outline-secondary btn-sm"
-                title="Próxima"
-            >
-                <i class="bi bi-chevron-right"></i>
-            </a>
-
-            <a
-                href="?{{ qs_sem_pagina }}&pagina={{ pagina_obj.paginator.num_pages }}"
-                class="btn btn-outline-secondary btn-sm"
-                title="Última página"
-            >
-                <i class="bi bi-chevron-double-right"></i>
-            </a>
-
-            {% endif %}
-
-        </div>
-
-    </div>
-
-    {% endif %}
+    {% include "core/_paginacao_imagens.html" %}
 
 </div>
 

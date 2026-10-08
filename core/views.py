@@ -170,156 +170,58 @@ PDF_COMPONENTES_SHAREPOINT = {
     "HIS": "HIS",
 }
 
+# DITO_SHAREPOINT_V4 - aliases conhecidos de pastas no SharePoint
+PDF_COMPONENTES_SHAREPOINT.update({
+    'MATEMATICA': 'MAT',
+    'MAT': 'MAT',
+    'CIENCIA': 'CIE',
+    'CIENCIAS': 'CIE',
+    'CIENCIASDANATUREZA': 'CIE',
+    'CIE': 'CIE',
+    'GEOGRAFIA': 'GEO',
+    'GEO': 'GEO',
+})
+
 
 def _normalizar_codigo_sharepoint(valor):
     texto = str(valor or "").strip()
-
-    texto = unicodedata.normalize(
-        "NFKD",
-        texto,
-    ).encode(
-        "ascii",
-        "ignore",
-    ).decode(
-        "ascii",
-    )
-
-    return re.sub(
-        r"[^A-Za-z0-9]+",
-        "",
-        texto,
-    ).upper()
+    texto = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^A-Za-z0-9]+", "", texto).upper()
 
 
 def _codigo_componente_pdf_sharepoint(valor):
-    normalizado = _normalizar_codigo_sharepoint(
-        valor
-    )
-
+    normalizado = _normalizar_codigo_sharepoint(valor)
     if not normalizado:
         return ""
-
-    return PDF_COMPONENTES_SHAREPOINT.get(
-        normalizado,
-        normalizado,
-    )
+    return PDF_COMPONENTES_SHAREPOINT.get(normalizado, "")
 
 
-def _normalizar_projeto_editorial_sharepoint(valor):
-    partes = [
-        _normalizar_codigo_sharepoint(parte)
-        for parte in str(valor or "").strip().split("_")
-        if str(parte or "").strip()
-    ]
-
-    return "_".join(
-        parte
-        for parte in partes
-        if parte
-    )
-
-
-def _normalizar_numero_projeto_pdf(valor):
-    numeros = re.sub(
-        r"\D",
-        "",
-        str(valor or ""),
-    )
-
-    if not numeros:
+def _montar_url_pdf_sharepoint(retranca, componente):
+    retranca_normalizada = str(retranca or "").strip().lower()
+    if not retranca_normalizada:
         return ""
 
-    return f"p{numeros.zfill(3)}"
-
-
-def _extrair_ano_pdf(valor):
-    encontrado = re.search(
-        r"\d{1,2}",
-        str(valor or ""),
+    dados_pagina = re.search(
+        r"(?<!\d)(?P<ano>\d{1,2})p(?P<projeto_scriba>\d{3})(?P<letra>[a-z])",
+        retranca_normalizada,
     )
+    dados_editoriais = re.search(
+        r"(?P<projeto>g\d+)[_-](?P<editora>e\d+)",
+        retranca_normalizada,
+    )
+    componente_codigo = _codigo_componente_pdf_sharepoint(componente)
 
-    if not encontrado:
+    if not dados_pagina or not dados_editoriais or not componente_codigo:
         return ""
 
-    return encontrado.group(0)
-
-
-def _prefixo_arquivo_pdf(projeto_editorial):
-    projeto = _normalizar_projeto_editorial_sharepoint(
-        projeto_editorial
-    )
-
-    partes = [
-        parte
-        for parte in projeto.split("_")
-        if parte
-    ]
-
-    if len(partes) < 2:
-        return ""
-
-    return "_".join(
-        partes[:2]
-    ).lower()
-
-
-def _montar_url_pdf_sharepoint(
-    projeto_editorial,
-    numero_projeto,
-    componente,
-    volume_ano,
-):
-    projeto_editorial = (
-        _normalizar_projeto_editorial_sharepoint(
-            projeto_editorial
-        )
-    )
-
-    partes = [
-        parte
-        for parte in projeto_editorial.split("_")
-        if parte
-    ]
-
-    if len(partes) < 2:
-        return ""
-
-    projeto = partes[0].lower()
-    prefixo = "_".join(partes[:2]).lower()
-
-    numero = _normalizar_numero_projeto_pdf(
-        numero_projeto
-    )
-
-    componente_codigo = (
-        _codigo_componente_pdf_sharepoint(
-            componente
-        )
-    )
-
-    ano = _extrair_ano_pdf(
-        volume_ano
-    )
-
-    if (
-        not projeto
-        or not prefixo
-        or not numero
-        or not componente_codigo
-        or not ano
-    ):
-        return ""
-
-    inicial_componente = (
-        componente_codigo[0].lower()
-    )
+    projeto = dados_editoriais.group("projeto")
+    editora = dados_editoriais.group("editora")
+    ano = dados_pagina.group("ano")
+    projeto_scriba = dados_pagina.group("projeto_scriba")
+    letra = dados_pagina.group("letra")
 
     nome_pdf = (
-        f"{prefixo}_"
-        f"{ano}"
-        f"{numero}"
-        f"{inicial_componente}_"
-        f"{PDF_TIPO_MATERIAL}.pdf"
+        f"{projeto}_{editora}_{ano}p{projeto_scriba}{letra}_{PDF_TIPO_MATERIAL}.pdf"
     )
 
     segmentos = [
@@ -329,17 +231,79 @@ def _montar_url_pdf_sharepoint(
         componente_codigo,
         nome_pdf,
     ]
+    caminho = "/".join(quote(segmento, safe="") for segmento in segmentos)
+    return f"{SHAREPOINT_SITE_URL}/{caminho}?web=1"
 
+# DITO_SHAREPOINT_V4 - metadados do Excel como fonte primaria para o PDF.
+# DITO_SHAREPOINT_METADADOS: URL calculada com dados do Excel + formulário.
+
+# DITO_SHAREPOINT_PASTAS_CONFIRMADAS_20261008: pastas, códigos de PDF e anos confirmados no SharePoint
+PDF_COMPONENTES_SHAREPOINT.update({'PORTUGUES': 'POR', 'POR': 'POR', 'ESPANHOL': 'ESP', 'ESP': 'ESP', 'INGLES': 'ING', 'ING': 'ING', 'EDUCACAODIGITAL': 'EDIG', 'EDDIGITAL': 'EDIG', 'EDIG': 'EDIG', 'EDUCACAOFISICA': 'EFIS', 'EDFISICA': 'EFIS', 'EFIS': 'EFIS', 'PDT': 'PDT', 'ARTE': 'ART', 'ART': 'ART', 'CIENCIA': 'CIE', 'CIENCIAS': 'CIE', 'CIENCIASDANATUREZA': 'CIE', 'CIE': 'CIE', 'GEOGRAFIA': 'GEO', 'GEO': 'GEO', 'HISTORIA': 'HIS', 'HIS': 'HIS', 'MATEMATICA': 'MAT', 'MAT': 'MAT'})
+DITO_SP_SUFIXO_ARQUIVO = {'ART': 'a', 'CIE': 'c', 'EDIG': 'ed', 'EFIS': 'ef', 'ESP': 'e', 'GEO': 'g', 'HIS': 'h', 'ING': 'i', 'MAT': 'm', 'PDT': 't', 'POR': 'p'}
+DITO_SP_ANOS_CONFIRMADOS = {'EDIG': (6, 7, 8, 9), 'EFIS': (6,), 'ESP': (6, 7, 8, 9), 'ING': (6, 7, 8, 9), 'PDT': (6, 7, 8, 9), 'POR': (6, 7, 8, 9)}
+
+def _montar_url_pdf_metadados_dito(editorial, scriba, sigla, ano):
+    """Gera URL somente para combinações reconhecidas de pasta e ano."""
+    from urllib.parse import quote as _quote_dito
+
+    partes = str(editorial or "").strip().upper().split("_")
+    if (len(partes) < 2
+            or not re.fullmatch(r"G\d+", partes[0])
+            or not re.fullmatch(r"E\d+", partes[1])):
+        return ""
+
+    projeto_scriba = str(scriba or "").strip().lower()
+    if not re.fullmatch(r"p?\d{3,4}", projeto_scriba):
+        return ""
+    numero = "p" + projeto_scriba.removeprefix("p").zfill(3)
+
+    pasta = str(sigla or "").strip().upper()
+    sufixo = DITO_SP_SUFIXO_ARQUIVO.get(pasta)
+    if not sufixo:
+        return ""
+
+    serie = str(ano or "").strip()
+    if not re.fullmatch(r"\d{1,2}", serie):
+        return ""
+    ano_num = int(serie)
+    if not 1 <= ano_num <= 12:
+        return ""
+    anos_confirmados = DITO_SP_ANOS_CONFIRMADOS.get(pasta)
+    if anos_confirmados is not None and ano_num not in anos_confirmados:
+        return ""
+
+    prefixo = (partes[0] + "_" + partes[1]).lower()
+    nome_pdf = f"{prefixo}_{ano_num}{numero}{sufixo}_mp.pdf"
     caminho = "/".join(
-        quote(segmento, safe="")
-        for segmento in segmentos
+        _quote_dito(str(segmento), safe="")
+        for segmento in (
+            SHAREPOINT_BIBLIOTECA,
+            partes[0].lower(),
+            SHAREPOINT_PASTA_PDFS,
+            pasta,
+            nome_pdf,
+        )
     )
+    return f"{SHAREPOINT_SITE_URL.rstrip('/')}/{caminho}?web=1"
 
-    return (
-        f"{SHAREPOINT_SITE_URL}/"
-        f"{caminho}"
-        "?web=1"
-    )
+
+def _url_pdf_dados_fotoweb(editorial, scriba, dados, retranca=""):
+    componente = _valor_excel(dados, "disciplina", "componente", "componente_curricular")
+    volume = _valor_excel(dados, "volume", "volume_ano_modulo")
+    codigo = PDF_COMPONENTES_SHAREPOINT.get(_normalizar_codigo_sharepoint(componente), "")
+    if not codigo:
+        return "", "componente_nao_mapeado"
+    # Não inferir série de números longos, como 2029 -> 20.
+    anos = re.findall(r"(?<!\d)\d{1,2}(?!\d)", str(volume or ""))
+    if len(anos) != 1 or not (1 <= int(anos[0]) <= 12):
+        return "", "ano_ausente_ou_ambiguo"
+    # Retranca é apenas verificação adicional de conflito inequívoco.
+    m = re.search(r"(?i)(?:^|[_-])p\d{3,4}[_-](cie|mat|his|art|geo)(?=$|[_-])", str(retranca or ""))
+    if m and m.group(1).upper() != codigo:
+        return "", "conflito_excel_retranca"
+    url = _montar_url_pdf_metadados_dito(editorial, scriba, codigo, anos[0])
+    return url, ("ok" if url else "url_nao_gerada")
+
 
 
 # ============================================================
@@ -732,6 +696,39 @@ def _tipo_acao_transicao(status_anterior, novo_status):
     return HistoricoItem.TipoAcao.STATUS_ALTERADO
 
 
+def _correcao_ativa_da_imagem(imagem):
+    from .models import HistoricoItem
+
+    evento = (
+        HistoricoItem.objects
+        .filter(
+            imagem=imagem,
+            tipo_acao=HistoricoItem.TipoAcao.DEVOLVIDO_CORRECAO,
+        )
+        .select_related(
+            "novo_status",
+            "usuario",
+        )
+        .order_by("-criado_em")
+        .first()
+    )
+
+    if (
+        not evento
+        or not evento.novo_status_id
+        or not imagem.status_id
+    ):
+        return None
+
+    if (
+        imagem.status.perfil_responsavel
+        != evento.novo_status.perfil_responsavel
+    ):
+        return None
+
+    return evento
+
+
 def _normalizar_texto_descricao(texto):
     """Substitui aspas duplas por aspas simples antes de persistir."""
     return str(texto or "").replace('"', "'")
@@ -745,6 +742,39 @@ def _data_iso_ou_none(valor):
     if not valor:
         return None
     return date.fromisoformat(valor)
+
+
+PAGINACAO_IMAGENS_OPCOES = (25, 50, 100)
+
+
+def _paginar_imagens(request, queryset):
+    from django.core.paginator import Paginator
+
+    try:
+        por_pagina = int(
+            request.GET.get("por_pagina", 25)
+        )
+    except (TypeError, ValueError):
+        por_pagina = 25
+
+    if por_pagina not in PAGINACAO_IMAGENS_OPCOES:
+        por_pagina = 25
+
+    paginador = Paginator(queryset, por_pagina)
+    pagina_obj = paginador.get_page(
+        request.GET.get("pagina", 1)
+    )
+
+    querydict = request.GET.copy()
+    querydict.pop("pagina", None)
+
+    return {
+        "pagina_obj": pagina_obj,
+        "total": paginador.count,
+        "por_pagina": por_pagina,
+        "por_pagina_opcoes": PAGINACAO_IMAGENS_OPCOES,
+        "qs_sem_pagina": querydict.urlencode(),
+    }
 
 
 # ============================================================
@@ -809,7 +839,7 @@ def dashboard(request):
         ctx.update({
             "visao": "descritor",
             "total_minhas": minhas.count(),
-            "disponiveis": disponiveis,
+            "disponiveis": disponiveis[:10],
             "disponiveis_count": disponiveis.count(),
         })
 
@@ -830,7 +860,7 @@ def dashboard(request):
         ctx.update({
             "visao": "revisor",
             "total_minhas": minhas.count(),
-            "para_conferir": para_conferir,
+            "para_conferir": para_conferir[:10],
             "para_conferir_count": para_conferir.count(),
         })
 
@@ -989,9 +1019,19 @@ def minhas_tarefas(request):
         )
     ]
 
-    total = tarefas.count()
-    paginador = Paginator(tarefas, 50)
-    pagina_obj = paginador.get_page(pagina)
+    paginacao = _paginar_imagens(
+        request,
+        tarefas,
+    )
+    pagina_obj = paginacao["pagina_obj"]
+    total = paginacao["total"]
+
+    for tarefa in pagina_obj.object_list:
+        tarefa.correcao_ativa = (
+            _correcao_ativa_da_imagem(
+                tarefa
+            )
+        )
 
     # ------------------------------------------------------------
     # Atribuição de imagens avulsas
@@ -1094,6 +1134,11 @@ def minhas_tarefas(request):
             )
         ),
         "url_voltar": url_voltar,
+        "por_pagina": paginacao["por_pagina"],
+        "por_pagina_opcoes": paginacao["por_pagina_opcoes"],
+        "qs_sem_pagina": paginacao["qs_sem_pagina"],
+        "paginacao_label": "tarefa",
+        "paginacao_label_plural": "tarefas",
     }
 
     return render(request, "core/minhas_tarefas.html", ctx)
@@ -1300,20 +1345,6 @@ def importar_imagens(request):
     contexto_base = {
         "projetos": projetos_ativos,
         "projeto_selecionado_id": request.POST.get("projeto", ""),
-        "acervo_fotoweb": request.POST.get("acervo_fotoweb", "").strip(),
-
-        # Para o projeto atual, já deixamos os valores de teste preenchidos.
-        # Em futuras importações eles podem ser alterados na própria tela.
-        "projeto_editorial_pdf": (
-            request.POST.get("projeto_editorial_pdf", "").strip()
-            if request.method == "POST"
-            else "G28_E002_EF2"
-        ),
-        "numero_projeto_pdf": (
-            request.POST.get("numero_projeto_pdf", "").strip()
-            if request.method == "POST"
-            else "p013"
-        ),
     }
 
     if request.method == "GET":
@@ -1355,83 +1386,17 @@ def importar_imagens(request):
             contexto_base,
         )
 
-    # ------------------------------------------------------------
-    # Acervo FotoWeb da importação
-    # ------------------------------------------------------------
-    acervo_fotoweb = (
-        request.POST.get("acervo_fotoweb", "")
-        .strip()
-        .strip("/")
-    )
+    acervo_fotoweb = str(
+        projeto_selecionado.acervo_fotoweb or ""
+    ).strip().strip("/")
 
     if not acervo_fotoweb:
         messages.error(
             request,
-            "Informe o Acervo FotoWeb deste relatório.",
-        )
-        return render(
-            request,
-            "core/importar_imagens.html",
-            contexto_base,
-        )
-
-    # ------------------------------------------------------------
-    # PDF no SharePoint
-    # ------------------------------------------------------------
-    projeto_editorial_pdf = (
-        request.POST.get(
-            "projeto_editorial_pdf",
-            "",
-        )
-        .strip()
-    )
-
-    numero_projeto_pdf = (
-        request.POST.get(
-            "numero_projeto_pdf",
-            "",
-        )
-        .strip()
-    )
-
-    projeto_editorial_pdf = (
-        _normalizar_projeto_editorial_sharepoint(
-            projeto_editorial_pdf
-        )
-    )
-
-    numero_projeto_pdf = (
-        _normalizar_numero_projeto_pdf(
-            numero_projeto_pdf
-        )
-    )
-
-    if not projeto_editorial_pdf:
-        messages.error(
-            request,
-            "Informe o Projeto Editorial utilizado no SharePoint.",
-        )
-        return render(
-            request,
-            "core/importar_imagens.html",
-            contexto_base,
-        )
-
-    if len(projeto_editorial_pdf.split("_")) < 2:
-        messages.error(
-            request,
-            "Informe um Projeto Editorial válido. Ex.: G28_E002_EF2.",
-        )
-        return render(
-            request,
-            "core/importar_imagens.html",
-            contexto_base,
-        )
-
-    if not numero_projeto_pdf:
-        messages.error(
-            request,
-            "Informe o número do projeto Scriba do PDF. Ex.: p013.",
+            (
+                f"O projeto '{projeto_selecionado.nome}' ainda não possui "
+                "Acervo FotoWeb configurado. Edite o projeto antes de importar."
+            ),
         )
         return render(
             request,
@@ -1623,6 +1588,7 @@ def importar_imagens(request):
     # atualizado da linha original. Isso permite reimportar relatórios
     # antigos apenas para preparar a futura exportação FotoWeb.
     imagens_snapshot_atualizar = {}
+    pdfs_reimportados_v4 = {}
 
     # Cache de usuários por username.
     usernames = {
@@ -1765,6 +1731,8 @@ def importar_imagens(request):
                 arquivo_origem=arquivo.name,
             )
         )
+        dados_fotoweb_originais["__projeto_editorial_pdf"] = projeto_editorial_pdf
+        dados_fotoweb_originais["__numero_projeto_pdf"] = numero_projeto_pdf
 
         if retranca in retrancas_existentes:
             puladas += 1
@@ -1776,6 +1744,17 @@ def importar_imagens(request):
             )
 
             if imagem_existente:
+                if imagem_existente.projeto_id != projeto_selecionado.pk:
+                    erros.append({"retranca": retranca, "msg": "Retranca já vinculada a outro projeto; preservada."})
+                    continue
+                if not imagem_existente.url_pdf:
+                    pdf_url_v4, motivo_pdf_v4 = _url_pdf_dados_fotoweb(
+                        projeto_editorial_pdf, numero_projeto_pdf, data, retranca,
+                    )
+                    if pdf_url_v4:
+                        pdfs_reimportados_v4[imagem_existente.pk] = pdf_url_v4
+                    elif motivo_pdf_v4 == "conflito_excel_retranca":
+                        erros.append({"retranca": retranca, "msg": "Conflito Excel/retranca; URL não preenchida."})
                 imagem_existente.dados_fotoweb_originais = (
                     dados_fotoweb_originais
                 )
@@ -1862,14 +1841,11 @@ def importar_imagens(request):
             )
         ).strip()
 
-        url_pdf_sharepoint = (
-            _montar_url_pdf_sharepoint(
-                projeto_editorial_pdf,
-                numero_projeto_pdf,
-                componente_raw,
-                volume_raw,
-            )
+        url_pdf_sharepoint, motivo_pdf_v4 = _url_pdf_dados_fotoweb(
+            projeto_editorial_pdf, numero_projeto_pdf, data, retranca,
         )
+        if motivo_pdf_v4 == "conflito_excel_retranca":
+            erros.append({"retranca": retranca, "msg": "Conflito Excel/retranca; URL não gerada."})
 
         imagem = Imagem(
             retranca=retranca,
@@ -1982,6 +1958,13 @@ def importar_imagens(request):
                     ],
                     batch_size=LOTE,
                 )
+
+            # Completa SOMENTE url_pdf vazio das imagens reimportadas.
+            from django.db.models import Q as _Q_pdf_v4
+            for pk_pdf_v4, url_pdf_v4 in pdfs_reimportados_v4.items():
+                Imagem.objects.filter(pk=pk_pdf_v4, projeto=projeto_selecionado, ativo=True).filter(
+                    _Q_pdf_v4(url_pdf="") | _Q_pdf_v4(url_pdf__isnull=True)
+                ).update(url_pdf=url_pdf_v4)
 
             for i in range(
                 0,
@@ -2191,12 +2174,7 @@ def importar_imagens(request):
             else None
         ),
 
-        # Deixa explícito em qual Projeto, Acervo e configuração de rede
-        # o grupo foi importado.
         "projeto_importacao": projeto_selecionado,
-        "acervo_fotoweb": acervo_fotoweb,
-        "projeto_editorial_pdf": projeto_editorial_pdf,
-        "numero_projeto_pdf": numero_projeto_pdf,
 
         # Mantém a lista disponível caso seja necessário
         # renderizar novamente o formulário.
@@ -2505,9 +2483,14 @@ def descricao_imagem(request, pk):
             ) is None
         )
 
+    correcao_ativa = _correcao_ativa_da_imagem(
+        imagem
+    )
+
     ctx = {
         "imagem": imagem,
         "descricao": descricao,
+        "correcao_ativa": correcao_ativa,
         "trechos": trechos,
         "pode_editar": pode_editar,
         "pode_visualizar": pode_visualizar,
@@ -3169,6 +3152,15 @@ def devolver_descritor(request, pk):
 
     observacao = request.POST.get("observacao", "").strip()
 
+    if not observacao:
+        messages.error(
+            request,
+            "Informe a instrução de correção antes de devolver a imagem.",
+        )
+        return redirect(
+            request.POST.get("next", "imagens_lista")
+        )
+
     status_liberado = _status_entrada_perfil(
         Usuario.Tipo.DESCRITOR,
     )
@@ -3201,7 +3193,7 @@ def devolver_descritor(request, pk):
             imagem=imagem,
             descricao=descricao,
             usuario=request.user,
-            tipo_acao=HistoricoItem.TipoAcao.DESCRITOR_LIBERADO,
+            tipo_acao=HistoricoItem.TipoAcao.DEVOLVIDO_CORRECAO,
             status_anterior=status_anterior,
             novo_status=status_liberado,
             observacao=(
@@ -3242,6 +3234,15 @@ def devolver_revisor(request, pk):
 
     observacao = request.POST.get("observacao", "").strip()
 
+    if not observacao:
+        messages.error(
+            request,
+            "Informe a instrução de correção antes de devolver a imagem.",
+        )
+        return redirect(
+            request.POST.get("next", "imagens_lista")
+        )
+
     status_liberado = _status_entrada_perfil(
         Usuario.Tipo.REVISOR,
     )
@@ -3274,7 +3275,7 @@ def devolver_revisor(request, pk):
             imagem=imagem,
             descricao=descricao,
             usuario=request.user,
-            tipo_acao=HistoricoItem.TipoAcao.REVISOR_LIBERADO,
+            tipo_acao=HistoricoItem.TipoAcao.DEVOLVIDO_CORRECAO,
             status_anterior=status_anterior,
             novo_status=status_liberado,
             observacao=(
@@ -3288,6 +3289,202 @@ def devolver_revisor(request, pk):
         f"Tarefa devolvida para o revisor {descricao.revisor}.",
     )
     return redirect(request.POST.get("next", "imagens_lista"))
+
+
+@login_required
+@require_POST
+def devolver_imagens_correcao(request, lote_id):
+    # Devolve somente as imagens selecionadas de um lote para
+    # o descritor ou revisor já vinculado àquela etapa.
+    from .models import Lote, HistoricoItem
+
+    if not _apenas_coordenador(request.user):
+        messages.error(
+            request,
+            "Você não tem permissão para devolver imagens para correção.",
+        )
+        return redirect("lotes_lista")
+
+    lote = get_object_or_404(
+        Lote,
+        pk=lote_id,
+        ativo=True,
+    )
+
+    imagem_ids = request.POST.getlist("imagem_ids")
+    selecionar_todas_lote = (
+        request.POST.get("selecionar_todas_lote") == "1"
+    )
+    destino = request.POST.get("destino", "").strip()
+    observacao = request.POST.get("observacao", "").strip()
+
+    url_retorno = _url_interna_segura(
+        request,
+        request.POST.get("next"),
+    )
+
+    if not url_retorno:
+        url_retorno = (
+            f"{reverse('minhas_tarefas')}?lote={lote.pk}"
+        )
+
+    if not imagem_ids and not selecionar_todas_lote:
+        messages.error(
+            request,
+            "Selecione pelo menos uma imagem para devolver.",
+        )
+        return redirect(url_retorno)
+
+    if not observacao:
+        messages.error(
+            request,
+            "Informe a instrução de correção.",
+        )
+        return redirect(url_retorno)
+
+    if destino == "descritor":
+        perfil_destino = Usuario.Tipo.DESCRITOR
+        nome_destino = "descritor"
+    elif destino == "revisor":
+        perfil_destino = Usuario.Tipo.REVISOR
+        nome_destino = "revisor"
+    else:
+        messages.error(
+            request,
+            "Escolha se a devolução será para Descritor ou Revisor.",
+        )
+        return redirect(url_retorno)
+
+    status_destino = _status_entrada_perfil(
+        perfil_destino
+    )
+
+    if not status_destino:
+        messages.error(
+            request,
+            (
+                "Não existe um status ativo de entrada "
+                f"configurado para {nome_destino}."
+            ),
+        )
+        return redirect(url_retorno)
+
+    imagens_qs = (
+        Imagem.objects
+        .filter(
+            lote=lote,
+            ativo=True,
+        )
+        .select_related(
+            "status",
+            "descricao",
+            "descricao__descritor",
+            "descricao__revisor",
+        )
+    )
+
+    if not selecionar_todas_lote:
+        imagens_qs = imagens_qs.filter(
+            pk__in=imagem_ids,
+        )
+
+    imagens = list(imagens_qs)
+
+    devolvidas = 0
+    ignoradas = 0
+
+    with transaction.atomic():
+        for imagem in imagens:
+            descricao = getattr(
+                imagem,
+                "descricao",
+                None,
+            )
+
+            if not descricao:
+                ignoradas += 1
+                continue
+
+            if perfil_destino == Usuario.Tipo.DESCRITOR:
+                usuario_destino = descricao.descritor
+
+                if not usuario_destino:
+                    ignoradas += 1
+                    continue
+
+                descricao.descritor_bloqueado = False
+                descricao.finalizado = False
+                descricao.save(
+                    update_fields=[
+                        "descritor_bloqueado",
+                        "finalizado",
+                    ]
+                )
+
+            else:
+                usuario_destino = descricao.revisor
+
+                if not usuario_destino:
+                    ignoradas += 1
+                    continue
+
+                descricao.revisor_bloqueado = False
+                descricao.finalizado = False
+                descricao.save(
+                    update_fields=[
+                        "revisor_bloqueado",
+                        "finalizado",
+                    ]
+                )
+
+            status_anterior = imagem.status
+
+            imagem.status = status_destino
+            imagem.responsavel = usuario_destino
+            imagem.save(
+                update_fields=[
+                    "status",
+                    "responsavel",
+                ]
+            )
+
+            HistoricoItem.objects.create(
+                imagem=imagem,
+                descricao=descricao,
+                usuario=request.user,
+                tipo_acao=HistoricoItem.TipoAcao.DEVOLVIDO_CORRECAO,
+                status_anterior=status_anterior,
+                novo_status=status_destino,
+                observacao=observacao,
+            )
+
+            devolvidas += 1
+
+    if devolvidas:
+        messages.success(
+            request,
+            (
+                f"{devolvidas} imagem(ns) devolvida(s) "
+                f"ao {nome_destino} para correção."
+            ),
+        )
+
+    if ignoradas:
+        messages.warning(
+            request,
+            (
+                f"{ignoradas} imagem(ns) não foi(ram) devolvida(s) "
+                f"porque não possuem {nome_destino} vinculado."
+            ),
+        )
+
+    if not devolvidas and not ignoradas:
+        messages.error(
+            request,
+            "Nenhuma das imagens selecionadas pertence a este lote.",
+        )
+
+    return redirect(url_retorno)
 
 
 # ============================================================
@@ -3487,49 +3684,162 @@ def atribuir_lote(request, lote_id):
 
 @login_required
 def organizar_lotes(request, importacao_id=None):
-    """
-    Tela de organização em Lotes. Funciona de duas formas:
-    - Com importacao_id: mostra só as imagens daquela importação específica
-      sem lote (fluxo logo após o upload do .xlsx).
-    - Sem importacao_id: mostra todas as imagens ativas sem lote no sistema
-      (acesso geral via botão "Criar Lote" na listagem de Imagens).
-    """
     from .models import Lote
 
     if not _apenas_coordenador(request.user):
-        messages.error(request, "Você não tem permissão para organizar lotes.")
+        messages.error(
+            request,
+            "Você não tem permissão para organizar lotes.",
+        )
         return redirect("dashboard")
 
     if importacao_id:
         imagens_sem_lote = Imagem.objects.filter(
-            importacao_id=importacao_id, lote__isnull=True, ativo=True,
+            importacao_id=importacao_id,
+            lote__isnull=True,
+            ativo=True,
         )
     else:
-        imagens_sem_lote = Imagem.objects.filter(lote__isnull=True, ativo=True)
+        imagens_sem_lote = Imagem.objects.filter(
+            lote__isnull=True,
+            ativo=True,
+        )
+
+    origem_filtros = (
+        request.POST
+        if request.method == "POST"
+        else request.GET
+    )
+
+    componente = origem_filtros.get(
+        "componente",
+        "",
+    ).strip()
+
+    volume = origem_filtros.get(
+        "volume",
+        "",
+    ).strip()
+
+    capitulo = origem_filtros.get(
+        "capitulo",
+        "",
+    ).strip()
+
+    busca = origem_filtros.get(
+        "busca",
+        "",
+    ).strip()
+
+    imagens_filtradas = (
+        imagens_sem_lote
+        .select_related(
+            "status",
+            "componente_curricular",
+        )
+    )
+
+    if componente:
+        imagens_filtradas = imagens_filtradas.filter(
+            componente_curricular__nome__icontains=componente
+        )
+
+    if volume:
+        imagens_filtradas = imagens_filtradas.filter(
+            volume_ano_modulo__icontains=volume
+        )
+
+    if capitulo:
+        imagens_filtradas = imagens_filtradas.filter(
+            capitulo_unidade__icontains=capitulo
+        )
+
+    if busca:
+        imagens_filtradas = imagens_filtradas.filter(
+            retranca__icontains=busca
+        )
+
+    imagens_filtradas = imagens_filtradas.order_by(
+        "componente_curricular__nome",
+        "volume_ano_modulo",
+        "capitulo_unidade",
+        "retranca",
+    )
 
     def _redirect_organizar_lotes():
         if importacao_id:
-            return redirect("organizar_lotes", importacao_id=importacao_id)
+            return redirect(
+                "organizar_lotes",
+                importacao_id=importacao_id,
+            )
         return redirect("organizar_lotes_geral")
 
     if request.method == "POST":
-        nome_lote = request.POST.get("nome_lote", "").strip()
-        descricao_lote = request.POST.get("descricao_lote", "").strip()
-        data_prevista_raw = request.POST.get("data_prevista", "").strip()
-        imagem_ids = request.POST.getlist("imagem_ids")
+        nome_lote = request.POST.get(
+            "nome_lote",
+            "",
+        ).strip()
+
+        descricao_lote = request.POST.get(
+            "descricao_lote",
+            "",
+        ).strip()
+
+        data_prevista_raw = request.POST.get(
+            "data_prevista",
+            "",
+        ).strip()
+
+        usar_todas_filtradas = (
+            request.POST.get(
+                "usar_todas_filtradas"
+            )
+            == "1"
+        )
+
+        if usar_todas_filtradas:
+            imagem_ids = list(
+                imagens_filtradas.values_list(
+                    "pk",
+                    flat=True,
+                )
+            )
+        else:
+            imagem_ids = request.POST.getlist(
+                "imagem_ids"
+            )
 
         try:
-            data_prevista = _data_iso_ou_none(data_prevista_raw)
+            data_prevista = _data_iso_ou_none(
+                data_prevista_raw
+            )
         except ValueError:
-            messages.error(request, "Informe uma data prevista válida.")
+            messages.error(
+                request,
+                "Informe uma data prevista válida.",
+            )
             return _redirect_organizar_lotes()
 
         if not nome_lote:
-            messages.error(request, "Informe um nome para o lote.")
+            messages.error(
+                request,
+                "Informe um nome para o lote.",
+            )
         elif not imagem_ids:
-            messages.error(request, "Selecione ao menos uma imagem para formar o lote.")
-        elif Lote.objects.filter(nome=nome_lote).exists():
-            messages.error(request, f"Já existe um lote com o nome '{nome_lote}'. Escolha outro nome.")
+            messages.error(
+                request,
+                "Selecione ao menos uma imagem para formar o lote.",
+            )
+        elif Lote.objects.filter(
+            nome=nome_lote
+        ).exists():
+            messages.error(
+                request,
+                (
+                    f"Já existe um lote com o nome "
+                    f"'{nome_lote}'. Escolha outro nome."
+                ),
+            )
         else:
             lote = Lote.objects.create(
                 nome=nome_lote,
@@ -3537,58 +3847,126 @@ def organizar_lotes(request, importacao_id=None):
                 data_prevista=data_prevista,
                 criado_por=request.user,
             )
-            atualizadas = imagens_sem_lote.filter(pk__in=imagem_ids).update(lote=lote)
+
+            atualizadas = (
+                imagens_sem_lote
+                .filter(
+                    pk__in=imagem_ids
+                )
+                .update(
+                    lote=lote
+                )
+            )
+
             lote.sincronizar_data_efetiva()
-            messages.success(request, f"Lote '{nome_lote}' criado com {atualizadas} imagem(ns).")
+
+            messages.success(
+                request,
+                (
+                    f"Lote '{nome_lote}' criado com "
+                    f"{atualizadas} imagem(ns)."
+                ),
+            )
 
         return _redirect_organizar_lotes()
 
-    # ---- Filtros (GET) ----
-    componente = request.GET.get("componente", "").strip()
-    volume = request.GET.get("volume", "").strip()
-    busca = request.GET.get("busca", "").strip()
-
-    imagens = imagens_sem_lote.select_related("status", "componente_curricular")
-
-    if componente:
-        imagens = imagens.filter(componente_curricular__nome__icontains=componente)
-    if volume:
-        imagens = imagens.filter(volume_ano_modulo__icontains=volume)
-    if busca:
-        imagens = imagens.filter(retranca__icontains=busca)
-
-    imagens = imagens.order_by("componente_curricular__nome", "volume_ano_modulo", "retranca")
-
     componentes_disponiveis = (
-        imagens_sem_lote.filter(componente_curricular__isnull=False)
-        .values_list("componente_curricular__nome", flat=True)
-        .distinct().order_by()
+        imagens_sem_lote
+        .filter(
+            componente_curricular__isnull=False
+        )
+        .values_list(
+            "componente_curricular__nome",
+            flat=True,
+        )
+        .distinct()
+        .order_by()
     )
+
     volumes_disponiveis = (
-        imagens_sem_lote.exclude(volume_ano_modulo="")
-        .values_list("volume_ano_modulo", flat=True)
-        .distinct().order_by()
+        imagens_sem_lote
+        .exclude(
+            volume_ano_modulo=""
+        )
+        .values_list(
+            "volume_ano_modulo",
+            flat=True,
+        )
+        .distinct()
+        .order_by()
+    )
+
+    capitulos_disponiveis = (
+        imagens_sem_lote
+        .exclude(
+            capitulo_unidade=""
+        )
+        .values_list(
+            "capitulo_unidade",
+            flat=True,
+        )
+        .distinct()
+        .order_by()
+    )
+
+    paginacao = _paginar_imagens(
+        request,
+        imagens_filtradas,
     )
 
     if importacao_id:
-        lotes_recentes = Lote.objects.filter(
-            imagens__importacao_id=importacao_id
-        ).distinct().order_by("-criado_em")
+        lotes_recentes = (
+            Lote.objects
+            .filter(
+                imagens__importacao_id=importacao_id
+            )
+            .distinct()
+            .order_by("-criado_em")
+        )
     else:
-        lotes_recentes = Lote.objects.filter(ativo=True).order_by("-criado_em")[:10]
+        lotes_recentes = (
+            Lote.objects
+            .filter(ativo=True)
+            .order_by("-criado_em")[:10]
+        )
 
     ctx = {
         "importacao_id": importacao_id,
-        "imagens": imagens,
+        "imagens": paginacao["pagina_obj"],
+        "pagina_obj": paginacao["pagina_obj"],
         "total_restante": imagens_sem_lote.count(),
+        "total_filtrado": paginacao["total"],
         "componente": componente,
         "volume": volume,
+        "capitulo": capitulo,
         "busca": busca,
-        "componentes_disponiveis": sorted(set(componentes_disponiveis)),
-        "volumes_disponiveis": sorted(set(volumes_disponiveis)),
+        "componentes_disponiveis": sorted(
+            set(componentes_disponiveis)
+        ),
+        "volumes_disponiveis": sorted(
+            set(volumes_disponiveis)
+        ),
+        "capitulos_disponiveis": sorted(
+            set(capitulos_disponiveis)
+        ),
         "lotes_desta_importacao": lotes_recentes,
+        "por_pagina": paginacao["por_pagina"],
+        "por_pagina_opcoes": paginacao[
+            "por_pagina_opcoes"
+        ],
+        "qs_sem_pagina": paginacao[
+            "qs_sem_pagina"
+        ],
+        "total": paginacao["total"],
+        "paginacao_label": "imagem",
+        "paginacao_label_plural": "imagens",
     }
-    return render(request, "core/organizar_lotes.html", ctx)
+
+    return render(
+        request,
+        "core/organizar_lotes.html",
+        ctx,
+    )
 
 # ============================================================
 # ATUALIZAÇÃO DE STATUS DE PAGAMENTO
@@ -3664,14 +4042,31 @@ def lote_editar(request, pk):
     lote = get_object_or_404(Lote, pk=pk)
 
     def contexto_formulario():
+        imagens_lote_qs = (
+            lote.imagens
+            .filter(ativo=True)
+            .select_related(
+                "status",
+                "responsavel",
+            )
+            .order_by("retranca")
+        )
+
+        paginacao = _paginar_imagens(
+            request,
+            imagens_lote_qs,
+        )
+
         return {
             "lote": lote,
-            "imagens_lote": (
-                lote.imagens
-                .filter(ativo=True)
-                .select_related("status", "responsavel")
-                .order_by("retranca")
-            ),
+            "imagens_lote": paginacao["pagina_obj"],
+            "pagina_obj": paginacao["pagina_obj"],
+            "total": paginacao["total"],
+            "por_pagina": paginacao["por_pagina"],
+            "por_pagina_opcoes": paginacao["por_pagina_opcoes"],
+            "qs_sem_pagina": paginacao["qs_sem_pagina"],
+            "paginacao_label": "imagem",
+            "paginacao_label_plural": "imagens",
             "lotes_destino": (
                 Lote.objects
                 .filter(ativo=True)
@@ -3776,79 +4171,306 @@ def lote_editar(request, pk):
 
 @login_required
 def lotes_lista(request):
-    """
-    Tela principal de Lotes. Comportamento por perfil:
-    - Coordenador/Administrador: todos os lotes, com progresso completo por status
-      e formulário de atribuição.
-    - Descritor/Revisor: apenas os lotes onde ele tem imagens atribuídas,
-      com progresso pessoal simplificado.
-    Ambos veem um card de "Imagens avulsas" (sem lote), quando houver.
-    """
-    from .models import Lote, filtro_autoria_imagem
+    from collections import Counter
+    from django.db.models import Prefetch
+    from .models import Lote, HistoricoItem, filtro_autoria_imagem
 
     usuario = request.user
     eh_coordenacao = _apenas_coordenador(usuario)
 
     busca = request.GET.get("busca", "").strip()
+    status_id = request.GET.get("status", "").strip()
+    data_prevista_f = request.GET.get("data_prevista", "").strip()
+    data_termino_f = request.GET.get("data_termino", "").strip()
     mostrar_inativos = request.GET.get("mostrar_inativos") == "1"
 
+    data_prevista = _data_filtro(data_prevista_f)
+    data_termino = _data_filtro(data_termino_f)
+
+    status_disponiveis = list(
+        StatusWorkflow.objects
+        .filter(ativo=True)
+        .order_by("ordem")
+    )
+
     if eh_coordenacao:
-        lotes = Lote.objects.filter(ativo=not mostrar_inativos)
-    else:
-        # Lotes onde o usuário é responsável atual OU foi autor da fase dele
-        # (mesmo depois de já ter entregue — para o lote continuar visível
-        # em modo consulta após o handoff).
         lotes = Lote.objects.filter(
-            ativo=True,
-            imagens__ativo=True,
-        ).filter(
-            imagens__in=Imagem.objects.filter(filtro_autoria_imagem(usuario))
-        ).distinct()
+            ativo=not mostrar_inativos
+        )
+    else:
+        lotes = (
+            Lote.objects
+            .filter(
+                ativo=True,
+                imagens__ativo=True,
+            )
+            .filter(
+                imagens__in=Imagem.objects.filter(
+                    filtro_autoria_imagem(usuario)
+                )
+            )
+            .distinct()
+        )
 
     if busca:
-        lotes = lotes.filter(nome__icontains=busca)
+        lotes = lotes.filter(
+            nome__icontains=busca
+        )
 
-    lotes = lotes.select_related("criado_por").order_by("-criado_em")
+    if data_prevista:
+        lotes = lotes.filter(
+            data_prevista=data_prevista
+        )
+
+    if data_termino:
+        lotes = lotes.filter(
+            data_efetiva=data_termino
+        )
+
+    if status_id:
+        lotes = lotes.filter(
+            imagens__ativo=True,
+            imagens__status_id=status_id,
+        )
+
+    imagens_ativas = (
+        Imagem.objects
+        .filter(ativo=True)
+        .select_related(
+            "status",
+            "responsavel",
+            "descricao",
+            "descricao__descritor",
+            "descricao__revisor",
+        )
+        .prefetch_related(
+            Prefetch(
+                "historico",
+                queryset=(
+                    HistoricoItem.objects
+                    .filter(
+                        tipo_acao=HistoricoItem.TipoAcao.DEVOLVIDO_CORRECAO
+                    )
+                    .select_related(
+                        "novo_status",
+                        "usuario",
+                    )
+                    .order_by("-criado_em")
+                ),
+                to_attr="correcoes_cache",
+            )
+        )
+        .order_by("retranca")
+    )
+
+    lotes = (
+        lotes
+        .select_related("criado_por")
+        .prefetch_related(
+            Prefetch(
+                "imagens",
+                queryset=imagens_ativas,
+                to_attr="imagens_ativas_cache",
+            )
+        )
+        .distinct()
+        .order_by("-criado_em")
+    )
 
     lotes_dados = []
+
     for lote in lotes:
+        imagens_do_lote = list(
+            getattr(
+                lote,
+                "imagens_ativas_cache",
+                [],
+            )
+        )
+
+        responsaveis = {}
+        status_nomes = set()
+        correcoes_ativas = []
+
+        for imagem in imagens_do_lote:
+            if imagem.responsavel_id:
+                responsavel = imagem.responsavel
+                nome = (
+                    responsavel.get_full_name()
+                    or responsavel.email
+                    or responsavel.username
+                )
+                responsaveis[responsavel.pk] = nome
+
+            if imagem.status_id:
+                status_nomes.add(
+                    imagem.status.nome
+                )
+
+            correcoes = getattr(
+                imagem,
+                "correcoes_cache",
+                [],
+            )
+
+            if correcoes:
+                ultima_correcao = correcoes[0]
+
+                if (
+                    ultima_correcao.novo_status_id
+                    and imagem.status_id
+                    and (
+                        imagem.status.perfil_responsavel
+                        == ultima_correcao.novo_status.perfil_responsavel
+                    )
+                ):
+                    correcoes_ativas.append(
+                        ultima_correcao
+                    )
+
+        nomes_responsaveis = sorted(
+            responsaveis.values(),
+            key=str.casefold,
+        )
+
+        if not nomes_responsaveis:
+            responsaveis_texto = "Sem responsável"
+        elif len(nomes_responsaveis) <= 2:
+            responsaveis_texto = ", ".join(
+                nomes_responsaveis
+            )
+        else:
+            responsaveis_texto = (
+                f"{nomes_responsaveis[0]}, "
+                f"{nomes_responsaveis[1]} "
+                f"+{len(nomes_responsaveis) - 2}"
+            )
+
+        if not status_nomes:
+            status_resumo = "Sem imagens"
+        elif len(status_nomes) == 1:
+            status_resumo = next(
+                iter(status_nomes)
+            )
+        else:
+            status_resumo = (
+                f"{len(status_nomes)} status em andamento"
+            )
+
         if eh_coordenacao:
+            contagens = Counter(
+                imagem.status_id
+                for imagem in imagens_do_lote
+                if imagem.status_id
+            )
+
+            total = len(imagens_do_lote)
+            progresso = []
+
+            if total:
+                for status in status_disponiveis:
+                    quantidade = contagens.get(
+                        status.pk,
+                        0,
+                    )
+
+                    if quantidade:
+                        progresso.append({
+                            "status_id": status.pk,
+                            "slug": status.slug,
+                            "nome": status.nome,
+                            "ordem": status.ordem,
+                            "quantidade": quantidade,
+                            "percentual": round(
+                                (quantidade / total) * 100,
+                                1,
+                            ),
+                        })
+
             lotes_dados.append({
                 "obj": lote,
-                "total": lote.total_imagens,
-                "progresso": lote.progresso_por_status(),
+                "total": total,
+                "progresso": progresso,
                 "meu_progresso": None,
+                "responsaveis_texto": responsaveis_texto,
+                "status_resumo": status_resumo,
+                "correcoes_ativas": len(correcoes_ativas),
             })
+
         else:
-            meu = lote.progresso_do_usuario(usuario)
+            meu = lote.progresso_do_usuario(
+                usuario
+            )
+
             if meu:
                 lotes_dados.append({
                     "obj": lote,
                     "total": meu["total"],
                     "progresso": None,
                     "meu_progresso": meu,
+                    "responsaveis_texto": responsaveis_texto,
+                    "status_resumo": status_resumo,
+                    "correcoes_ativas": len(correcoes_ativas),
                 })
 
-    # ---- Card de imagens avulsas (sem lote) ----
-    avulsas_qs = Imagem.objects.filter(ativo=True, lote__isnull=True)
+    avulsas_qs = Imagem.objects.filter(
+        ativo=True,
+        lote__isnull=True,
+    )
+
     if not eh_coordenacao:
-        avulsas_qs = avulsas_qs.filter(filtro_autoria_imagem(usuario)).distinct()
+        avulsas_qs = (
+            avulsas_qs
+            .filter(
+                filtro_autoria_imagem(
+                    usuario
+                )
+            )
+            .distinct()
+        )
+
     total_avulsas = avulsas_qs.count()
 
-    descritores = Usuario.objects.filter(
-        tipo=Usuario.Tipo.DESCRITOR, is_active=True
-    ).order_by("first_name", "username")
+    descritores = (
+        Usuario.objects
+        .filter(
+            tipo=Usuario.Tipo.DESCRITOR,
+            is_active=True,
+        )
+        .order_by(
+            "first_name",
+            "username",
+        )
+    )
 
-    revisores = Usuario.objects.filter(
-        tipo=Usuario.Tipo.REVISOR, is_active=True
-    ).order_by("first_name", "username")
+    revisores = (
+        Usuario.objects
+        .filter(
+            tipo=Usuario.Tipo.REVISOR,
+            is_active=True,
+        )
+        .order_by(
+            "first_name",
+            "username",
+        )
+    )
 
-    status_disponiveis = StatusWorkflow.objects.filter(ativo=True).order_by("ordem")
+    filtros_ativos = any([
+        busca,
+        status_id,
+        data_prevista_f,
+        data_termino_f,
+        mostrar_inativos,
+    ])
 
     ctx = {
         "lotes_dados": lotes_dados,
         "busca": busca,
+        "status_selecionado": status_id,
+        "data_prevista_selecionada": data_prevista_f,
+        "data_termino_selecionada": data_termino_f,
         "mostrar_inativos": mostrar_inativos,
+        "filtros_ativos": filtros_ativos,
         "total_lotes": len(lotes_dados),
         "total_avulsas": total_avulsas,
         "eh_coordenacao": eh_coordenacao,
@@ -3856,7 +4478,13 @@ def lotes_lista(request):
         "revisores": revisores,
         "status_disponiveis": status_disponiveis,
     }
-    return render(request, "core/lotes_lista.html", ctx)
+
+    return render(
+        request,
+        "core/lotes_lista.html",
+        ctx,
+    )
+
 # ============================================================
 # NAVEGAÇÃO SEQUENCIAL DENTRO DO LOTE
 # ============================================================
@@ -4074,10 +4702,13 @@ def projeto_criar(request):
     if request.method == "POST":
         nome = request.POST.get("nome", "").strip()
         descricao = request.POST.get("descricao", "").strip()
+        acervo_fotoweb = request.POST.get("acervo_fotoweb", "").strip().strip("/")
         ativo = request.POST.get("ativo") == "on"
 
         if not nome:
             messages.error(request, "Informe o nome do projeto.")
+        elif not acervo_fotoweb:
+            messages.error(request, "Informe o Acervo FotoWeb do projeto.")
         elif Projeto.objects.filter(nome__iexact=nome).exists():
             messages.error(
                 request,
@@ -4087,6 +4718,7 @@ def projeto_criar(request):
             projeto = Projeto.objects.create(
                 nome=nome,
                 descricao=descricao,
+                acervo_fotoweb=acervo_fotoweb,
                 ativo=ativo,
             )
             messages.success(
@@ -4117,10 +4749,13 @@ def projeto_editar(request, pk):
     if request.method == "POST":
         nome = request.POST.get("nome", "").strip()
         descricao = request.POST.get("descricao", "").strip()
+        acervo_fotoweb = request.POST.get("acervo_fotoweb", "").strip().strip("/")
         ativo = request.POST.get("ativo") == "on"
 
         if not nome:
             messages.error(request, "Informe o nome do projeto.")
+        elif not acervo_fotoweb:
+            messages.error(request, "Informe o Acervo FotoWeb do projeto.")
         elif (
             Projeto.objects
             .filter(nome__iexact=nome)
@@ -4134,6 +4769,7 @@ def projeto_editar(request, pk):
         else:
             projeto.nome = nome
             projeto.descricao = descricao
+            projeto.acervo_fotoweb = acervo_fotoweb
             projeto.ativo = ativo
             projeto.save()
 
@@ -4428,11 +5064,28 @@ def status_editar(request, pk):
         descricao_txt = request.POST.get("descricao", "").strip()
         perfil_responsavel = request.POST.get("perfil_responsavel")
         exige_atribuicao = request.POST.get("exige_atribuicao") == "on"
-        permite_edicao = request.POST.get("permite_edicao") == "on"
-        avanca_ao_abrir = request.POST.get("avanca_ao_abrir") == "on"
-        descricao_concluida = request.POST.get("descricao_concluida") == "on"
-        conferencia_concluida = request.POST.get("conferencia_concluida") == "on"
-        revisao_concluida = request.POST.get("revisao_concluida") == "on"
+        # Se um formulário antigo/sem flags fizer POST, não apaga as flags.
+        flags_na_tela = request.POST.get("flags_workflow_presentes") == "1"
+        permite_edicao = (
+            request.POST.get("permite_edicao") == "on"
+            if flags_na_tela else status_obj.permite_edicao
+        )
+        avanca_ao_abrir = (
+            request.POST.get("avanca_ao_abrir") == "on"
+            if flags_na_tela else status_obj.avanca_ao_abrir
+        )
+        descricao_concluida = (
+            request.POST.get("descricao_concluida") == "on"
+            if flags_na_tela else status_obj.descricao_concluida
+        )
+        conferencia_concluida = (
+            request.POST.get("conferencia_concluida") == "on"
+            if flags_na_tela else status_obj.conferencia_concluida
+        )
+        revisao_concluida = (
+            request.POST.get("revisao_concluida") == "on"
+            if flags_na_tela else status_obj.revisao_concluida
+        )
         is_inicial = request.POST.get("is_inicial") == "on"
         is_final = request.POST.get("is_final") == "on"
 
@@ -4729,8 +5382,11 @@ def relatorios_lista(request):
         .order_by("status__ordem", "status__nome")
     )
 
-    paginator = Paginator(imagens, 50)
-    pagina_obj = paginator.get_page(request.GET.get("pagina", 1))
+    paginacao = _paginar_imagens(
+        request,
+        imagens,
+    )
+    pagina_obj = paginacao["pagina_obj"]
 
     # Query string compartilhada por exportação e paginação.
     # "pagina" não entra porque o Excel exporta todo o resultado filtrado,
@@ -4828,27 +5484,19 @@ def relatorios_lista(request):
 
         "filtros_query": filtros_query,
         "filtros_ativos": filtros_ativos,
+        "por_pagina": paginacao["por_pagina"],
+        "por_pagina_opcoes": paginacao["por_pagina_opcoes"],
+        "qs_sem_pagina": paginacao["qs_sem_pagina"],
+        "paginacao_label": "imagem",
+        "paginacao_label_plural": "imagens",
     }
     return render(request, "core/relatorios.html", contexto)
 
 
 @login_required
 def relatorios_exportar_fotoweb(request):
-    """
-    Gera um .xlsx no MESMO modelo do relatório original do FotoWeb.
-
-    A linha base vem do snapshot salvo no momento da importação. Assim,
-    campos como keywords, status, img_file, usuario e etapa permanecem
-    exatamente como vieram do FotoWeb.
-
-    Somente:
-    - descricao
-    - descricao_flat
-
-    são substituídas pelas versões atuais existentes no Dito!.
-
-    Os filtros aplicados na tela de Relatórios também são respeitados.
-    """
+    # Exporta no mesmo conjunto e ordem de colunas do FotoWeb,
+    # usando os dados atuais do Dito nos campos editáveis.
     from django.http import HttpResponse
     from openpyxl import Workbook
 
@@ -4896,20 +5544,13 @@ def relatorios_exportar_fotoweb(request):
             "relatorios_lista"
         )
 
-        query_string = (
-            request.GET.urlencode()
-        )
+        query_string = request.GET.urlencode()
 
         if query_string:
-            retorno = (
-                f"{retorno}?{query_string}"
-            )
+            retorno = f"{retorno}?{query_string}"
 
-        return redirect(
-            retorno
-        )
+        return redirect(retorno)
 
-    # Ordem semelhante à origem quando o snapshot possui os metadados.
     imagens.sort(
         key=lambda imagem: (
             str(
@@ -4940,7 +5581,6 @@ def relatorios_exportar_fotoweb(request):
     worksheet = workbook.active
     worksheet.title = "Sheet1"
 
-    # Cabeçalho idêntico ao modelo original.
     worksheet.append(
         FOTOWEB_COLUNAS_RELATORIO
     )
@@ -4951,49 +5591,97 @@ def relatorios_exportar_fotoweb(request):
             or {}
         )
 
-        # ----------------------------------------------------
-        # A ÚNICA atualização feita no conteúdo da linha:
-        # descrição atual do Dito.
-        # ----------------------------------------------------
         descricao = getattr(
             imagem,
             "descricao",
             None,
         )
 
+        trechos = []
+
         if descricao:
             trechos = list(
                 descricao.trechos
-                .filter(
-                    ativo=True
-                )
-                .order_by(
-                    "ordem"
+                .filter(ativo=True)
+                .order_by("ordem")
+            )
+
+        base["obra"] = imagem.nome_obra
+
+        base["componente"] = (
+            imagem.componente_curricular.nome
+            if imagem.componente_curricular
+            else ""
+        )
+
+        base["volume"] = (
+            imagem.volume_ano_modulo
+            or ""
+        )
+
+        base["capitulo"] = (
+            imagem.capitulo_unidade
+            or ""
+        )
+
+        base["status"] = (
+            imagem.status.nome
+            if imagem.status
+            else ""
+        )
+
+        base["retranca"] = imagem.retranca
+        base["retranca_lower"] = (
+            imagem.retranca.lower()
+            if imagem.retranca
+            else ""
+        )
+
+        usuario_fotoweb = None
+
+        if descricao and descricao.descritor:
+            usuario_fotoweb = descricao.descritor
+        elif imagem.responsavel:
+            usuario_fotoweb = imagem.responsavel
+
+        if usuario_fotoweb:
+            base["usuario"] = (
+                usuario_fotoweb.username
+                or usuario_fotoweb.email
+                or ""
+            )
+
+        base["etapa"] = (
+            f"Etapa: {imagem.etapa}"
+            if imagem.etapa
+            else ""
+        )
+
+        if trechos:
+            base["descricao"] = (
+                _json.dumps(
+                    [
+                        {
+                            "lang": _lang_tag(
+                                trecho.idioma_codigo
+                            ),
+                            "text": trecho.texto,
+                        }
+                        for trecho in trechos
+                    ],
+                    ensure_ascii=False,
                 )
             )
 
-            if trechos:
-                base["descricao"] = (
-                    _json.dumps(
-                        [
-                            {
-                                "lang": _lang_tag(
-                                    trecho.idioma_codigo
-                                ),
-                                "text": trecho.texto,
-                            }
-                            for trecho in trechos
-                        ],
-                        ensure_ascii=False,
-                    )
-                )
-
-                base["descricao_flat"] = (
-                    " ".join(
-                        trecho.texto
-                        for trecho in trechos
-                    ).strip()
-                )
+            base["descricao_flat"] = (
+                " ".join(
+                    trecho.texto
+                    for trecho in trechos
+                ).strip()
+            )
+        else:
+            base["descricao"] = None
+            base["descricao_flat"] = None
 
         worksheet.append(
             [
@@ -5013,12 +5701,9 @@ def relatorios_exportar_fotoweb(request):
         'attachment; filename="relatorio_fotoweb_atualizado.xlsx"'
     )
 
-    workbook.save(
-        resposta
-    )
+    workbook.save(resposta)
 
     return resposta
-
 
 @login_required
 def relatorios_exportar(request):
@@ -5271,22 +5956,73 @@ def buscar_retranca(request):
     from .models import filtro_autoria_imagem
 
     termo = request.GET.get("q", "").strip()
-    resultados = []
+
+    imagens = (
+        Imagem.objects
+        .filter(ativo=True)
+        .select_related(
+            "status",
+            "lote",
+        )
+    )
+
+    if not _apenas_coordenador(
+        request.user
+    ):
+        imagens = (
+            imagens
+            .filter(
+                filtro_autoria_imagem(
+                    request.user
+                )
+            )
+            .distinct()
+        )
 
     if termo:
-        imagens = Imagem.objects.filter(ativo=True).select_related("status", "lote")
+        imagens = (
+            imagens
+            .filter(
+                retranca__icontains=termo
+            )
+            .order_by(
+                "nome_obra",
+                "retranca",
+            )
+        )
+    else:
+        imagens = Imagem.objects.none()
 
-        # Descritor/revisor só vê o que é responsabilidade dele; coordenação/admin vê tudo.
-        if not _apenas_coordenador(request.user):
-            imagens = imagens.filter(filtro_autoria_imagem(request.user)).distinct()
+    paginacao = _paginar_imagens(
+        request,
+        imagens,
+    )
 
-        resultados = imagens.filter(retranca__icontains=termo).order_by("nome_obra", "retranca")[:100]
-
-    return render(request, "core/buscar_retranca.html", {
-        "termo": termo,
-        "resultados": resultados,
-    })
-
+    return render(
+        request,
+        "core/buscar_retranca.html",
+        {
+            "termo": termo,
+            "resultados": paginacao[
+                "pagina_obj"
+            ],
+            "pagina_obj": paginacao[
+                "pagina_obj"
+            ],
+            "total": paginacao["total"],
+            "por_pagina": paginacao[
+                "por_pagina"
+            ],
+            "por_pagina_opcoes": paginacao[
+                "por_pagina_opcoes"
+            ],
+            "qs_sem_pagina": paginacao[
+                "qs_sem_pagina"
+            ],
+            "paginacao_label": "imagem",
+            "paginacao_label_plural": "imagens",
+        },
+    )
 
 # ============================================================
 # HISTÓRICO

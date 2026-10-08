@@ -36,9 +36,8 @@
                     <th style="width:32px;">#</th>
                     <th>Status</th>
                     <th>Perfil</th>
-                    <th>Regras</th>
-                    <th style="width:70px;">Ativo</th>
-                    {% if pode_gerenciar %}<th style="width:40px;"></th>{% endif %}
+                    <th style="width:90px;">Ativo</th>
+                    {% if pode_gerenciar %}<th style="width:52px;"></th>{% endif %}
                 </tr>
             </thead>
             <tbody id="corpoStatus">
@@ -56,15 +55,12 @@
                     </td>
                     <td class="text-secondary">{{ s.get_perfil_responsavel_display }}</td>
                     <td>
-                        {% if s.exige_atribuicao %}<span class="dito-kbd me-1">exige atribuição</span>{% endif %}
-                        {% if s.is_inicial %}<span class="dito-kbd me-1">inicial</span>{% endif %}
-                        {% if s.is_final %}<span class="dito-kbd">final</span>{% endif %}
-                    </td>
-                    <td>
                         {% if pode_gerenciar %}
                         <div class="form-check form-switch mb-0">
-                            <input class="form-check-input btn-toggle-ativo" type="checkbox" role="switch"
-                                   data-status-id="{{ s.pk }}" {% if s.ativo %}checked{% endif %}
+                            <input class="form-check-input btn-toggle-ativo"
+                                   type="checkbox" role="switch"
+                                   data-status-id="{{ s.pk }}"
+                                   {% if s.ativo %}checked{% endif %}
                                    style="cursor:pointer;">
                         </div>
                         {% else %}
@@ -77,7 +73,9 @@
                     </td>
                     {% if pode_gerenciar %}
                     <td>
-                        <a href="{% url 'status_editar' s.pk %}" class="btn btn-sm btn-outline-secondary dito-btn-acao" title="Editar status">
+                        <a href="{% url 'status_editar' s.pk %}"
+                           class="btn btn-sm btn-outline-secondary dito-btn-acao"
+                           title="Editar status">
                             <i class="bi bi-pencil"></i>
                         </a>
                     </td>

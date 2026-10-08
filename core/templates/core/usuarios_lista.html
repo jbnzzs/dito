@@ -55,9 +55,7 @@
                                     <select name="tipo" class="form-select form-select-sm" style="width:150px;" required>
                                         <option value="">Perfil...</option>
                                         {% for valor, label in tipos %}
-                                            {% if valor != 'administrador' %}
                                             <option value="{{ valor }}">{{ label }}</option>
-                                            {% endif %}
                                         {% endfor %}
                                     </select>
                                     <button type="submit" class="btn btn-sm btn-primary" title="Aprovar">

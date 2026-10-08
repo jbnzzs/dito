@@ -29,7 +29,7 @@ SECRET_KEY = os.environ.get("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '172.16.13.66']
+ALLOWED_HOSTS = ['*']
 
 # Hosts de produção vindos de variável de ambiente (ex: dito-vcbh.onrender.com)
 _hosts_extra = os.environ.get("ALLOWED_HOSTS", "")

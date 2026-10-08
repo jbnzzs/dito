@@ -264,6 +264,15 @@ class Projeto(models.Model):
         blank=True,
         verbose_name="Descrição",
     )
+    acervo_fotoweb = models.CharField(
+        max_length=180,
+        blank=True,
+        verbose_name="Acervo FotoWeb",
+        help_text=(
+            "Nome do acervo usado para gerar automaticamente "
+            "os links das imagens no FotoWeb."
+        ),
+    )
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
@@ -316,6 +325,7 @@ class Imagem(models.Model):
         P3       = "P3",       "P3 — Prova 3"
 
     class StatusPagamento(models.TextChoices):
+        PENDENTE = "pendente", "Pendente"
         CONTABILIZADO = "contabilizado", "Contabilizado"
         PAGO = "pago", "Pago"
 
@@ -465,13 +475,13 @@ class Imagem(models.Model):
     pagamento_descritor = models.CharField(
         max_length=20,
         choices=StatusPagamento.choices,
-        default=StatusPagamento.CONTABILIZADO,
+        default=StatusPagamento.PENDENTE,
         verbose_name="Pagamento — Descritor",
     )
     pagamento_revisor = models.CharField(
         max_length=20,
         choices=StatusPagamento.choices,
-        default=StatusPagamento.CONTABILIZADO,
+        default=StatusPagamento.PENDENTE,
         verbose_name="Pagamento — Revisor",
     )
 

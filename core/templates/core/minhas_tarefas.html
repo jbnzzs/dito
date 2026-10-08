@@ -2,9 +2,213 @@
 
 {% block title %}Minhas Tarefas — Dito!{% endblock %}
 {% block page_title %}Minhas Tarefas{% endblock %}
-{% block nav_tarefas %}active{% endblock %}
+{% block nav_tarefas %}active{% if lote_atual and mostrar_todos_status %}
+
+{% endif %}
+
+{% endblock %}
 
 {% block content %}
+
+<script>
+function ditoChecksCorrecao() {
+    return Array.prototype.slice.call(
+        document.querySelectorAll(".check-correcao-imagem")
+    );
+}
+
+function ditoAtualizarSelecionadasCorrecao() {
+    var todasLote = document.getElementById(
+        "selecionarTodasLoteCorrecao"
+    );
+
+    if (todasLote && todasLote.value === "1") {
+        return;
+    }
+
+    var checks = ditoChecksCorrecao();
+    var selecionadas = 0;
+
+    for (var i = 0; i < checks.length; i++) {
+        if (checks[i].checked) {
+            selecionadas++;
+        }
+    }
+
+    var contador = document.getElementById(
+        "contadorSelecionadasCorrecao"
+    );
+
+    if (contador) {
+        contador.textContent =
+            selecionadas +
+            (selecionadas === 1
+                ? " selecionada"
+                : " selecionadas");
+    }
+
+    var botoes = document.querySelectorAll(
+        ".btn-devolver-selecionadas"
+    );
+
+    for (var j = 0; j < botoes.length; j++) {
+        botoes[j].disabled = selecionadas === 0;
+    }
+
+    var selecionarTodas = document.getElementById(
+        "selecionarTodasCorrecao"
+    );
+
+    if (selecionarTodas) {
+        selecionarTodas.checked =
+            checks.length > 0 &&
+            selecionadas === checks.length;
+
+        selecionarTodas.indeterminate =
+            selecionadas > 0 &&
+            selecionadas < checks.length;
+    }
+}
+
+function ditoSelecionarTodasCorrecao(marcar) {
+    var todasLote = document.getElementById(
+        "selecionarTodasLoteCorrecao"
+    );
+
+    if (todasLote && todasLote.value === "1") {
+        ditoCancelarTodasLoteCorrecao();
+    }
+
+    var checks = ditoChecksCorrecao();
+
+    for (var i = 0; i < checks.length; i++) {
+        checks[i].checked = marcar;
+    }
+
+    ditoAtualizarSelecionadasCorrecao();
+}
+
+function ditoSelecionarTodasLoteCorrecao() {
+    var campo = document.getElementById(
+        "selecionarTodasLoteCorrecao"
+    );
+    var contador = document.getElementById(
+        "contadorSelecionadasCorrecao"
+    );
+    var aviso = document.getElementById(
+        "avisoTodasLoteCorrecao"
+    );
+    var botaoSelecionar = document.getElementById(
+        "btnSelecionarTodasLoteCorrecao"
+    );
+    var botaoCancelar = document.getElementById(
+        "btnCancelarTodasLoteCorrecao"
+    );
+    var botoes = document.querySelectorAll(
+        ".btn-devolver-selecionadas"
+    );
+
+    if (!campo || !contador) {
+        return;
+    }
+
+    campo.value = "1";
+
+    var total = parseInt(
+        contador.getAttribute("data-total-lote") || "0",
+        10
+    );
+
+    contador.textContent =
+        total +
+        (total === 1 ? " selecionada" : " selecionadas");
+
+    if (aviso) {
+        aviso.classList.remove("d-none");
+    }
+
+    if (botaoSelecionar) {
+        botaoSelecionar.classList.add("d-none");
+    }
+
+    if (botaoCancelar) {
+        botaoCancelar.classList.remove("d-none");
+    }
+
+    for (var i = 0; i < botoes.length; i++) {
+        botoes[i].disabled = false;
+    }
+
+    var checkCabecalho = document.getElementById(
+        "selecionarTodasCorrecao"
+    );
+
+    if (checkCabecalho) {
+        checkCabecalho.checked = true;
+        checkCabecalho.indeterminate = false;
+    }
+
+    var checks = ditoChecksCorrecao();
+
+    for (var j = 0; j < checks.length; j++) {
+        checks[j].checked = true;
+        checks[j].disabled = true;
+    }
+}
+
+function ditoCancelarTodasLoteCorrecao() {
+    var campo = document.getElementById(
+        "selecionarTodasLoteCorrecao"
+    );
+    var aviso = document.getElementById(
+        "avisoTodasLoteCorrecao"
+    );
+    var botaoSelecionar = document.getElementById(
+        "btnSelecionarTodasLoteCorrecao"
+    );
+    var botaoCancelar = document.getElementById(
+        "btnCancelarTodasLoteCorrecao"
+    );
+
+    if (campo) {
+        campo.value = "0";
+    }
+
+    if (aviso) {
+        aviso.classList.add("d-none");
+    }
+
+    if (botaoSelecionar) {
+        botaoSelecionar.classList.remove("d-none");
+    }
+
+    if (botaoCancelar) {
+        botaoCancelar.classList.add("d-none");
+    }
+
+    var checks = ditoChecksCorrecao();
+
+    for (var i = 0; i < checks.length; i++) {
+        checks[i].disabled = false;
+        checks[i].checked = false;
+    }
+
+    var checkCabecalho = document.getElementById(
+        "selecionarTodasCorrecao"
+    );
+
+    if (checkCabecalho) {
+        checkCabecalho.checked = false;
+        checkCabecalho.indeterminate = false;
+    }
+
+    ditoAtualizarSelecionadasCorrecao();
+}
+
+window.addEventListener("load", ditoAtualizarSelecionadasCorrecao);
+window.addEventListener("pageshow", ditoAtualizarSelecionadasCorrecao);
+</script>
+
 
 {# ---- Navegação ---- #}
 <div class="mb-3">
@@ -104,6 +308,129 @@
     </div>
 </div>
 
+{% if lote_atual and mostrar_todos_status %}
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap mb-3">
+            <div>
+                <h6 class="fw-bold mb-1">
+                    <i class="bi bi-arrow-counterclockwise me-2" style="color:#B42318;"></i>
+                    Devolver imagens para correção
+                </h6>
+
+                <p class="text-secondary mb-0" style="font-size:0.8rem;">
+                    Marque as imagens na tabela e escolha para qual etapa elas devem voltar.
+                </p>
+            </div>
+
+            <span
+                id="contadorSelecionadasCorrecao"
+                class="badge text-bg-light border"
+                data-total-lote="{{ total }}"
+            >
+                0 selecionadas
+            </span>
+        </div>
+
+        <form
+            method="post"
+            action="{% url 'devolver_imagens_correcao' lote_atual.pk %}"
+            id="formDevolverSelecionadas"
+        >
+            {% csrf_token %}
+
+            <input
+                type="hidden"
+                name="next"
+                value="{{ request.get_full_path }}"
+            >
+
+            <input
+                type="hidden"
+                name="selecionar_todas_lote"
+                id="selecionarTodasLoteCorrecao"
+                value="0"
+            >
+
+            <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+                <button
+                    type="button"
+                    class="btn btn-outline-secondary btn-sm"
+                    id="btnSelecionarTodasLoteCorrecao"
+                    onclick="ditoSelecionarTodasLoteCorrecao()"
+                >
+                    <i class="bi bi-check2-square me-1"></i>
+                    Selecionar todas as {{ total }} imagens do lote
+                </button>
+
+                <button
+                    type="button"
+                    class="btn btn-link btn-sm text-secondary d-none"
+                    id="btnCancelarTodasLoteCorrecao"
+                    onclick="ditoCancelarTodasLoteCorrecao()"
+                    style="text-decoration:none;"
+                >
+                    Cancelar seleção total
+                </button>
+            </div>
+
+            <div
+                id="avisoTodasLoteCorrecao"
+                class="alert alert-warning py-2 px-3 mb-3 d-none"
+                style="font-size:0.8rem;"
+            >
+                <i class="bi bi-check2-all me-1"></i>
+                Todas as <strong>{{ total }}</strong> imagens deste lote serão devolvidas,
+                inclusive as que não aparecem nesta página.
+            </div>
+
+            <label
+                for="instrucaoCorrecao"
+                class="form-label fw-bold"
+                style="font-size:0.8rem;"
+            >
+                Instrução da correção
+            </label>
+
+            <textarea
+                id="instrucaoCorrecao"
+                name="observacao"
+                class="form-control mb-3"
+                rows="3"
+                placeholder="Explique exatamente o que precisa ser corrigido nas imagens selecionadas..."
+                required
+            ></textarea>
+
+            <div class="d-flex gap-2 flex-wrap">
+                <button
+                    type="submit"
+                    name="destino"
+                    value="descritor"
+                    class="btn btn-outline-danger btn-sm btn-devolver-selecionadas"
+                    disabled
+                    onclick="return confirm('Devolver as imagens selecionadas ao Descritor para correção?');"
+                >
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>
+                    Devolver ao descritor
+                </button>
+
+                <button
+                    type="submit"
+                    name="destino"
+                    value="revisor"
+                    class="btn btn-outline-danger btn-sm btn-devolver-selecionadas"
+                    disabled
+                    onclick="return confirm('Devolver as imagens selecionadas ao Revisor para correção?');"
+                >
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>
+                    Devolver ao revisor
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
 {# ---- Tabela de tarefas ---- #}
 <div class="card">
     <div class="card-body p-0">
@@ -112,7 +439,20 @@
             <table class="table table-sm mb-0">
                 <thead>
                     <tr>
-                        <th class="ps-3">Retranca</th>
+                        {% if lote_atual and mostrar_todos_status %}
+                        <th style="width:42px;" class="ps-3">
+                            <input
+                                type="checkbox"
+                                id="selecionarTodasCorrecao"
+                                onchange="ditoSelecionarTodasCorrecao(this.checked)"
+                                title="Selecionar todas desta página"
+                            >
+                        </th>
+                        {% endif %}
+
+                        <th class="{% if not lote_atual or not eh_coordenacao %}ps-3{% endif %}">
+                            Retranca
+                        </th>
                         <th>Projeto</th>
                         <th>Disciplina</th>
                         <th>Etapa</th>
@@ -130,9 +470,51 @@
                 </thead>
                 <tbody>
                     {% for img in tarefas %}
-                    <tr>
+                    <tr
+                        {% if img.correcao_ativa %}
+                        style="background:#FFF7F7;"
+                        {% endif %}
+                    >
+                        {% if lote_atual and mostrar_todos_status %}
                         <td class="ps-3">
+                            <input
+                                type="checkbox"
+                                name="imagem_ids"
+                                value="{{ img.pk }}"
+                                class="check-correcao-imagem"
+                                onchange="ditoAtualizarSelecionadasCorrecao()"
+                                form="formDevolverSelecionadas"
+                            >
+                        </td>
+                        {% endif %}
+
+                        <td class="{% if not lote_atual or not eh_coordenacao %}ps-3{% endif %}">
                             <span class="dito-retranca">{{ img.retranca }}</span>
+
+                            {% if img.correcao_ativa %}
+                            <div
+                                class="mt-1"
+                                style="
+                                    color:#B42318;
+                                    font-size:0.7rem;
+                                    font-weight:700;
+                                "
+                                title="{{ img.correcao_ativa.observacao }}"
+                            >
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                Correção solicitada
+                            </div>
+
+                            <div
+                                style="
+                                    color:#7A3B38;
+                                    font-size:0.7rem;
+                                    max-width:260px;
+                                "
+                            >
+                                {{ img.correcao_ativa.observacao|truncatechars:90 }}
+                            </div>
+                            {% endif %}
                         </td>
                         <td style="font-size:0.875rem;">
                             {{ img.nome_obra }}
@@ -318,64 +700,7 @@
             </table>
         </div>
 
-        {# Paginação #}
-        {% if pagina_obj.has_other_pages %}
-        <div class="d-flex align-items-center justify-content-between px-3 py-2 border-top"
-             style="font-size:0.875rem;">
-            <span class="text-secondary">
-                Página {{ pagina_obj.number }} de {{ pagina_obj.paginator.num_pages }}
-                &nbsp;·&nbsp; {{ total }} tarefa{{ total|pluralize }}
-            </span>
-            <div class="d-flex gap-1 align-items-center">
-
-                {% if pagina_obj.has_previous %}
-                <a href="?pagina=1{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}{% if lote_atual %}&lote={{ lote_atual.pk }}{% elif sem_lote %}&sem_lote=1{% endif %}&next={{ url_voltar|urlencode }}"
-                   class="btn btn-outline-secondary btn-sm" title="Primeira">
-                    <i class="bi bi-chevron-double-left"></i>
-                </a>
-                <a href="?pagina={{ pagina_obj.previous_page_number }}{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}{% if lote_atual %}&lote={{ lote_atual.pk }}{% elif sem_lote %}&sem_lote=1{% endif %}&next={{ url_voltar|urlencode }}"
-                   class="btn btn-outline-secondary btn-sm" title="Anterior">
-                    <i class="bi bi-chevron-left"></i>
-                </a>
-                {% endif %}
-
-                {% for num in pagina_obj.paginator.page_range %}
-                    {% if pagina_obj.number == num %}
-                    <button class="btn btn-primary btn-sm">{{ num }}</button>
-                    {% elif num > pagina_obj.number|add:"-3" and num < pagina_obj.number|add:"3" %}
-                    <a href="?pagina={{ num }}{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}{% if lote_atual %}&lote={{ lote_atual.pk }}{% elif sem_lote %}&sem_lote=1{% endif %}&next={{ url_voltar|urlencode }}"
-                       class="btn btn-outline-secondary btn-sm">{{ num }}</a>
-                    {% endif %}
-                {% endfor %}
-
-                {% if pagina_obj.has_next %}
-                <a href="?pagina={{ pagina_obj.next_page_number }}{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}{% if lote_atual %}&lote={{ lote_atual.pk }}{% elif sem_lote %}&sem_lote=1{% endif %}&next={{ url_voltar|urlencode }}"
-                   class="btn btn-outline-secondary btn-sm" title="Próxima">
-                    <i class="bi bi-chevron-right"></i>
-                </a>
-                <a href="?pagina={{ pagina_obj.paginator.num_pages }}{% if status_slug_ativo %}&status={{ status_slug_ativo }}{% endif %}{% if busca %}&busca={{ busca }}{% endif %}{% if lote_atual %}&lote={{ lote_atual.pk }}{% elif sem_lote %}&sem_lote=1{% endif %}&next={{ url_voltar|urlencode }}"
-                   class="btn btn-outline-secondary btn-sm" title="Última">
-                    <i class="bi bi-chevron-double-right"></i>
-                </a>
-                {% endif %}
-
-                <form method="get" class="d-flex align-items-center gap-1 ms-2">
-                    {% if status_slug_ativo %}<input type="hidden" name="status" value="{{ status_slug_ativo }}">{% endif %}
-                    {% if busca %}<input type="hidden" name="busca" value="{{ busca }}">{% endif %}
-                    {% if lote_atual %}<input type="hidden" name="lote" value="{{ lote_atual.pk }}">{% elif sem_lote %}<input type="hidden" name="sem_lote" value="1">{% endif %}
-                    <input type="hidden" name="next" value="{{ url_voltar }}">
-                    <input type="number" name="pagina" min="1"
-                           max="{{ pagina_obj.paginator.num_pages }}"
-                           placeholder="{{ pagina_obj.number }}"
-                           style="width:60px; font-size:0.8rem; padding:0.25rem 0.4rem; border:0.5px solid #DAD6CD; border-radius:6px; text-align:center; background:#fff; font-family:'Manrope',sans-serif;">
-                    <button type="submit" class="btn btn-outline-secondary btn-sm">
-                        <i class="bi bi-arrow-right"></i>
-                    </button>
-                </form>
-
-            </div>
-        </div>
-        {% endif %}
+                {% include "core/_paginacao_imagens.html" %}
 
         {% else %}
         <div class="dito-empty-state py-5">

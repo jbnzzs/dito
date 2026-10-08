@@ -817,50 +817,7 @@
         </div>
 
 
-        {% if pagina_obj.has_other_pages %}
-
-        <div
-            class="d-flex align-items-center justify-content-between px-3 py-2 border-top flex-wrap gap-2"
-            style="font-size:0.82rem;"
-        >
-
-            <span class="text-secondary">
-                Página {{ pagina_obj.number }}
-                de {{ pagina_obj.paginator.num_pages }}
-                &nbsp;·&nbsp;
-                {{ total }} {% if total == 1 %}imagem{% else %}imagens{% endif %}
-            </span>
-
-
-            <div class="d-flex gap-1">
-
-                {% if pagina_obj.has_previous %}
-                <a
-                    href="?{% if filtros_query %}{{ filtros_query }}&{% endif %}pagina={{ pagina_obj.previous_page_number }}"
-                    class="btn btn-outline-secondary btn-sm"
-                    title="Página anterior"
-                >
-                    <i class="bi bi-chevron-left"></i>
-                </a>
-                {% endif %}
-
-
-                {% if pagina_obj.has_next %}
-                <a
-                    href="?{% if filtros_query %}{{ filtros_query }}&{% endif %}pagina={{ pagina_obj.next_page_number }}"
-                    class="btn btn-outline-secondary btn-sm"
-                    title="Próxima página"
-                >
-                    <i class="bi bi-chevron-right"></i>
-                </a>
-                {% endif %}
-
-            </div>
-
-        </div>
-
-        {% endif %}
-
+        {% include "core/_paginacao_imagens.html" %}
 
         {% else %}
 
@@ -891,7 +848,7 @@
         >
             <strong>Exportação filtrada:</strong>
             o botão de Excel exporta todas as imagens do resultado atual,
-            e não apenas as 50 exibidas na página.
+            e não apenas as imagens exibidas na página atual.
         </p>
 
         <p

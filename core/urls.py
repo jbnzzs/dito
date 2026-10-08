@@ -29,6 +29,11 @@ urlpatterns = [
     path("lotes/", views.lotes_lista, name="lotes_lista"),
     path("lotes/organizar/", views.organizar_lotes, name="organizar_lotes_geral"),
     path("lotes/<int:lote_id>/atribuir/", views.atribuir_lote, name="atribuir_lote"),
+    path(
+        "lotes/<int:lote_id>/devolver-correcao/",
+        views.devolver_imagens_correcao,
+        name="devolver_imagens_correcao",
+    ),
     path("lotes/<int:lote_id>/alterar-status/", views.lote_alterar_status, name="lote_alterar_status"),
     path("lotes/<int:pk>/editar/", views.lote_editar, name="lote_editar"),
 

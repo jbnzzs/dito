@@ -48,6 +48,7 @@
                         <th class="ps-3">Projeto</th>
                         <th>Descrição</th>
                         <th>Imagens vinculadas</th>
+                        <th>FotoWeb</th>
                         <th>Situação</th>
 
                         {% if pode_gerenciar %}
@@ -75,6 +76,14 @@
 
                         <td>
                             {{ projeto.total_imagens }}
+                        </td>
+
+                        <td>
+                            {% if projeto.acervo_fotoweb %}
+                            <span class="badge text-bg-light border">Configurado</span>
+                            {% else %}
+                            <span class="badge text-bg-warning">Pendente</span>
+                            {% endif %}
                         </td>
 
                         <td>

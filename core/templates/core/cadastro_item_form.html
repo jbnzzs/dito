@@ -65,6 +65,31 @@
             </div>
             {% endif %}
 
+            {% if tipo == "projeto" %}
+            <div class="border rounded-3 p-3 mb-4" style="background:#F8FAFC;">
+                <div class="fw-bold mb-1" style="color:#1B3A5C;">Integração FotoWeb</div>
+                <div class="text-secondary mb-3" style="font-size:0.8rem;">
+                    Esta configuração será reutilizada automaticamente nas importações do projeto.
+                </div>
+
+                <label for="acervo_fotoweb" class="form-label">Acervo FotoWeb</label>
+                <input
+                    type="text"
+                    class="form-control"
+                    id="acervo_fotoweb"
+                    name="acervo_fotoweb"
+                    value="{% if item %}{{ item.acervo_fotoweb }}{% endif %}"
+                    maxlength="180"
+                    placeholder="Ex.: 5101-G28-EF2-AUDIODESC"
+                    autocomplete="off"
+                    required
+                >
+                <div class="form-text">
+                    O link da imagem usa este acervo. O PDF do SharePoint é identificado automaticamente pela retranca.
+                </div>
+            </div>
+            {% endif %}
+
             <div class="form-check mb-4">
                 <input
                     class="form-check-input"
