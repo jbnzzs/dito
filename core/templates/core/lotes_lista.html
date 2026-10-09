@@ -64,6 +64,30 @@
                 >
             </div>
 
+            {# DITO_FILTRO_RESP_LOTES_20261009 — responsável atual de uma imagem do lote #}
+            <div class="col-md-6 col-xl-3">
+                <label class="form-label mb-1" for="filtro-responsavel-lote">
+                    Responsável
+                </label>
+                <select name="responsavel" id="filtro-responsavel-lote" class="form-select">
+                    <option value="">Todos os responsáveis</option>
+                    <optgroup label="Descritores">
+                    {% for pessoa in descritores %}
+                        <option value="{{ pessoa.pk }}" {% if pessoa.pk|stringformat:"s" == responsavel_selecionado %}selected{% endif %}>
+                            {{ pessoa.get_full_name|default:pessoa.email }}
+                        </option>
+                    {% endfor %}
+                    </optgroup>
+                    <optgroup label="Revisores">
+                    {% for pessoa in revisores %}
+                        <option value="{{ pessoa.pk }}" {% if pessoa.pk|stringformat:"s" == responsavel_selecionado %}selected{% endif %}>
+                            {{ pessoa.get_full_name|default:pessoa.email }}
+                        </option>
+                    {% endfor %}
+                    </optgroup>
+                </select>
+            </div>
+
             <div class="col-md-6 col-xl-3">
                 <label class="form-label mb-1">
                     Status

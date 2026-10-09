@@ -15,6 +15,7 @@ from django.db import transaction
 from django.shortcuts import redirect, render, get_object_or_404
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
 
 from .models import (
     ComponenteCurricular,
@@ -781,6 +782,68 @@ def _paginar_imagens(request, queryset):
 # DASHBOARD
 # ============================================================
 
+
+# DITO_MELHORIAS_RAPIDAS_02: avisos de devoluções para o responsável.
+def _dito_devolucoes_dashboard(request):
+    from .models import HistoricoItem
+
+    usuario = request.user
+    chave = f"dito_devolucoes_vistas_{usuario.pk}"
+    vistos = {str(v) for v in request.session.get(chave, [])}
+
+    eventos = (
+        HistoricoItem.objects.filter(
+            tipo_acao=HistoricoItem.TipoAcao.DEVOLVIDO_CORRECAO,
+            imagem__ativo=True,
+            imagem__responsavel=usuario,
+            imagem__status__perfil_responsavel=usuario.tipo,
+            novo_status__perfil_responsavel=usuario.tipo,
+        )
+        .select_related("imagem", "imagem__status", "novo_status", "usuario")
+        .order_by("-criado_em", "-pk")[:250]
+    )
+
+    resultado = []
+    imagens_vistas = set()
+    for evento in eventos:
+        if evento.imagem_id in imagens_vistas:
+            continue
+        imagens_vistas.add(evento.imagem_id)
+        if str(evento.pk) not in vistos:
+            resultado.append(evento)
+        if len(resultado) >= 15:
+            break
+    return resultado
+
+
+@login_required
+@require_POST
+def confirmar_devolucoes_dashboard(request):
+    from .models import HistoricoItem
+
+    usuario = request.user
+    if usuario.tipo not in (usuario.Tipo.DESCRITOR, usuario.Tipo.REVISOR):
+        return redirect("dashboard")
+
+    ids = [
+        int(valor)
+        for valor in request.POST.getlist("eventos")[:30]
+        if valor.isdecimal()
+    ]
+    confirmados = set(
+        HistoricoItem.objects.filter(
+            pk__in=ids,
+            tipo_acao=HistoricoItem.TipoAcao.DEVOLVIDO_CORRECAO,
+            imagem__responsavel=usuario,
+            novo_status__perfil_responsavel=usuario.tipo,
+        ).values_list("pk", flat=True)
+    )
+    chave = f"dito_devolucoes_vistas_{usuario.pk}"
+    anteriores = set(request.session.get(chave, []))
+    request.session[chave] = sorted(anteriores | confirmados)[-500:]
+    return redirect("minhas_tarefas" if request.POST.get("ir_tarefas") == "1" else "dashboard")
+
+
 @login_required
 def dashboard(request):
     from datetime import datetime
@@ -863,6 +926,9 @@ def dashboard(request):
             "para_conferir": para_conferir[:10],
             "para_conferir_count": para_conferir.count(),
         })
+
+    if usuario.tipo in (usuario.Tipo.DESCRITOR, usuario.Tipo.REVISOR):
+        ctx["devolucoes_dashboard"] = _dito_devolucoes_dashboard(request)
 
     return render(request, "core/dashboard.html", ctx)
 
@@ -1160,11 +1226,13 @@ def imagens_lista(request):
     componente_f = request.GET.get("componente", "").strip()
     status_f = request.GET.get("status", "").strip()
     lote_f = request.GET.get("lote", "").strip()
+    modo_visualizacao = "lotes" if request.GET.get("modo") == "lotes" else "lista"  # DITO_MELHORIAS_RAPIDAS_02
     resp_descricao_f = request.GET.get("resp_descricao", "").strip()
     resp_revisao_f = request.GET.get("resp_revisao", "").strip()
     pagamento_descritor_f = request.GET.get("pagamento_descritor", "").strip()
     pagamento_revisor_f = request.GET.get("pagamento_revisor", "").strip()
     mostrar_inativas = request.GET.get("mostrar_inativas") == "1"
+    somente_avulsas = request.GET.get("sem_lote") == "1"  # DITO_LOTES_LISTA_V3
     pagina = request.GET.get("pagina", 1)
 
     # Quantidade de imagens por página.
@@ -1241,14 +1309,83 @@ def imagens_lista(request):
         if lote_selecionado:
             imagens = imagens.filter(lote=lote_selecionado)
 
-    imagens = imagens.order_by("-criado_em")
+    if somente_avulsas:
+        imagens = imagens.filter(lote__isnull=True)
 
-    total = imagens.count()
-    paginador = Paginator(
-        imagens,
-        por_pagina,
-    )
-    pagina_obj = paginador.get_page(pagina)
+    lotes_resumo = []
+    if modo_visualizacao == "lotes":
+        # Paginamos LOTES, não imagens. Isso evita repetir o mesmo lote
+        # ou separar as suas imagens entre páginas diferentes.
+        grupos = (
+            imagens.order_by()
+            .values("lote_id")
+            .annotate(quantidade=Count("pk", distinct=True))
+            .order_by("lote_id")
+        )
+        paginador = Paginator(grupos, por_pagina)
+        pagina_obj = paginador.get_page(pagina)
+        grupos_pagina = list(pagina_obj.object_list)
+        ids_lotes = [g["lote_id"] for g in grupos_pagina if g["lote_id"] is not None]
+        tem_avulsas = any(g["lote_id"] is None for g in grupos_pagina)
+
+        lotes_por_id = Lote.objects.in_bulk(ids_lotes)
+        dados_por_lote = {
+            g["lote_id"]: {"projetos": set(), "responsaveis": set(), "status": set()}
+            for g in grupos_pagina
+        }
+
+        if grupos_pagina:
+            filtro_pagina = Q(lote_id__in=ids_lotes)
+            if tem_avulsas:
+                filtro_pagina |= Q(lote__isnull=True)
+
+            # Somente campos necessários para as linhas dos lotes.
+            for dado in (
+                imagens.filter(filtro_pagina).order_by()
+                .values(
+                    "lote_id", "projeto__nome", "status__nome",
+                    "responsavel__first_name", "responsavel__last_name", "responsavel__email",
+                ).distinct()
+            ):
+                info = dados_por_lote.get(dado["lote_id"])
+                if info is None:
+                    continue
+                if dado["projeto__nome"]:
+                    info["projetos"].add(dado["projeto__nome"])
+                if dado["status__nome"]:
+                    info["status"].add(dado["status__nome"])
+                responsavel = (
+                    " ".join(filter(None, [dado["responsavel__first_name"], dado["responsavel__last_name"]])).strip()
+                    or dado["responsavel__email"]
+                )
+                if responsavel:
+                    info["responsaveis"].add(responsavel)
+
+        def resumo(nomes, vazio):
+            nomes = sorted(nomes, key=str.casefold)
+            if not nomes:
+                return vazio
+            if len(nomes) <= 2:
+                return ", ".join(nomes)
+            return f"{nomes[0]}, {nomes[1]} +{len(nomes) - 2}"
+
+        for grupo in grupos_pagina:
+            lote_id = grupo["lote_id"]
+            info = dados_por_lote[lote_id]
+            nomes_status = info["status"]
+            lotes_resumo.append({
+                "lote": lotes_por_id.get(lote_id) if lote_id is not None else None,
+                "quantidade": grupo["quantidade"],
+                "projetos": resumo(info["projetos"], "—"),
+                "responsaveis": resumo(info["responsaveis"], "Sem responsável"),
+                "status": resumo(nomes_status, "Sem status"),
+            })
+        total = paginador.count
+    else:
+        imagens = imagens.order_by("-criado_em")
+        total = imagens.count()
+        paginador = Paginator(imagens, por_pagina)
+        pagina_obj = paginador.get_page(pagina)
 
     status_list = StatusWorkflow.objects.filter(ativo=True).order_by("ordem")
     descritores = Usuario.objects.filter(tipo=Usuario.Tipo.DESCRITOR, is_active=True).order_by("first_name", "username")
@@ -1281,9 +1418,17 @@ def imagens_lista(request):
     querydict = request.GET.copy()
     querydict.pop("pagina", None)
     qs_sem_pagina = querydict.urlencode()
+    querydict_sem_modo = querydict.copy()
+    querydict_sem_modo.pop("modo", None)
+    querydict_sem_modo.pop("pagina", None)
+    qs_sem_modo = querydict_sem_modo.urlencode()
+    querydict_abertura = querydict_sem_modo.copy()
+    querydict_abertura.pop("lote", None)
+    querydict_abertura.pop("sem_lote", None)
+    qs_abertura_lote = querydict_abertura.urlencode()
 
     tem_filtro = any([
-        busca, projeto_f, obra_f, componente_f, status_f, lote_f,
+        busca, projeto_f, obra_f, componente_f, status_f, lote_f, somente_avulsas,
         resp_descricao_f, resp_revisao_f,
         pagamento_descritor_f, pagamento_revisor_f, mostrar_inativas,
     ])
@@ -1317,6 +1462,10 @@ def imagens_lista(request):
         "obras_disponiveis": sorted(set(obras_disponiveis)),
         "componentes_disponiveis": sorted(set(componentes_disponiveis)),
         "qs_sem_pagina": qs_sem_pagina,
+        "qs_sem_modo": qs_sem_modo,
+        "modo_visualizacao": modo_visualizacao,
+        "lotes_resumo": lotes_resumo,
+        "qs_abertura_lote": qs_abertura_lote,
     }
     return render(request, "core/imagens_lista.html", ctx)
 
@@ -4180,6 +4329,7 @@ def lotes_lista(request):
 
     busca = request.GET.get("busca", "").strip()
     status_id = request.GET.get("status", "").strip()
+    responsavel_id = request.GET.get("responsavel", "").strip()  # DITO_FILTRO_RESP_LOTES_20261009
     data_prevista_f = request.GET.get("data_prevista", "").strip()
     data_termino_f = request.GET.get("data_termino", "").strip()
     mostrar_inativos = request.GET.get("mostrar_inativos") == "1"
@@ -4232,6 +4382,18 @@ def lotes_lista(request):
             imagens__ativo=True,
             imagens__status_id=status_id,
         )
+
+    # Filtra lotes que tenham ao menos uma imagem ativa atribuída ao
+    # responsável, sem ocultar as outras imagens do lote nos totais.
+    # O escopo inicial do usuário continua sendo respeitado.
+    if responsavel_id:
+        if responsavel_id.isdecimal():
+            lotes = lotes.filter(
+                imagens__ativo=True,
+                imagens__responsavel_id=int(responsavel_id),
+            )
+        else:
+            lotes = lotes.none()
 
     imagens_ativas = (
         Imagem.objects
@@ -4458,6 +4620,7 @@ def lotes_lista(request):
     filtros_ativos = any([
         busca,
         status_id,
+        responsavel_id,
         data_prevista_f,
         data_termino_f,
         mostrar_inativos,
@@ -4467,6 +4630,7 @@ def lotes_lista(request):
         "lotes_dados": lotes_dados,
         "busca": busca,
         "status_selecionado": status_id,
+        "responsavel_selecionado": responsavel_id,
         "data_prevista_selecionada": data_prevista_f,
         "data_termino_selecionada": data_termino_f,
         "mostrar_inativos": mostrar_inativos,
@@ -4625,6 +4789,37 @@ def aprovar_solicitacao(request, pk):
     solicitante.aprovado_por = request.user
     solicitante.decidido_em = timezone.now()
     solicitante.save()
+
+    # DITO_EMAILS_MODO_TESTE_20261009: o email nao interfere na aprovacao.
+    # Em modo console, a mensagem e exibida somente no terminal do runserver.
+    from django.conf import settings
+    from django.core.mail import send_mail
+    import logging
+
+    def _notificar_aprovacao():
+        try:
+            url_login = request.build_absolute_uri(reverse("login"))
+            send_mail(
+                subject="Dito! — Seu acesso foi aprovado",
+                message=(
+                    f"Olá, {solicitante.get_full_name() or solicitante.email}!\n\n"
+                    f"Seu acesso ao Dito! foi aprovado.\n"
+                    f"Perfil: {solicitante.get_tipo_display()}.\n"
+                    f"Acesse: {url_login}\n\n"
+                    "Utilize a senha escolhida no cadastro. Se não lembrar, "
+                    "selecione 'Esqueci minha senha' na página de login.\n\n"
+                    "Dito! — Notificação automática (ambiente de teste)"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[solicitante.email],
+                fail_silently=False,
+            )
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "Falha ao preparar notificação de aprovação do usuário %s", solicitante.pk
+            )
+
+    transaction.on_commit(_notificar_aprovacao)
 
     messages.success(
         request,

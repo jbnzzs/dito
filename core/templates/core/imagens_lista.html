@@ -35,7 +35,7 @@
     <div>
         <h2 class="mb-1">Imagens</h2>
         <p class="text-secondary mb-0" style="font-size:0.875rem;">
-            {{ total }} imagem{{ total|pluralize }} encontrada{{ total|pluralize }}
+            {% if modo_visualizacao == "lotes" %}{{ total }} lote{{ total|pluralize }} encontrado{{ total|pluralize }}{% else %}{{ total }} imagem{{ total|pluralize }} encontrada{{ total|pluralize }}{% endif %}
             {% if mostrar_inativas %}&nbsp;·&nbsp; <strong>mostrando inativas</strong>{% endif %}
             {% if lote_selecionado %}&nbsp;·&nbsp; filtrando pelo lote <strong>{{ lote_selecionado.nome }}</strong>{% endif %}
         </p>
@@ -92,6 +92,9 @@
             id="formFiltros"
             class="row g-3"
         >
+        {% if modo_visualizacao == "lotes" %}
+          <input type="hidden" name="modo" value="lotes">
+        {% endif %}
 
             {# 1. PROJETO #}
             <div class="col-6 col-md-3">
@@ -651,6 +654,22 @@
 </style>
 
 
+
+<div class="d-flex justify-content-end gap-2 mb-3">
+  {% if modo_visualizacao == "lotes" %}
+  <a class="btn btn-primary btn-sm" href="?modo=lista{% if qs_sem_modo %}&amp;{{ qs_sem_modo }}{% endif %}">
+    <i class="bi bi-list-ul me-1"></i> Ver lista de imagens
+  </a>
+  {% else %}
+  <a class="btn btn-outline-primary btn-sm" href="?modo=lotes{% if qs_sem_modo %}&amp;{{ qs_sem_modo }}{% endif %}">
+    <i class="bi bi-collection me-1"></i> Ver lista de lotes
+  </a>
+  {% endif %}
+</div>
+
+{% if modo_visualizacao == "lotes" %}
+{% include "core/_imagens_por_lotes.html" %}
+{% else %}
 <div class="card dito-card-flush">
 
     <div class="card-body p-0">
@@ -717,6 +736,17 @@
                 <tbody>
 
                     {% for img in imagens %}
+
+                    {% if modo_visualizacao == "lotes" %}
+                      {% ifchanged img.lote_id %}
+                      <tr class="table-light">
+                        <td colspan="9" style="padding:0.75rem 1rem; background:#F5F3EE; color:#1B3A5C; border-top:2px solid #D9D2C7;">
+                          <i class="bi bi-collection me-2"></i>
+                          <strong>{% if img.lote %}{{ img.lote.nome }}{% else %}Imagens sem lote{% endif %}</strong>
+                        </td>
+                      </tr>
+                      {% endifchanged %}
+                    {% endif %}
 
                     <tr>
 
@@ -1212,6 +1242,8 @@
     {% include "core/_paginacao_imagens.html" %}
 
 </div>
+
+{% endif %}
 
 <script>
 document.querySelectorAll(".dito-datas-btn").forEach(function (btn) {

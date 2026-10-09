@@ -1,0 +1,123 @@
+{# DITO_PADRONIZACAO_TABELA_LOTES_20261009 #}
+<style>
+  /* Cabeçalhos e dados com o mesmo alinhamento em todas as colunas. */
+  .dito-tabela-lotes thead th,
+  .dito-tabela-lotes tbody td {
+      text-align: center !important;
+      vertical-align: middle;
+  }
+  .dito-tabela-lotes .dito-info-valor {
+      display: inline-block;
+      max-width: 100%;
+      vertical-align: middle;
+  }
+  .dito-tabela-lotes .dito-lote-datas {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.15rem;
+      text-align: center;
+  }
+  /* Os botões seguem o mesmo tamanho da coluna Ações em Imagens. */
+  .dito-tabela-lotes .dito-acoes-celula,
+  .dito-tabela-lotes .dito-acoes-botoes {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+  }
+  .dito-tabela-lotes .dito-acoes-botoes {
+      flex-direction: row;
+      gap: 0.3rem;
+  }
+  .dito-tabela-lotes .dito-acoes-botoes .btn {
+      width: 31px;
+      height: 31px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+  }
+</style>
+
+{# DITO_LOTES_LISTA_V3 — uma linha por lote, imagens só ao abrir #}
+<div class="card dito-card-flush">
+  <div class="card-body p-0">
+  {% if lotes_resumo %}
+    <div class="table-responsive">
+      <table class="table table-sm mb-0 dito-tabela dito-tabela-imagens dito-tabela-lotes align-middle">
+        <colgroup>
+          <col style="width:22%"><col style="width:14%"><col style="width:10%">
+          <col style="width:18%"><col style="width:15%"><col style="width:13%"><col style="width:8%">
+        </colgroup>
+        <thead><tr>
+          <th>Lote</th><th>Projeto</th><th>Imagens</th><th>Responsáveis</th>
+          <th>Status</th><th>Datas</th><th>Ações</th>
+        </tr></thead>
+        <tbody>
+        {% for item in lotes_resumo %}
+          <tr>
+            <td>
+              {% if item.lote %}
+              <a class="dito-retranca text-decoration-none"
+                 href="{% url 'imagens_lista' %}?modo=lista&amp;lote={{ item.lote.nome|urlencode }}{% if qs_abertura_lote %}&amp;{{ qs_abertura_lote }}{% endif %}">
+                {{ item.lote.nome }}
+              </a>
+              {% else %}
+              <a class="dito-retranca text-decoration-none"
+                 href="{% url 'imagens_lista' %}?modo=lista&amp;sem_lote=1{% if qs_abertura_lote %}&amp;{{ qs_abertura_lote }}{% endif %}">
+                Imagens sem lote
+              </a>
+              {% endif %}
+              <div class="text-secondary mt-1" style="font-size:0.72rem;">
+                {% if item.lote and item.lote.descricao %}{{ item.lote.descricao|truncatechars:60 }}{% else %}Clique para visualizar as imagens{% endif %}
+              </div>
+            </td>
+            <td><span class="dito-info-valor" title="{{ item.projetos }}">{{ item.projetos|truncatechars:65 }}</span></td>
+            <td><span class="badge rounded-pill text-bg-light border" style="color:#1B3A5C!important;">{{ item.quantidade }}</span></td>
+            <td><span title="{{ item.responsaveis }}">{{ item.responsaveis|truncatechars:85 }}</span></td>
+            <td><span title="{{ item.status }}">{{ item.status|truncatechars:66 }}</span></td>
+            <td>
+              {% if item.lote %}
+                <div class="dito-lote-datas">
+                  <span class="small text-secondary">Prev.: {{ item.lote.data_prevista|date:"d/m/Y"|default:"—" }}</span>
+                  <span class="small text-secondary">Fim: {{ item.lote.data_efetiva|date:"d/m/Y"|default:"—" }}</span>
+                </div>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              <div class="dito-acoes-celula">
+                <div class="dito-acoes-botoes">
+              {% if item.lote %}
+                <a class="btn btn-sm btn-outline-secondary dito-btn-acao" title="Abrir imagens deste lote"
+                   href="{% url 'imagens_lista' %}?modo=lista&amp;lote={{ item.lote.nome|urlencode }}{% if qs_abertura_lote %}&amp;{{ qs_abertura_lote }}{% endif %}">
+                  <i class="bi bi-box-arrow-in-right"></i><span class="visually-hidden">Abrir imagens</span>
+                </a>
+                {% if pode_atribuir_lote %}
+                  <a class="btn btn-sm btn-outline-secondary dito-btn-acao" title="Editar lote"
+                     href="{% url 'lote_editar' item.lote.pk %}">
+                    <i class="bi bi-pencil"></i><span class="visually-hidden">Editar lote</span>
+                  </a>
+                {% endif %}
+              {% else %}
+                <a class="btn btn-sm btn-outline-secondary dito-btn-acao" title="Abrir imagens sem lote"
+                   href="{% url 'imagens_lista' %}?modo=lista&amp;sem_lote=1{% if qs_abertura_lote %}&amp;{{ qs_abertura_lote }}{% endif %}">
+                  <i class="bi bi-box-arrow-in-right"></i><span class="visually-hidden">Abrir imagens avulsas</span>
+                </a>
+              {% endif %}
+                </div>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="dito-empty-state py-5"><i class="bi bi-collection"></i>
+      <p>Nenhum lote encontrado com os filtros aplicados.</p>
+    </div>
+  {% endif %}
+  </div>
+  {% include "core/_paginacao_imagens.html" %}
+</div>

@@ -205,6 +205,31 @@ function ditoCancelarTodasLoteCorrecao() {
     ditoAtualizarSelecionadasCorrecao();
 }
 
+// DITO_SHIFT_CORRECAO_20261009 — seleção de intervalo na página atual.
+// Não altera a seleção total do lote (que inclui outras páginas).
+(function () {
+    var ultimo = null;
+    document.addEventListener("click", function (event) {
+        var atual = event.target;
+        if (!atual || !atual.matches || !atual.matches(".check-correcao-imagem")) {
+            return;
+        }
+        var checks = Array.prototype.slice.call(document.querySelectorAll(".check-correcao-imagem"));
+        if (event.shiftKey && ultimo && checks.includes(ultimo)) {
+            var origem = checks.indexOf(ultimo);
+            var destino = checks.indexOf(atual);
+            var marcar = atual.checked;
+            if (origem >= 0 && destino >= 0) {
+                for (var indice = Math.min(origem, destino); indice <= Math.max(origem, destino); indice++) {
+                    checks[indice].checked = marcar;
+                }
+                ditoAtualizarSelecionadasCorrecao();
+            }
+        }
+        ultimo = atual;
+    });
+})();
+
 window.addEventListener("load", ditoAtualizarSelecionadasCorrecao);
 window.addEventListener("pageshow", ditoAtualizarSelecionadasCorrecao);
 </script>

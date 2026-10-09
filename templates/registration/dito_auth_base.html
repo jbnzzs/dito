@@ -1,0 +1,31 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Dito! — Acesso{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/dito-theme.css' %}">
+  <style>
+    body { min-height:100vh; background:#FAF9F6; font-family:Manrope,Arial,sans-serif; }
+    .dito-auth { max-width:510px; margin:7vh auto 2rem; padding:1rem; }
+    .dito-auth-card { border:1px solid #DAD6CD; border-radius:12px; background:#fff; padding:2rem; }
+    .dito-auth h1 { color:#1B3A5C; font-size:1.45rem; font-weight:800; }
+    .dito-auth p { color:#55616B; font-size:0.93rem; }
+    .dito-auth input[type=email],.dito-auth input[type=password] { display:block; width:100%; padding:0.6rem 0.8rem; border:1px solid #D5D0C7; border-radius:8px; margin:0.25rem 0 1rem; }
+    .dito-auth label { font-weight:700; font-size:0.87rem; }
+    .btn-primary { background:#1B3A5C; border-color:#1B3A5C; }
+    .btn-primary:hover { background:#16304D; border-color:#16304D; }
+    .errorlist { color:#B42318; }
+  </style>
+</head>
+<body>
+  <main class="dito-auth">
+    <div class="dito-auth-card">
+      {% block conteudo %}{% endblock %}
+      <hr class="mt-4"><a href="{% url 'login' %}">Voltar ao login</a>
+    </div>
+  </main>
+</body>
+</html>

@@ -331,4 +331,55 @@
 
 {% endif %}
 
+
+{# DITO_MELHORIAS_RAPIDAS_02 — aviso das devoluções ainda não visualizadas #}
+{% if devolucoes_dashboard %}
+<div class="modal fade" id="ditoModalDevolucoes" tabindex="-1" aria-labelledby="ditoTituloDevolucoes" aria-hidden="true"
+     data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#1B3A5C; color:#fff;">
+        <h5 class="modal-title" id="ditoTituloDevolucoes">
+          <i class="bi bi-arrow-counterclockwise me-2"></i> Atividades devolvidas para correção
+        </h5>
+      </div>
+      <form method="post" action="{% url 'confirmar_devolucoes_dashboard' %}">
+        {% csrf_token %}
+        <div class="modal-body">
+          <p>Você recebeu orientações de correção para as seguintes imagens:</p>
+          <div class="list-group">
+          {% for evento in devolucoes_dashboard %}
+            <input type="hidden" name="eventos" value="{{ evento.pk }}">
+            <div class="list-group-item">
+              <a class="fw-bold" href="{% url 'descricao_imagem' evento.imagem.pk %}">
+                {{ evento.imagem.retranca }}
+              </a>
+              <div class="small text-secondary mt-1">
+                {{ evento.observacao|default:"Sem orientação registrada."|linebreaksbr }}
+              </div>
+              <div class="small text-secondary mt-1">{{ evento.criado_em|date:"d/m/Y H:i" }}</div>
+            </div>
+          {% endfor %}
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-outline-secondary">Entendi, fechar</button>
+          <button type="submit" name="ir_tarefas" value="1" class="btn btn-primary">
+            Ver minhas tarefas
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  var el = document.getElementById("ditoModalDevolucoes");
+  if (el && window.bootstrap) {
+    new bootstrap.Modal(el).show();
+  }
+});
+</script>
+{% endif %}
+
 {% endblock %}

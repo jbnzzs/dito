@@ -145,3 +145,16 @@ LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/login/"
 
 CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if os.environ.get("CSRF_TRUSTED_ORIGINS") else []
+
+# DITO_EMAILS_MODO_TESTE_20261009
+# Em desenvolvimento, execute $env:DITO_EMAIL_CONSOLE="1" antes de runserver.
+# Sem essa variável e com DEBUG=False, a configuração padrão descarta emails.
+# Configure EMAIL_BACKEND apenas quando houver serviço de envio autorizado.
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend"
+    if DEBUG or os.environ.get("DITO_EMAIL_CONSOLE") == "1"
+    else "django.core.mail.backends.dummy.EmailBackend",
+)
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "Dito! <nao-responda@localhost>")
+PASSWORD_RESET_TIMEOUT = 3600

@@ -1,0 +1,48 @@
+/* DITO_PALETA_APENAS_LOTES_20261009 */
+/* Nove cores SOMENTE na barra de progresso e legenda da tela Lotes. */
+/* O dashboard mantém a aparência anterior, definida no dito-theme.css. */
+
+.dito-progresso-barra .dito-progresso-segmento.dito-progresso-liberado-descricao,
+.dito-progresso-legenda .dito-progresso-ponto.dito-progresso-liberado-descricao {
+    background-color: #1F5AA6 !important;
+}
+
+.dito-progresso-barra .dito-progresso-segmento.dito-progresso-descrevendo,
+.dito-progresso-legenda .dito-progresso-ponto.dito-progresso-descrevendo {
+    background-color: #926300 !important;
+}
+
+.dito-progresso-barra .dito-progresso-segmento.dito-progresso-descrito,
+.dito-progresso-legenda .dito-progresso-ponto.dito-progresso-descrito {
+    background-color: #007B79 !important;
+}
+
+.dito-progresso-barra .dito-progresso-segmento.dito-progresso-liberado-conferencia,
+.dito-progresso-legenda .dito-progresso-ponto.dito-progresso-liberado-conferencia {
+    background-color: #733FA6 !important;
+}
+
+.dito-progresso-barra .dito-progresso-segmento.dito-progresso-em-conferencia,
+.dito-progresso-legenda .dito-progresso-ponto.dito-progresso-em-conferencia {
+    background-color: #B14B14 !important;
+}
+
+.dito-progresso-barra .dito-progresso-segmento.dito-progresso-conferido,
+.dito-progresso-legenda .dito-progresso-ponto.dito-progresso-conferido {
+    background-color: #475569 !important;
+}
+
+.dito-progresso-barra .dito-progresso-segmento.dito-progresso-revisando,
+.dito-progresso-legenda .dito-progresso-ponto.dito-progresso-revisando {
+    background-color: #A33776 !important;
+}
+
+.dito-progresso-barra .dito-progresso-segmento.dito-progresso-revisado,
+.dito-progresso-legenda .dito-progresso-ponto.dito-progresso-revisado {
+    background-color: #64732D !important;
+}
+
+.dito-progresso-barra .dito-progresso-segmento.dito-progresso-finalizado,
+.dito-progresso-legenda .dito-progresso-ponto.dito-progresso-finalizado {
+    background-color: #1D5038 !important;
+}
