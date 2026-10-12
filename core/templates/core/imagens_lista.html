@@ -35,8 +35,8 @@
     <div>
         <h2 class="mb-1">Imagens</h2>
         <p class="text-secondary mb-0" style="font-size:0.875rem;">
-            {% if modo_visualizacao == "lotes" %}{{ total }} lote{{ total|pluralize }} encontrado{{ total|pluralize }}{% else %}{{ total }} imagem{{ total|pluralize }} encontrada{{ total|pluralize }}{% endif %}
-            {% if mostrar_inativas %}&nbsp;·&nbsp; <strong>mostrando inativas</strong>{% endif %}
+            {% if modo_visualizacao == "lotes" %}{{ total }} lote{{ total|pluralize }} encontrado{{ total|pluralize }}{% else %}{{ total }} {% if total == 1 %}imagem{% else %}imagens{% endif %} encontrada{{ total|pluralize }}{% endif %}
+            {% if mostrar_inativas %}&nbsp;·&nbsp; <strong>{% if modo_visualizacao == "lotes" %}mostrando lotes inativos{% else %}mostrando imagens inativas{% endif %}</strong>{% endif %}
             {% if lote_selecionado %}&nbsp;·&nbsp; filtrando pelo lote <strong>{{ lote_selecionado.nome }}</strong>{% endif %}
         </p>
     </div>
@@ -164,6 +164,20 @@
                 </datalist>
             </div>
 
+
+            {# Filtro por Volume/Ano — Dito! #}
+            <div class="col-6 col-md-3">
+                <label class="dito-filtro-label" for="filtro-volume">Volume / Ano</label>
+                <input type="text" name="volume" id="filtro-volume"
+                       class="form-control" list="listaVolumes"
+                       value="{{ volume_f }}" placeholder="Digite ou selecione..."
+                       autocomplete="off">
+                <datalist id="listaVolumes">
+                    {% for v in volumes_disponiveis %}
+                    <option value="{{ v }}">
+                    {% endfor %}
+                </datalist>
+            </div>
 
             {# 4. LOTE #}
             <div class="col-6 col-md-3">
@@ -321,7 +335,7 @@
                         for="mostrarInativas"
                         style="font-size:0.8rem;"
                     >
-                        Mostrar apenas inativas
+                        {% if modo_visualizacao == "lotes" %}Mostrar apenas lotes inativos{% else %}Mostrar apenas imagens inativas{% endif %}
                     </label>
                 </div>
                 {% endif %}

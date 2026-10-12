@@ -223,7 +223,7 @@
                     style="font-size:0.78rem;"
                 >
                     {{ total_avulsas }}
-                    imagem{{ total_avulsas|pluralize }}
+                    {% if total_avulsas == 1 %}imagem{% else %}imagens{% endif %}
                     sem lote
                 </div>
             </div>
@@ -408,7 +408,7 @@
                         <span>
                             <i class="bi bi-images me-1"></i>
                             {{ item.total }}
-                            imagem{{ item.total|pluralize }}
+                            {% if item.total == 1 %}imagem{% else %}imagens{% endif %}
                         </span>
 
                         {% if eh_coordenacao %}

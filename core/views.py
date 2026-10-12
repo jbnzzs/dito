@@ -1224,8 +1224,10 @@ def imagens_lista(request):
     projeto_f = request.GET.get("projeto", "").strip()
     obra_f = request.GET.get("obra", "").strip()
     componente_f = request.GET.get("componente", "").strip()
+    volume_f = request.GET.get("volume", "").strip()
     status_f = request.GET.get("status", "").strip()
     lote_f = request.GET.get("lote", "").strip()
+    lote_id_f = request.GET.get("lote_id", "").strip()  # DITO_LOTES_ATIVOS_20261012
     modo_visualizacao = "lotes" if request.GET.get("modo") == "lotes" else "lista"  # DITO_MELHORIAS_RAPIDAS_02
     resp_descricao_f = request.GET.get("resp_descricao", "").strip()
     resp_revisao_f = request.GET.get("resp_revisao", "").strip()
@@ -1253,7 +1255,16 @@ def imagens_lista(request):
     if por_pagina not in por_pagina_opcoes:
         por_pagina = 25
 
-    imagens = Imagem.objects.filter(ativo=False) if mostrar_inativas else Imagem.objects.filter(ativo=True)
+    # DITO_LOTES_ATIVOS_20261012: no modo Lotes, o seletor controla LOTES,
+    # e os totais consideram somente imagens ativas do lote selecionado.
+    if modo_visualizacao == "lotes":
+        imagens = Imagem.objects.filter(ativo=True)
+        if mostrar_inativas:
+            imagens = imagens.filter(lote__ativo=False)
+        else:
+            imagens = imagens.filter(Q(lote__isnull=True) | Q(lote__ativo=True))
+    else:
+        imagens = Imagem.objects.filter(ativo=not mostrar_inativas)
 
     imagens = imagens.select_related(
         "status", "responsavel", "lote", "projeto", "componente_curricular",
@@ -1268,6 +1279,8 @@ def imagens_lista(request):
         imagens = imagens.filter(nome_obra__icontains=obra_f)
     if componente_f:
         imagens = imagens.filter(componente_curricular__nome__icontains=componente_f)
+    if volume_f:
+        imagens = imagens.filter(volume_ano_modulo__iexact=volume_f)
     if status_f:
         imagens = imagens.filter(status__nome__icontains=status_f)
     if resp_descricao_f:
@@ -1300,12 +1313,18 @@ def imagens_lista(request):
         if v:
             imagens = imagens.filter(pagamento_revisor=v)
 
-    # Lote: match exato primeiro (nome completo selecionado no datalist), senão parcial
+    # Lote por ID permite abrir corretamente inclusive lotes inativos;
+    # IDs inexistentes nunca devem resultar na exibicao de todas as imagens.
     lote_selecionado = None
-    if lote_f:
-        lote_selecionado = Lote.objects.filter(nome__iexact=lote_f, ativo=True).first()
+    if lote_id_f:
+        if lote_id_f.isdecimal():
+            lote_selecionado = Lote.objects.filter(pk=lote_id_f).first()
+        imagens = imagens.filter(lote=lote_selecionado) if lote_selecionado else imagens.none()
+    elif lote_f:
+        ativo_lote = not (modo_visualizacao == "lotes" and mostrar_inativas)
+        lote_selecionado = Lote.objects.filter(nome__iexact=lote_f, ativo=ativo_lote).first()
         if not lote_selecionado:
-            lote_selecionado = Lote.objects.filter(nome__icontains=lote_f, ativo=True).first()
+            lote_selecionado = Lote.objects.filter(nome__icontains=lote_f, ativo=ativo_lote).first()
         if lote_selecionado:
             imagens = imagens.filter(lote=lote_selecionado)
 
@@ -1392,7 +1411,7 @@ def imagens_lista(request):
     revisores = Usuario.objects.filter(tipo=Usuario.Tipo.REVISOR, is_active=True).order_by("first_name", "username")
 
     lotes = (
-        Lote.objects.filter(ativo=True)
+        Lote.objects.filter(ativo=not (modo_visualizacao == "lotes" and mostrar_inativas))
         .annotate(total_ativo=Count("imagens", filter=Q(imagens__ativo=True)))
         .order_by("nome")
     )
@@ -1414,6 +1433,16 @@ def imagens_lista(request):
         .values_list("componente_curricular__nome", flat=True).distinct().order_by()
     )
 
+    # Opções do filtro Volume/Ano, sem alterar os registros existentes.
+    volumes_disponiveis = (
+        Imagem.objects.filter(ativo=False if mostrar_inativas else True)
+        .exclude(volume_ano_modulo="")
+        .exclude(volume_ano_modulo__isnull=True)
+        .values_list("volume_ano_modulo", flat=True)
+        .distinct()
+        .order_by("volume_ano_modulo")
+    )
+
     # Preserva todos os filtros aplicados ao montar links de paginação
     querydict = request.GET.copy()
     querydict.pop("pagina", None)
@@ -1424,11 +1453,13 @@ def imagens_lista(request):
     qs_sem_modo = querydict_sem_modo.urlencode()
     querydict_abertura = querydict_sem_modo.copy()
     querydict_abertura.pop("lote", None)
+    querydict_abertura.pop("lote_id", None)
     querydict_abertura.pop("sem_lote", None)
+    querydict_abertura.pop("mostrar_inativas", None)
     qs_abertura_lote = querydict_abertura.urlencode()
 
     tem_filtro = any([
-        busca, projeto_f, obra_f, componente_f, status_f, lote_f, somente_avulsas,
+        busca, projeto_f, obra_f, componente_f, volume_f, status_f, lote_f, lote_id_f, somente_avulsas,
         resp_descricao_f, resp_revisao_f,
         pagamento_descritor_f, pagamento_revisor_f, mostrar_inativas,
     ])
@@ -1440,6 +1471,7 @@ def imagens_lista(request):
         "projeto_f": projeto_f,
         "obra_f": obra_f,
         "componente_f": componente_f,
+        "volume_f": volume_f,
         "status_f": status_f,
         "lote_f": lote_f,
         "resp_descricao_f": resp_descricao_f,
@@ -1461,6 +1493,7 @@ def imagens_lista(request):
         "projetos_disponiveis": projetos_disponiveis,
         "obras_disponiveis": sorted(set(obras_disponiveis)),
         "componentes_disponiveis": sorted(set(componentes_disponiveis)),
+        "volumes_disponiveis": volumes_disponiveis,
         "qs_sem_pagina": qs_sem_pagina,
         "qs_sem_modo": qs_sem_modo,
         "modo_visualizacao": modo_visualizacao,
