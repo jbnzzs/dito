@@ -30,6 +30,8 @@ from .forms import ImagemForm
 
 # DITO_EXTRACAO_SHAREPOINT_V1: mantém os nomes públicos compatíveis.
 from .services.excel_service import _valor_excel
+from .services.importacao_service import classificar_status_fotoweb
+from .services.origem_service import origem_g27
 from .services.sharepoint_service import (
     SHAREPOINT_SITE_URL,
     SHAREPOINT_BIBLIOTECA,
@@ -782,6 +784,11 @@ def dashboard(request):
             "para_conferir": para_conferir[:10],
             "para_conferir_count": para_conferir.count(),
         })
+
+    if usuario.tipo == usuario.Tipo.ADMINISTRADOR:
+        ctx["total_acessos_pendentes"] = Usuario.objects.filter(
+            situacao=Usuario.Situacao.PENDENTE
+        ).count()
 
     if usuario.tipo in (usuario.Tipo.DESCRITOR, usuario.Tipo.REVISOR):
         ctx["devolucoes_dashboard"] = _dito_devolucoes_dashboard(request)
@@ -1580,6 +1587,44 @@ def importar_imagens(request):
             contexto_base,
         )
 
+    # DITO_STATUS_FOTOWEB_WEB_V1: validacao antes de qualquer gravacao.
+    # Nomes do Dito sao configuraveis: se destino nao existe/esta inativo,
+    # interrompemos a importacao em vez de supor um status.
+    if "status" not in colunas_detectadas:
+        messages.error(request, "O relatorio nao contem a coluna Status.")
+        return render(request, "core/importar_imagens.html", contexto_base)
+
+    classificacoes_status = {}
+    destinos_necessarios = set()
+    for linha_numero, linha in enumerate(data_rows, start=2):
+        retranca_status = str(_valor_excel(linha, "retranca") or "").strip()
+        if not retranca_status:
+            continue
+        acao, destino, motivo = classificar_status_fotoweb(
+            _valor_excel(linha, "status")
+        )
+        classificacoes_status[linha_numero] = (acao, destino, motivo)
+        if acao == "importar":
+            destinos_necessarios.add(destino)
+
+    status_por_nome = {}
+    destinos_indisponiveis = []
+    for destino in sorted(destinos_necessarios):
+        opcoes = list(StatusWorkflow.objects.filter(ativo=True, nome__iexact=destino))
+        if len(opcoes) != 1:
+            destinos_indisponiveis.append(destino)
+        else:
+            status_por_nome[destino] = opcoes[0]
+
+    if destinos_indisponiveis:
+        messages.error(
+            request,
+            "Importacao cancelada: os status de destino nao estao ativos "
+            "ou nao existem no Gerenciador de Status: "
+            + ", ".join(destinos_indisponiveis)
+        )
+        return render(request, "core/importar_imagens.html", contexto_base)
+
     importacao_id = uuid.uuid4()
 
     # ------------------------------------------------------------
@@ -1762,6 +1807,20 @@ def importar_imagens(request):
             puladas += 1
             continue
 
+        acao_status, destino_status, motivo_status = classificacoes_status[numero_linha]
+        if acao_status != "importar":
+            puladas += 1
+            origem_status = _valor_excel(data, "status")
+            mensagem_status = f"FotoWeb '{origem_status}': {motivo_status}"
+            log.append({
+                "tipo": "pulada" if acao_status == "ignorar" else "erro",
+                "retranca": retranca,
+                "msg": mensagem_status,
+            })
+            if acao_status == "revisar":
+                erros.append({"retranca": retranca, "msg": mensagem_status})
+            continue
+
         dados_fotoweb_originais = (
             _snapshot_linha_fotoweb(
                 data,
@@ -1931,7 +1990,7 @@ def importar_imagens(request):
             # descricao_flat serão substituídas.
             dados_fotoweb_originais=dados_fotoweb_originais,
 
-            status=status_inicial,
+            status=status_por_nome[destino_status],
             responsavel=responsavel,
             cadastrado_por=request.user,
             importacao_id=importacao_id,
@@ -2529,6 +2588,7 @@ def descricao_imagem(request, pk):
         "imagem": imagem,
         "descricao": descricao,
         "correcao_ativa": correcao_ativa,
+        "alerta_origem_g27": origem_g27(imagem),
         "trechos": trechos,
         "pode_editar": pode_editar,
         "pode_visualizar": pode_visualizar,

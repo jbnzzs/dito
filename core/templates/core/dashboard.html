@@ -20,6 +20,16 @@
 
 
 {# ============================================================ #}
+{# Aviso de cadastros pendentes — visivel apenas para administradores #}
+{% if request.user.tipo == "administrador" and total_acessos_pendentes %}
+<div class="alert alert-warning d-flex align-items-center justify-content-between gap-3 flex-wrap mb-4" role="alert">
+    <span><i class="bi bi-person-exclamation me-2"></i>
+        Existem <strong>{{ total_acessos_pendentes }}</strong> solicitações de acesso aguardando aprovação.
+    </span>
+    <a class="btn btn-sm btn-outline-dark" href="{% url 'usuarios_lista' %}">Analisar solicitações</a>
+</div>
+{% endif %}
+
 {# VISÃO COORDENAÇÃO / ADMINISTRADOR                            #}
 {# ============================================================ #}
 {% if visao == "coordenacao" %}
