@@ -1,6 +1,8 @@
-"""Audita valores de status de um Excel FotoWeb sem utilizar o banco."""
 from django.core.management.base import BaseCommand, CommandError
-from core.services.importacao_service import auditar_arquivo_excel
+from core.services.importacao_service import (
+    auditar_arquivo_excel,
+    classificar_status_fotoweb,
+)
 
 
 class Command(BaseCommand):
@@ -32,5 +34,52 @@ class Command(BaseCommand):
             if amostras:
                 exemplos = ", ".join(resultado["amostras"].get(status, []))
                 self.stdout.write(f"    Exemplo(s): {exemplos}")
+
+        # Resumo da classificacao FotoWeb -> Dito!
+        totais = {
+            "importar": 0,
+            "ignorar": 0,
+            "revisar": 0,
+        }
+
+        self.stdout.write("\n=== PREVIA DA IMPORTACAO ===")
+
+        for status, quantidade in resultado["status"].items():
+            acao, destino, motivo = classificar_status_fotoweb(
+                status
+            )
+
+            totais[acao] += quantidade
+
+            if acao == "importar":
+                self.stdout.write(
+                    f"[IMPORTAR] {status} -> {destino}: "
+                    f"{quantidade} imagem(ns)"
+                )
+
+            elif acao == "ignorar":
+                self.stdout.write(
+                    f"[IGNORAR] {status}: "
+                    f"{quantidade} imagem(ns) | {motivo}"
+                )
+
+            else:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"[REVISAR] {status}: "
+                        f"{quantidade} imagem(ns) | {motivo}"
+                    )
+                )
+
+        self.stdout.write("\n=== TOTAIS ===")
+        self.stdout.write(
+            f"Importar: {totais['importar']}"
+        )
+        self.stdout.write(
+            f"Ignorar: {totais['ignorar']}"
+        )
+        self.stdout.write(
+            f"Revisar: {totais['revisar']}"
+        )
         self.stdout.write("\n[OK] Somente leitura. Nenhuma imagem foi importada ou modificada.")
         self.stdout.write("[AVISO] Esta auditoria não verifica os status cadastrados no banco.")
