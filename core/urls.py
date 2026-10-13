@@ -55,6 +55,7 @@ urlpatterns = [
     path("componentes/novo/", views.componente_criar, name="componente_criar"),
     path("componentes/<int:pk>/editar/", views.componente_editar, name="componente_editar"),
     path("componentes/<int:pk>/toggle-ativo/", views.componente_toggle_ativo, name="componente_toggle_ativo"),
+    path("componentes/<int:pk>/excluir/", views.componente_excluir, name="componente_excluir"),
 
     # ---- Status do workflow ----
     path("status/", views.status_lista, name="status_lista"),

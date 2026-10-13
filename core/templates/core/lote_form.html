@@ -331,6 +331,132 @@
     </div>
 </div>
 
+<div class="card mt-4" style="max-width:1180px;">
+  <div class="card-body p-0">
+    <div class="px-4 py-3 border-bottom">
+      <h5 class="mb-1">Adicionar imagens avulsas a este lote</h5>
+      <p class="text-secondary small mb-3">Busque, filtre e selecione imagens sem lote. Shift + clique seleciona um intervalo na pagina.</p>
+      <form method="get" class="row g-2 align-items-end" id="filtrosAvulsas">
+        <div class="col-md-5">
+          <label class="form-label fw-bold small" for="buscaAvulsas">Buscar por retranca</label>
+          <input id="buscaAvulsas" name="busca_avulsas" value="{{ busca_avulsas }}" class="form-control form-control-sm" placeholder="Digite parte da retranca...">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-bold small" for="statusAvulsas">Filtrar por status</label>
+          <select id="statusAvulsas" name="status_avulsas" class="form-select form-select-sm">
+            <option value="">Todos os status</option>
+            {% for status in status_opcoes_avulsas %}
+            <option value="{{ status.pk }}" {% if status_avulsas == status.pk|stringformat:'s' %}selected{% endif %}>{{ status.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-2 d-flex gap-2">
+          <button class="btn btn-outline-primary btn-sm" type="submit">Filtrar</button>
+          <a class="btn btn-outline-secondary btn-sm" href="{% url 'lote_editar' lote.pk %}">Limpar</a>
+        </div>
+      </form>
+    </div>
+    <form method="post" id="formAdicionarAvulsas">
+      {% csrf_token %}
+      <div class="px-4 py-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span class="text-secondary small">{{ pagina_avulsas.paginator.count }} imagem(ns) encontrada(s) · <strong id="contadorAvulsas">0</strong> selecionada(s)</span>
+        <div class="d-flex gap-2">
+          <button type="button" id="marcarAvulsas" class="btn btn-outline-primary btn-sm">Selecionar pagina</button>
+          <button type="button" id="limparAvulsas" class="btn btn-outline-secondary btn-sm">Limpar selecao</button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead><tr><th style="width:55px">Selecionar</th><th>Retranca</th><th>Projeto</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for imagem in imagens_avulsas %}
+            <tr><td><input type="checkbox" class="form-check-input chk-avulsa" name="avulsas_selecionadas" value="{{ imagem.pk }}"></td><td><span class="dito-retranca">{{ imagem.retranca }}</span></td><td>{{ imagem.projeto|default:"—" }}</td><td>{{ imagem.status.nome|default:"—" }}</td></tr>
+            {% empty %}<tr><td colspan="4" class="text-center text-secondary py-4">Nenhuma imagem avulsa encontrada com estes filtros.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+<div class="d-flex justify-content-end px-3 py-3 border-top">
+    <button type="submit"
+            form="formAdicionarAvulsas"
+            name="acao_imagens"
+            value="adicionar_avulsas"
+            class="btn btn-primary btn-sm"
+            onclick="return document.querySelectorAll('.chk-avulsa:checked').length > 0 ? confirm('Adicionar imagens selecionadas ao lote?') : (alert('Selecione pelo menos uma imagem.'), false);">
+        <i class="bi bi-plus-circle me-1"></i>
+        Adicionar selecionadas ao lote
+    </button>
+</div>
+
+{# DITO_AVULSAS_PAGINACAO_V4: mesmo padrao visual da paginacao das imagens do lote. #}
+<div class="d-flex align-items-center justify-content-between px-3 py-2 border-top flex-wrap gap-2" style="font-size:0.82rem;">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+        <span class="text-secondary">Página {{ pagina_avulsas.number }} de {{ pagina_avulsas.paginator.num_pages }} &nbsp;·&nbsp; {{ pagina_avulsas.paginator.count }} imagens</span>
+        <div class="d-flex align-items-center gap-2">
+            <label for="exibirAvulsas" class="text-secondary mb-0" style="font-size:0.78rem;">Exibir</label>
+            <select id="exibirAvulsas" class="form-select form-select-sm" style="width:auto; min-width:76px;" aria-label="Quantidade de avulsas por página">
+                <option value="25" {% if por_pagina_avulsas == '25' %}selected{% endif %}>25</option>
+                <option value="50" {% if por_pagina_avulsas == '50' %}selected{% endif %}>50</option>
+                <option value="100" {% if por_pagina_avulsas == '100' %}selected{% endif %}>100</option>
+            </select>
+        </div>
+    </div>
+    <div class="d-flex align-items-center gap-1 flex-wrap">
+        {% if pagina_avulsas.has_previous %}
+        <a class="btn btn-outline-secondary btn-sm" title="Primeira página" href="?busca_avulsas={{ busca_avulsas|urlencode }}&amp;status_avulsas={{ status_avulsas|urlencode }}&amp;por_pagina_avulsas={{ por_pagina_avulsas }}&amp;pagina_avulsas=1"><i class="bi bi-chevron-double-left"></i></a>
+        <a class="btn btn-outline-secondary btn-sm" title="Página anterior" href="?busca_avulsas={{ busca_avulsas|urlencode }}&amp;status_avulsas={{ status_avulsas|urlencode }}&amp;por_pagina_avulsas={{ por_pagina_avulsas }}&amp;pagina_avulsas={{ pagina_avulsas.previous_page_number }}"><i class="bi bi-chevron-left"></i></a>
+        {% endif %}
+        <div class="d-flex align-items-center gap-1 mx-1">
+            <label for="irPaginaAvulsas" class="text-secondary mb-0" style="font-size:0.75rem;">Página</label>
+            <input id="irPaginaAvulsas" type="number" min="1" max="{{ pagina_avulsas.paginator.num_pages }}" value="{{ pagina_avulsas.number }}" class="form-control form-control-sm" style="width:70px; text-align:center;" aria-label="Ir para página de avulsas">
+            <button id="botaoIrAvulsas" type="button" class="btn btn-outline-secondary btn-sm">Ir</button>
+        </div>
+        {% if pagina_avulsas.has_next %}
+        <a class="btn btn-outline-secondary btn-sm" title="Próxima página" href="?busca_avulsas={{ busca_avulsas|urlencode }}&amp;status_avulsas={{ status_avulsas|urlencode }}&amp;por_pagina_avulsas={{ por_pagina_avulsas }}&amp;pagina_avulsas={{ pagina_avulsas.next_page_number }}"><i class="bi bi-chevron-right"></i></a>
+        <a class="btn btn-outline-secondary btn-sm" title="Última página" href="?busca_avulsas={{ busca_avulsas|urlencode }}&amp;status_avulsas={{ status_avulsas|urlencode }}&amp;por_pagina_avulsas={{ por_pagina_avulsas }}&amp;pagina_avulsas={{ pagina_avulsas.paginator.num_pages }}"><i class="bi bi-chevron-double-right"></i></a>
+        {% endif %}
+    </div>
+</div>
+<script>
+(function () {
+    function navegarAvulsas(chave, valor) {
+        const url = new URL(window.location.href);
+        url.searchParams.set(chave, String(valor));
+        if (chave === 'por_pagina_avulsas') url.searchParams.set('pagina_avulsas', '1');
+        window.location.href = url.toString();
+    }
+    const exibir = document.getElementById('exibirAvulsas');
+    const pagina = document.getElementById('irPaginaAvulsas');
+    const botao = document.getElementById('botaoIrAvulsas');
+    if (exibir) exibir.addEventListener('change', () => navegarAvulsas('por_pagina_avulsas', exibir.value));
+    function ir() {
+        const numero = Number(pagina.value);
+        if (!Number.isInteger(numero) || numero < 1 || numero > Number(pagina.max)) { pagina.focus(); return; }
+        navegarAvulsas('pagina_avulsas', numero);
+    }
+    if (botao) botao.addEventListener('click', ir);
+    if (pagina) pagina.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') { event.preventDefault(); ir(); }
+    });
+})();
+</script>
+</form>
+  </div>
+</div>
+<script>
+(function(){
+ const checks=Array.from(document.querySelectorAll('.chk-avulsa'));
+ const count=document.getElementById('contadorAvulsas');
+ function update(){count.textContent=checks.filter(c=>c.checked).length;}
+ checks.forEach(c=>c.addEventListener('change',update));
+ document.getElementById('marcarAvulsas').addEventListener('click',()=>{checks.forEach(c=>c.checked=true);update();});
+ document.getElementById('limparAvulsas').addEventListener('click',()=>{checks.forEach(c=>c.checked=false);update();});
+ update();
+})();
+</script>
+{% include "core/_selecao_shift.html" %}
+
 {% if imagens_lote %}
 <script>
 (function () {

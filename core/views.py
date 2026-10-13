@@ -4240,7 +4240,30 @@ def lote_editar(request, pk):
             imagens_lote_qs,
         )
 
+        from django.core.paginator import Paginator
+        busca_avulsas = request.GET.get("busca_avulsas", "").strip()[:120]
+        status_avulsas = request.GET.get("status_avulsas", "").strip()
+        por_pagina_avulsas = request.GET.get("por_pagina_avulsas", "25")
+        if por_pagina_avulsas not in ("25", "50", "100"):
+            por_pagina_avulsas = "25"
+        avulsas = Imagem.objects.filter(ativo=True, lote__isnull=True).select_related("status", "projeto")
+        if busca_avulsas:
+            avulsas = avulsas.filter(retranca__icontains=busca_avulsas)
+        if status_avulsas:
+            if status_avulsas.isdecimal():
+                avulsas = avulsas.filter(status_id=int(status_avulsas))
+            else:
+                status_avulsas = ""
+        avulsas = avulsas.order_by("retranca", "pk")
+        pagina_avulsas = Paginator(avulsas, int(por_pagina_avulsas)).get_page(request.GET.get("pagina_avulsas", "1"))
+        status_opcoes_avulsas = StatusWorkflow.objects.filter(ativo=True).order_by("ordem", "nome")
         return {
+            "busca_avulsas": busca_avulsas,
+            "status_avulsas": status_avulsas,
+            "por_pagina_avulsas": por_pagina_avulsas,
+            "status_opcoes_avulsas": status_opcoes_avulsas,
+            "pagina_avulsas": pagina_avulsas,
+            "imagens_avulsas": pagina_avulsas.object_list,
             "lote": lote,
             "imagens_lote": paginacao["pagina_obj"],
             "pagina_obj": paginacao["pagina_obj"],
@@ -4263,6 +4286,19 @@ def lote_editar(request, pk):
         # Gestão das imagens que pertencem ao lote
         # ------------------------------------------------------------
         acao_imagens = request.POST.get("acao_imagens", "").strip()
+
+        if acao_imagens == "adicionar_avulsas":
+            ids = request.POST.getlist("avulsas_selecionadas")
+            if not ids or len(ids) > 100:
+                messages.warning(request, "Selecione de 1 a 100 imagens avulsas.")
+                return redirect("lote_editar", pk=lote.pk)
+            with transaction.atomic():
+                quantidade = Imagem.objects.filter(
+                    pk__in=ids, ativo=True, lote__isnull=True
+                ).update(lote=lote)
+                lote.sincronizar_data_efetiva()
+            messages.success(request, f"{quantidade} imagem(ns) avulsa(s) adicionada(s) ao lote.")
+            return redirect("lote_editar", pk=lote.pk)
 
         if acao_imagens in ("mover", "remover"):
             ids_selecionados = request.POST.getlist("imagens_selecionadas")
@@ -5182,6 +5218,29 @@ def componente_toggle_ativo(request, pk):
         f"Componente '{componente.nome}' {estado}. "
         "Os vínculos existentes com imagens foram preservados.",
     )
+    return redirect("componente_lista")
+
+
+@login_required
+@require_POST
+def componente_excluir(request, pk):
+    if not _apenas_coordenador(request.user):
+        messages.error(request, "Sem permissao para excluir componentes.")
+        return redirect("componente_lista")
+    from django.db.models.deletion import ProtectedError
+    with transaction.atomic():
+        componente = get_object_or_404(ComponenteCurricular.objects.select_for_update(), pk=pk)
+        if componente.ativo:
+            messages.error(request, "Inative o componente antes de exclui-lo.")
+        elif Imagem.objects.filter(componente_curricular=componente).exists():
+            messages.error(request, "Exclusao bloqueada: ha imagens vinculadas, inclusive historicas.")
+        else:
+            try:
+                nome = componente.nome
+                componente.delete()
+                messages.success(request, f"Componente '{nome}' excluido.")
+            except ProtectedError:
+                messages.error(request, "Exclusao bloqueada por vinculos protegidos.")
     return redirect("componente_lista")
 
 

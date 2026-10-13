@@ -1,0 +1,20 @@
+<script>
+/* DITO_SHIFT_SELECTION_V2: range selection for image checkboxes in same form/list */
+(function () {
+  const groups = ['.imagem-check', '.chk-imagem', '.chk-avulsa'];
+  groups.forEach(function(selector) {
+    let last = null;
+    document.addEventListener('click', function(event) {
+      const box = event.target.closest('input[type="checkbox"]' + selector);
+      if (!box) return;
+      const scope = box.closest('form') || document;
+      const all = Array.from(scope.querySelectorAll('input[type="checkbox"]' + selector)).filter(x => x.offsetParent !== null && !x.disabled);
+      if (event.shiftKey && last && all.includes(last) && all.includes(box)) {
+        const a=all.indexOf(last), b=all.indexOf(box);
+        all.slice(Math.min(a,b),Math.max(a,b)+1).forEach(x => {x.checked=box.checked; x.dispatchEvent(new Event('change',{bubbles:true}));});
+      }
+      last=box;
+    });
+  });
+})();
+</script>
