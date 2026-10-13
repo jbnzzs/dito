@@ -1370,6 +1370,48 @@ def imagens_lista(request):
 # IMAGENS — IMPORTAÇÃO VIA EXCEL
 # ============================================================
 
+# DITO_PDFS_LOTES_RETROATIVOS_V1: previsualizacao e recuperacao segura pelo site.
+def _processar_pdfs_existentes_fotoweb(
+    request, contexto, projeto, linhas, editorial, scriba,
+):
+    from .services.pdf_backfill_service import (
+        MAXIMO_LINHAS_PDFS,
+        preparar_pdfs_existentes,
+        aplicar_pdfs_existentes,
+    )
+
+    if len(linhas) > MAXIMO_LINHAS_PDFS:
+        messages.error(
+            request,
+            f"Para evitar timeout, use no maximo {MAXIMO_LINHAS_PDFS} "
+            "linhas por operacao de PDFs. Divida uma copia do Excel em partes.",
+        )
+        return render(request, "core/importar_imagens.html", contexto)
+
+    previa = preparar_pdfs_existentes(projeto, linhas, editorial, scriba)
+    aplicadas = None
+    if request.POST.get("acao_importacao") == "preencher_pdfs":
+        aplicadas = aplicar_pdfs_existentes(projeto, previa["candidatas"])
+
+    return render(
+        request,
+        "core/importar_imagens.html",
+        {
+            **contexto,
+            "pdfs_previa": True,
+            "pdfs_aplicadas": aplicadas,
+            "pdfs_aplicacao_realizada": aplicadas is not None,
+            "pdfs_possiveis": len(previa["candidatas"]),
+            "pdfs_encontradas": previa["encontradas"],
+            "pdfs_ja_preenchidas": previa["ja_preenchidas"],
+            "pdfs_sem_correspondencia": previa["sem_correspondencia"],
+            "pdfs_motivos": previa["motivos"],
+            "pdfs_amostras": previa["amostras"],
+            "projeto_importacao": projeto,
+        },
+    )
+
+
 @login_required
 def importar_imagens(request):
     if not _apenas_coordenador(request.user):
@@ -1390,6 +1432,8 @@ def importar_imagens(request):
     contexto_base = {
         "projetos": projetos_ativos,
         "projeto_selecionado_id": request.POST.get("projeto", ""),
+        "projeto_editorial_pdf_valor": request.POST.get("projeto_editorial_pdf", ""),
+        "numero_projeto_pdf_valor": request.POST.get("numero_projeto_pdf", ""),
     }
 
     if request.method == "GET":
@@ -1483,6 +1527,22 @@ def importar_imagens(request):
             "core/importar_imagens.html",
             contexto_base,
         )
+
+    # DITO_PDFS_LOTES_RETROATIVOS_V1: codigos PDF obrigatorios.
+    if not re.fullmatch(
+        r"G\d+_E\d+(?:_[A-Za-z0-9]+)*",
+        projeto_editorial_pdf,
+        re.IGNORECASE,
+    ):
+        messages.error(request, "Projeto editorial invalido (ex.: G27_E1).")
+        return render(request, "core/importar_imagens.html", contexto_base)
+
+    if not re.fullmatch(r"p?\d{3,4}", numero_projeto_pdf, re.IGNORECASE):
+        messages.error(request, "Projeto Scriba invalido (ex.: p013).")
+        return render(request, "core/importar_imagens.html", contexto_base)
+
+    projeto_editorial_pdf = projeto_editorial_pdf.upper()
+    numero_projeto_pdf = numero_projeto_pdf.lower()
 
     status_inicial = _status_inicial_workflow()
 
@@ -1596,6 +1656,18 @@ def importar_imagens(request):
             request,
             "core/importar_imagens.html",
             contexto_base,
+        )
+
+    # Modo especial: previsualiza ou preenche SOMENTE links PDF vazios.
+    # Nao toca no status/descricoes/lotes/historico das imagens existentes.
+    if request.POST.get("acao_importacao") in ("prever_pdfs", "preencher_pdfs"):
+        return _processar_pdfs_existentes_fotoweb(
+            request,
+            contexto_base,
+            projeto_selecionado,
+            data_rows,
+            projeto_editorial_pdf,
+            numero_projeto_pdf,
         )
 
     # DITO_STATUS_FOTOWEB_WEB_V1: validacao antes de qualquer gravacao.

@@ -44,7 +44,47 @@
 {% endif %}
 
 
-{% if not resultado %}
+{% if pdfs_previa %}
+<div class="card mb-4" style="max-width:940px;">
+    <div class="card-body p-4">
+        <h4>PDFs das imagens existentes — {{ projeto_importacao.nome }}</h4>
+        {% if pdfs_aplicacao_realizada %}
+            <div class="alert alert-success">
+                {{ pdfs_aplicadas }} link(s) PDF vazio(s) preenchido(s).
+            </div>
+        {% else %}
+            <div class="alert alert-info">Prévia somente leitura. Nenhuma imagem foi alterada.</div>
+        {% endif %}
+        <p><strong>{{ pdfs_possiveis }}</strong> imagem(ns) elegível(is) com PDF vazio.
+           <strong>{{ pdfs_ja_preenchidas }}</strong> já tinham link.
+           <strong>{{ pdfs_sem_correspondencia }}</strong> retranca(s) sem imagem ativa correspondente neste projeto.</p>
+        {% if pdfs_motivos %}
+        <p class="text-secondary" style="font-size:0.8rem;">
+            Linhas ignoradas por dados incompletos ou conflito:
+            {% for motivo, quantidade in pdfs_motivos.items %}{{ motivo }}: {{ quantidade }}{% if not forloop.last %}; {% endif %}{% endfor %}.
+        </p>
+        {% endif %}
+        {% if pdfs_amostras %}
+        <h6>Amostra de links propostos (máx. 12)</h6>
+        <div class="table-responsive"><table class="table table-sm"><thead><tr>
+            <th>Retranca</th><th>Link do SharePoint</th>
+        </tr></thead><tbody>
+        {% for item in pdfs_amostras %}
+            <tr><td>{{ item.retranca }}</td><td class="text-break">{{ item.url }}</td></tr>
+        {% endfor %}
+        </tbody></table></div>
+        {% endif %}
+        <p class="text-secondary" style="font-size:0.8rem;">
+            Confira os códigos e uma amostra dos links antes de aplicar.
+            A geração do endereço não comprova que o PDF existe no SharePoint.
+        </p>
+        <a class="btn btn-outline-primary" href="{% url 'importar_imagens' %}">
+            Voltar à importação / preencher PDFs
+        </a>
+    </div>
+</div>
+{% elif not resultado %}
+
 
 
 <div
@@ -152,6 +192,30 @@
                     </div>
                 </div>
 
+                {# DITO_PDFS_LOTES_RETROATIVOS_V1 #}
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label for="projeto_editorial_pdf" class="form-label fw-bold">
+                            Projeto editorial (PDF) <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" id="projeto_editorial_pdf" name="projeto_editorial_pdf"
+                               class="form-control" placeholder="Ex.: G27_E1"
+                               pattern="[Gg][0-9]+_[Ee][0-9]+(_[A-Za-z0-9]+)*"
+                               maxlength="50" required
+                               value="{{ projeto_editorial_pdf_valor|default:'' }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="numero_projeto_pdf" class="form-label fw-bold">
+                            Projeto Scriba (PDF) <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" id="numero_projeto_pdf" name="numero_projeto_pdf"
+                               class="form-control" placeholder="Ex.: p013"
+                               pattern="[Pp]?[0-9]{3,4}" maxlength="5" required
+                               value="{{ numero_projeto_pdf_valor|default:'' }}">
+                    </div>
+                </div>
+                <input type="hidden" name="acao_importacao" id="acaoImportacao" value="importar">
+
                 <div class="mb-4">
                     <label for="arquivo" class="form-label fw-bold mb-2" style="font-size:0.875rem; color:#24384A;">
                         Arquivo Excel (.xlsx) <span class="text-danger">*</span>
@@ -177,7 +241,26 @@
                     </div>
                 </div>
 
-                <button type="submit" class="btn btn-primary w-100" id="btnImportar" style="min-height:44px; font-weight:700;">
+                <div class="d-flex gap-2 flex-wrap mb-3">
+                    <button type="submit" class="btn btn-outline-primary btn-sm"
+                            onclick="document.getElementById('acaoImportacao').value='prever_pdfs'">
+                        <i class="bi bi-search me-1"></i> Prévia: PDFs das imagens existentes
+                    </button>
+                    <button type="submit" class="btn btn-outline-success btn-sm"
+                            onclick="document.getElementById('acaoImportacao').value='preencher_pdfs'">
+                        <i class="bi bi-link-45deg me-1"></i> Completar PDFs vazios (imagens existentes)
+                    </button>
+                </div>
+                <p class="text-secondary" style="font-size:0.78rem;">
+                    Para corrigir imagens já importadas, use uma cópia do mesmo relatório
+                    e os códigos de PDF corretos. A prévia não altera registros.
+                    A aplicação modifica somente links PDF vazios.
+                    Até 1000 linhas por operação.
+                </p>
+
+                <button type="submit" class="btn btn-primary w-100" id="btnImportar"
+                        onclick="document.getElementById('acaoImportacao').value='importar'"
+                        style="min-height:44px; font-weight:700;">
                     <i class="bi bi-upload me-2"></i>Importar imagens
                 </button>
             </form>
@@ -263,12 +346,13 @@
         }
 
         const projetoNome = projetoSelect.options[projetoSelect.selectedIndex].text;
-        const confirmado = window.confirm(
-            'Importar este relatório para o projeto "' + projetoNome + '"?'
-        );
-
-        if (!confirmado) {
+        const operacao = document.getElementById("acaoImportacao").value;
+        const pergunta = operacao === "preencher_pdfs"
+            ? 'Preencher somente PDFs vazios das imagens já cadastradas em "' + projetoNome + '"?'
+            : 'Importar este relatório para o projeto "' + projetoNome + '"?';
+        if (operacao !== "prever_pdfs" && !window.confirm(pergunta)) {
             event.preventDefault();
+            document.getElementById("acaoImportacao").value = "importar";
             return;
         }
 
