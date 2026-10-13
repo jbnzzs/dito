@@ -1449,10 +1449,21 @@ def importar_imagens(request):
             contexto_base,
         )
 
+
+
     # ------------------------------------------------------------
     # Arquivo
     # ------------------------------------------------------------
     arquivo = request.FILES.get("arquivo")
+
+    # Metadados opcionais do PDF.
+    projeto_editorial_pdf = str(
+        request.POST.get("projeto_editorial_pdf") or ""
+    ).strip()
+
+    numero_projeto_pdf = str(
+        request.POST.get("numero_projeto_pdf") or ""
+    ).strip()
 
     if not arquivo:
         messages.error(request, "Nenhum arquivo enviado.")
