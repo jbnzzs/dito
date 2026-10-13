@@ -29,12 +29,35 @@ SECRET_KEY = os.environ.get("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
 # Hosts de produção vindos de variável de ambiente (ex: dito-vcbh.onrender.com)
 _hosts_extra = os.environ.get("ALLOWED_HOSTS", "")
 if _hosts_extra:
     ALLOWED_HOSTS += [h.strip() for h in _hosts_extra.split(",") if h.strip()]
+
+
+# DITO_SEGURANCA_RENDER_V1
+# Render injeta RENDER=true e RENDER_EXTERNAL_HOSTNAME automaticamente.
+# Fora do Render, mantem a operacao local sem forcar HTTPS.
+# Nunca permitir DEBUG=True no Render, mesmo se houver env antiga.
+if os.environ.get("RENDER", "").lower() == "true":
+    DEBUG = False
+_RENDER_PRODUCTION = os.environ.get("RENDER", "").lower() == "true"
+_render_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
+if _render_hostname and _render_hostname not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_render_hostname)
+
+# Confiar no X-Forwarded-Proto somente no proxy gerenciado do Render.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if _RENDER_PRODUCTION else None
+SECURE_SSL_REDIRECT = _RENDER_PRODUCTION
+SESSION_COOKIE_SECURE = _RENDER_PRODUCTION
+CSRF_COOKIE_SECURE = _RENDER_PRODUCTION
+# Primeiro deploy: HSTS de 1 hora, sem includeSubDomains e sem preload.
+# Aumentar apenas depois de validar HTTPS e todos os dominios utilizados.
+SECURE_HSTS_SECONDS = 3600 if _RENDER_PRODUCTION else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_HSTS_PRELOAD = False
 
 
 # Application definition
