@@ -181,3 +181,53 @@ EMAIL_BACKEND = os.environ.get(
 )
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "Dito! <nao-responda@localhost>")
 PASSWORD_RESET_TIMEOUT = 3600
+
+if not DEBUG:
+    LOG_LEVEL_APPS = 'INFO'      # apps.* (getLogger(__name__)): rastro de negócio
+    LOG_LEVEL_DJANGO = 'WARNING'  # django e django.request (erro 500 = ERROR)
+    LOG_LEVEL_ROOT = 'WARNING'    # bibliotecas de terceiros: só avisos e erros
+
+    LOGGING = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'filters': {
+            'require_debug_false': {'()': 'django.utils.log.RequireDebugFalse'},
+        },
+        'formatters': {
+            'linha': {'format': '%(asctime)s %(levelname)s %(name)s %(message)s'},
+        },
+        'handlers': {
+            'console': {
+                'class': 'logging.StreamHandler',
+                'stream': 'ext://sys.stdout',
+                'formatter': 'linha',
+            },
+            # Mantido como no DEFAULT_LOGGING do Django; inerte com ADMINS
+            # vazio (L5).
+            'mail_admins': {
+                'level': 'ERROR',
+                'class': 'django.utils.log.AdminEmailHandler',
+                'filters': ['require_debug_false'],
+            },
+        },
+        # Os loggers 'apps' e 'django' têm handler próprio e propagate=False
+        # para o registro não subir ao root (que também tem o console) e
+        # sair duplicado. 'django.request' não tem handler: propaga só até
+        # 'django', onde sai uma vez (e passa pelo mail_admins, inerte).
+        'loggers': {
+            'core': {
+                'handlers': ['console'],
+                'level': LOG_LEVEL_APPS,
+                'propagate': False,
+            },
+            'django': {
+                'handlers': ['console', 'mail_admins'],
+                'level': LOG_LEVEL_DJANGO,
+                'propagate': False,
+            },
+        },
+        'root': {
+            'handlers': ['console'],
+            'level': LOG_LEVEL_ROOT,
+        },
+    }
