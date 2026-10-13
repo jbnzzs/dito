@@ -1658,6 +1658,8 @@ def importar_imagens(request):
             .only(
                 "id",
                 "retranca",
+                "projeto",
+                "url_pdf",
                 "dados_fotoweb_originais",
             )
         )
