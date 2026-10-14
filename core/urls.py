@@ -27,6 +27,9 @@ urlpatterns = [
     path("solicitar-acesso/", views.solicitar_acesso, name="solicitar_acesso"),
     path("minha-conta/", views.minha_conta, name="minha_conta"),
 
+    path("imagens/<int:pk>/marcar-conclusao/", views.marcar_conclusao_lote, name="marcar_conclusao_lote"),
+    path("lotes/<int:lote_id>/enviar-concluidas/", views.enviar_concluidas_lote, name="enviar_concluidas_lote"),
+
     # ---- Lotes ----
     path("lotes/", views.lotes_lista, name="lotes_lista"),
     path("lotes/organizar/", views.organizar_lotes, name="organizar_lotes_geral"),

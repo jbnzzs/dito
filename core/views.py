@@ -314,7 +314,7 @@ def _proxima_imagem_do_lote(imagem_atual, usuario):
     if not imagem_atual.lote:
         return None
 
-    escopo = _imagens_do_lote_para_usuario(imagem_atual.lote, usuario).exclude(pk=imagem_atual.pk)
+    escopo = _imagens_do_lote_para_usuario(imagem_atual.lote, usuario).exclude(pk=imagem_atual.pk).filter(pronto_para_lote=False)
 
     proxima = escopo.filter(retranca__gt=imagem_atual.retranca).order_by("retranca").first()
     if proxima:
@@ -495,12 +495,19 @@ def _usuario_pode_editar_imagem(usuario, imagem, descricao=None):
     """
     status = imagem.status
 
-    if not status or not status.ativo or not status.permite_edicao:
+    if not status or not status.ativo:
         return False
 
-    # Administrador pode editar qualquer etapa explicitamente editável.
-    if usuario.tipo == Usuario.Tipo.ADMINISTRADOR:
-        return True
+    # Coordenação e administração podem corrigir descrições nas etapas
+    # Avaliando, Avaliado e Finalizado, sem reabrir ou avançar o workflow.
+    if usuario.tipo in (Usuario.Tipo.COORDENADOR, Usuario.Tipo.ADMINISTRADOR):
+        if status.nome.strip().casefold() in ("avaliando", "avaliado", "finalizado"):
+            return True
+        if usuario.tipo == Usuario.Tipo.ADMINISTRADOR:
+            return bool(status.permite_edicao)
+
+    if not status.permite_edicao:
+        return False
 
     if status.perfil_responsavel != usuario.tipo:
         return False
@@ -2401,7 +2408,10 @@ def descricao_imagem(request, pk):
         request.GET.get("next"),
     )
 
-    if not url_voltar:
+    if imagem.lote_id:
+        # O Voltar superior sempre leva à listagem interna do lote.
+        url_voltar = f"{reverse('minhas_tarefas')}?{urlencode({'lote': imagem.lote_id})}"
+    elif not url_voltar:
         url_voltar = _url_anterior_segura(request)
 
     if not url_voltar:
@@ -2613,57 +2623,30 @@ def descricao_imagem(request, pk):
         ensure_ascii=False,
     )
 
-    # ------------------------------------------------------------
-    # Progresso do usuário dentro do lote
-    # ------------------------------------------------------------
-    # Não existe uma "posição fixa" da imagem no lote. O usuário pode abrir
-    # qualquer retranca primeiro. Por isso, o contador representa quantas
-    # imagens ele já iniciou naquela etapa do workflow.
-    #
-    # Exemplo:
-    # - abre qualquer imagem pela primeira vez -> 1/178
-    # - abre outra imagem ainda não iniciada   -> 2/178
-    # - reabre uma imagem já iniciada          -> continua 2/178
+    # Posição real da retranca no conjunto do lote (inclui Avaliando).
     lote_progresso_atual = None
     lote_total = None
     lote_eh_ultima = False
+    imagem_anterior_url = None
 
-    if imagem.lote:
-        escopo_lote = _escopo_fixo_do_lote(
-            imagem.lote,
-            usuario,
-        )
-
-        lote_total = escopo_lote.count()
-
-        perfil_etapa = (
-            imagem.status.perfil_responsavel
-            if imagem.status
-            else _perfil_operacional(usuario)
-        )
-
-        tipo_inicio = _tipo_acao_inicio(
-            perfil_etapa
-        )
-
-        lote_progresso_atual = (
-            HistoricoItem.objects
-            .filter(
-                imagem__in=escopo_lote,
-                usuario=usuario,
-                tipo_acao=tipo_inicio,
-            )
-            .values("imagem_id")
-            .distinct()
-            .count()
-        )
-
-        lote_eh_ultima = (
-            _proxima_imagem_do_lote(
-                imagem,
-                usuario,
-            ) is None
-        )
+    if imagem.lote_id:
+        escopo_lote = _escopo_fixo_do_lote(imagem.lote, usuario)
+        ids_lote = list(escopo_lote.values_list("pk", flat=True))
+        if imagem.pk not in ids_lote:
+            # Para visualização histórica ou troca de responsável, o
+            # contador continua refletindo a posição real dentro do lote.
+            ids_lote = list(Imagem.objects.filter(
+                lote_id=imagem.lote_id, ativo=True
+            ).order_by("retranca", "pk").values_list("pk", flat=True))
+        lote_total = len(ids_lote)
+        if imagem.pk in ids_lote:
+            posicao = ids_lote.index(imagem.pk)
+            lote_progresso_atual = posicao + 1
+            if posicao > 0:
+                imagem_anterior_url = reverse(
+                    "descricao_imagem", kwargs={"pk": ids_lote[posicao - 1]}
+                )
+        lote_eh_ultima = _proxima_imagem_do_lote(imagem, usuario) is None
 
     correcao_ativa = _correcao_ativa_da_imagem(
         imagem
@@ -2684,6 +2667,7 @@ def descricao_imagem(request, pk):
         "lote_progresso_atual": lote_progresso_atual,
         "lote_total": lote_total,
         "lote_eh_ultima": lote_eh_ultima,
+        "imagem_anterior_url": imagem_anterior_url,
         "url_voltar": url_voltar,
     }
 
@@ -2771,6 +2755,13 @@ def salvar_trecho(request, pk):
         descricao.save(update_fields=campos_descricao)
 
     trechos_data = body.get("trechos", [])
+    if not isinstance(trechos_data, list) or not all(isinstance(t, dict) for t in trechos_data):
+        return JsonResponse({"ok": False, "erro": "Trechos inválidos."}, status=400)
+    marcar_pronta = body.get("marcar_pronta", False) is True
+    if marcar_pronta and not imagem.lote_id:
+        return JsonResponse({"ok": False, "erro": "Imagem não pertence a um lote."}, status=400)
+    if marcar_pronta and not any(_normalizar_texto_descricao(t.get("texto", "")).strip() for t in trechos_data):
+        return JsonResponse({"ok": False, "erro": "Preencha ao menos um trecho."}, status=400)
 
     with transaction.atomic():
         descricao.trechos.all().delete()
@@ -2796,6 +2787,8 @@ def salvar_trecho(request, pk):
                 )
 
         Trecho.objects.bulk_create(novos)
+        imagem.pronto_para_lote = marcar_pronta
+        imagem.save(update_fields=["pronto_para_lote"])
 
         if usuario.tipo == Usuario.Tipo.DESCRITOR and criada:
             HistoricoItem.objects.create(
@@ -2809,6 +2802,7 @@ def salvar_trecho(request, pk):
     return JsonResponse({
         "ok": True,
         "total": len(novos),
+        "pronta": imagem.pronto_para_lote,
     })
 
 
@@ -2975,6 +2969,7 @@ def avancar_status(request, pk):
                 imagem.responsavel = None
 
         imagem.status = proximo_status
+        imagem.pronto_para_lote = False
         imagem.save()
 
         # --------------------------------------------------------
@@ -4520,6 +4515,8 @@ def lotes_lista(request):
             )
         )
 
+        pronto_usuario = sum(1 for img in imagens_do_lote if img.pronto_para_lote and
+                            _usuario_pode_editar_imagem(usuario, img, getattr(img, "descricao", None)))
         responsaveis = {}
         status_nomes = set()
         correcoes_ativas = []
@@ -4620,6 +4617,7 @@ def lotes_lista(request):
                         })
 
             lotes_dados.append({
+                "pronto_usuario": pronto_usuario,
                 "obj": lote,
                 "total": total,
                 "progresso": progresso,
@@ -4636,6 +4634,7 @@ def lotes_lista(request):
 
             if meu:
                 lotes_dados.append({
+                    "pronto_usuario": pronto_usuario,
                     "obj": lote,
                     "total": meu["total"],
                     "progresso": None,
@@ -4738,7 +4737,12 @@ def proxima_imagem_lote(request, pk):
     proxima = _proxima_imagem_do_lote(imagem_atual, request.user)
 
     if proxima:
-        return redirect("descricao_imagem", pk=proxima.pk)
+        destino = reverse("descricao_imagem", kwargs={"pk": proxima.pk})
+        if imagem_atual.lote_id:
+            destino += "?" + urlencode({
+                "next": f"{reverse('minhas_tarefas')}?lote={imagem_atual.lote_id}"
+            })
+        return redirect(destino)
 
     messages.success(
         request,
@@ -4752,6 +4756,57 @@ def proxima_imagem_lote(request, pk):
 # ============================================================
 # DEVOLUÇÃO DO LOTE AO COORDENADOR
 # ============================================================
+
+
+# DITO_ENVIO_PARCIAL_V1
+@login_required
+@require_POST
+def marcar_conclusao_lote(request, pk):
+    imagem = get_object_or_404(Imagem, pk=pk, ativo=True, lote__ativo=True)
+    if not _usuario_pode_editar_imagem(request.user, imagem, getattr(imagem, "descricao", None)):
+        return JsonResponse({"ok": False, "erro": "Sem permissão para concluir esta imagem."}, status=403)
+    try:
+        dados = json.loads(request.body)
+        concluida = dados["concluida"]
+        if type(concluida) is not bool:
+            raise ValueError()
+    except (ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return JsonResponse({"ok": False, "erro": "Informe concluida como booleano."}, status=400)
+    if concluida and not (getattr(imagem, "descricao", None) and imagem.descricao.trechos.filter(ativo=True, texto__gt="").exists()):
+        return JsonResponse({"ok": False, "erro": "Salve ao menos um trecho antes de concluir."}, status=400)
+    imagem.pronto_para_lote = concluida
+    imagem.save(update_fields=["pronto_para_lote"])
+    return JsonResponse({"ok": True, "concluida": concluida})
+
+
+@login_required
+@require_POST
+def enviar_concluidas_lote(request, lote_id):
+    if request.user.tipo not in (Usuario.Tipo.DESCRITOR, Usuario.Tipo.REVISOR):
+        return JsonResponse({"ok": False, "erro": "Somente descritores e revisores podem enviar concluídas."}, status=403)
+    from django.db import transaction
+    from .models import Lote
+    lote = get_object_or_404(Lote, pk=lote_id, ativo=True)
+    with transaction.atomic():
+        # Lock impede dois envios simultâneos das mesmas imagens.
+        imagens = list(Imagem.objects.select_for_update(of=("self",)).select_related("status", "responsavel")
+                       .filter(lote=lote, ativo=True, pronto_para_lote=True).order_by("pk"))
+        elegiveis = [i for i in imagens if _usuario_pode_editar_imagem(
+            request.user, i, getattr(i, "descricao", None))]
+        if not elegiveis:
+            return JsonResponse({"ok": False, "erro": "Nenhuma imagem concluída sob sua responsabilidade."}, status=400)
+        # Reutiliza a regra de transição e histórico já existente no Dito!.
+        for imagem in elegiveis:
+            resposta = avancar_status(request, imagem.pk)
+            if resposta.status_code != 200:
+                try:
+                    erro = json.loads(resposta.content).get("erro", "Transição recusada")
+                except (ValueError, AttributeError):
+                    erro = "Transição recusada"
+                transaction.set_rollback(True)
+                return JsonResponse({"ok": False, "erro": f"{imagem.retranca}: {erro}. Nenhuma imagem enviada."}, status=409)
+            Imagem.objects.filter(pk=imagem.pk).update(pronto_para_lote=False)
+    return JsonResponse({"ok": True, "enviadas": len(elegiveis)})
 
 @login_required
 @require_POST

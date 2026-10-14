@@ -296,6 +296,15 @@
                         {% endif %}
                     </div>
 
+                    {% if item.obj.ativo and request.user.tipo == 'descritor' or item.obj.ativo and request.user.tipo == 'revisor' %}
+                    <form method="post" class="mt-2 dito-enviar-lote" action="{% url 'enviar_concluidas_lote' item.obj.pk %}"
+                          onsubmit="return confirm('Enviar {{ item.pronto_usuario }} imagem(ns) pronta(s) para a próxima etapa?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-primary" {% if not item.pronto_usuario %}disabled{% endif %}>
+                            <i class="bi bi-send me-1"></i> Enviar concluídas ({{ item.pronto_usuario|default:0 }})
+                        </button>
+                    </form>
+                    {% endif %}
                     {% if item.obj.descricao %}
                     <p
                         class="text-secondary mb-3"
@@ -765,5 +774,61 @@
 </div>
 
 {% endif %}
+
+<!-- DITO_ENVIO_AJAX_AVISO_V1 -->
+<div id="dito-feedback-envio" role="status" aria-live="polite"
+     style="display:none;position:fixed;top:20px;right:20px;z-index:2000;max-width:420px;
+            padding:15px 20px;border-radius:10px;color:#fff;background:#23764b;
+            box-shadow:0 6px 24px rgba(0,0,0,.2);font-weight:600;"></div>
+<script>
+(function () {
+    const feedback = document.getElementById('dito-feedback-envio');
+    let timer;
+    function aviso(mensagem, sucesso) {
+        clearTimeout(timer);
+        feedback.textContent = mensagem;
+        feedback.style.background = sucesso ? '#23764b' : '#9b3030';
+        feedback.style.display = 'block';
+        timer = setTimeout(() => { feedback.style.display = 'none'; }, 6000);
+    }
+
+    document.querySelectorAll('form.dito-enviar-lote').forEach(form => {
+        // Preserva a confirmação existente (onsubmit); este listener só
+        // é executado quando ela é aceita.
+        form.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            const botao = form.querySelector('button[type="submit"]');
+            if (!botao || botao.disabled) return;
+            botao.disabled = true;
+            const textoOriginal = botao.innerHTML;
+            botao.textContent = 'Enviando...';
+            try {
+                const resposta = await fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+                });
+                const tipo = resposta.headers.get('content-type') || '';
+                if (!tipo.includes('application/json')) {
+                    throw new Error('Resposta inesperada do servidor. Atualize a página e confira o lote antes de tentar novamente.');
+                }
+                const dados = await resposta.json();
+                if (!resposta.ok || !dados.ok) {
+                    throw new Error(dados.erro || 'Não foi possível enviar as imagens.');
+                }
+                const quantidade = Number(dados.enviadas || 0);
+                aviso(quantidade + (quantidade === 1 ? ' imagem enviada com sucesso!' : ' imagens enviadas com sucesso!'), true);
+                // Recarrega apenas a mesma tela para atualizar status e contadores.
+                setTimeout(() => window.location.reload(), 1800);
+            } catch (erro) {
+                aviso(erro.message || 'Falha ao enviar. Confira o lote antes de tentar novamente.', false);
+                botao.disabled = false;
+                botao.innerHTML = textoOriginal;
+            }
+        });
+    });
+})();
+</script>
 
 {% endblock %}
