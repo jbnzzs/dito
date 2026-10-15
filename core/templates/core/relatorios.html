@@ -31,23 +31,53 @@
 
     <div class="d-flex align-items-center gap-2 flex-wrap">
 
-        <a
-            href="{% url 'relatorios_exportar' %}{% if filtros_query %}?{{ filtros_query }}{% endif %}"
-            class="btn btn-primary"
-        >
-            <i class="bi bi-file-earmark-excel me-1"></i>
-            Exportar relatório Dito
-        </a>
+        {% if total > 0 %}
+            {% if total <= 200 %}
+            <a
+                href="{% url 'relatorios_exportar' %}{% if filtros_query %}?{{ filtros_query }}{% endif %}"
+                class="btn btn-primary"
+            >
+                <i class="bi bi-file-earmark-excel me-1"></i>
+                Exportar Dito (Excel)
+            </a>
+            {% endif %}
 
-        <a
-            href="{% url 'relatorios_exportar_fotoweb' %}{% if filtros_query %}?{{ filtros_query }}{% endif %}"
-            class="btn btn-outline-primary"
-        >
-            <i class="bi bi-file-earmark-arrow-down me-1"></i>
-            Exportar para FotoWeb
-        </a>
+            <a
+                href="{% url 'relatorios_exportar_csv' %}{% if filtros_query %}?{{ filtros_query }}{% endif %}"
+                class="btn btn-outline-success"
+            >
+                <i class="bi bi-filetype-csv me-1"></i>
+                Exportar Dito (CSV)
+            </a>
+
+            {% if total <= 200 %}
+            <a
+                href="{% url 'relatorios_exportar_fotoweb' %}{% if filtros_query %}?{{ filtros_query }}{% endif %}"
+                class="btn btn-outline-primary"
+            >
+                <i class="bi bi-file-earmark-excel me-1"></i>
+                Exportar FotoWeb (Excel)
+            </a>
+            {% endif %}
+
+            <a
+                href="{% url 'relatorios_exportar_fotoweb_csv' %}{% if filtros_query %}?{{ filtros_query }}{% endif %}"
+                class="btn btn-outline-primary"
+            >
+                <i class="bi bi-filetype-csv me-1"></i>
+                Exportar FotoWeb (CSV)
+            </a>
+        {% else %}
+            <span class="text-secondary small">Nenhuma imagem para exportar.</span>
+        {% endif %}
 
     </div>
+    {% if total > 200 %}
+    <p class="text-secondary small mb-0 mt-2">
+        Resultado filtrado com {{ total }} imagens: exportação Excel limitada a 200.
+        Utilize CSV para exportar todas as imagens do resultado.
+    </p>
+    {% endif %}
 
 </div>
 
@@ -677,6 +707,15 @@
 
         {% if pagina_obj.object_list %}
 
+        <div class="px-3 py-2 small text-secondary border-bottom">
+            {% if filtros_ativos %}
+                Tabela completa sem filtros; após filtrar, exibe Retranca e as colunas selecionadas.
+            {% else %}
+                Exibindo todas as imagens ativas.
+            {% endif %}
+            <strong>{{ total }}</strong>
+            {% if total == 1 %}imagem no resultado{% else %}imagens no resultado{% endif %}.
+        </div>
         <div class="table-responsive">
 
             <table class="table table-sm mb-0 align-middle">
@@ -684,132 +723,68 @@
                 <thead>
                     <tr>
                         <th class="ps-3">Retranca</th>
-                        <th>Obra</th>
-                        <th>Componente</th>
-                        <th>Lote</th>
-                        <th>Status</th>
-                        <th>Responsável</th>
-                        <th>Pag. descritor</th>
-                        <th>Pag. revisor</th>
-                        <th>Prevista</th>
-                        <th>Efetiva</th>
-                        <th>Atualizada</th>
-                        <th></th>
+                        {% if request.GET.projeto %}<th>Projeto</th>{% endif %}
+                        {% if not filtros_ativos or request.GET.obra %}<th>Obra</th>{% endif %}
+                        {% if not filtros_ativos or request.GET.componente %}<th>Componente</th>{% endif %}
+                        {% if not filtros_ativos or request.GET.lote %}<th>Lote</th>{% endif %}
+                        {% if not filtros_ativos or request.GET.status %}<th>Status</th>{% endif %}
+                        {% if not filtros_ativos or request.GET.responsavel %}<th>Responsável</th>{% endif %}
+                        {% if not filtros_ativos or request.GET.pagamento_descritor %}<th>Pag. descritor</th>{% endif %}
+                        {% if not filtros_ativos or request.GET.pagamento_revisor %}<th>Pag. revisor</th>{% endif %}
+                        {% if not filtros_ativos %}<th>Prevista</th><th>Efetiva</th><th>Atualizada</th>{% endif %}
+                        {% if request.GET.data_inicio or request.GET.data_fim %}<th>Cadastrada em</th>{% endif %}
+                        <th class="text-end pe-3"></th>
                     </tr>
                 </thead>
 
-
                 <tbody>
-
                     {% for img in pagina_obj %}
-
                     <tr>
-
-                        <td class="ps-3">
-                            <span class="dito-retranca">
-                                {{ img.retranca }}
-                            </span>
-                        </td>
-
-
+                        <td class="ps-3"><span class="dito-retranca">{{ img.retranca }}</span></td>
+                        {% if request.GET.projeto %}
+                        <td style="font-size:0.82rem;">{{ img.projeto.nome|default:"—" }}</td>
+                        {% endif %}
+                        {% if not filtros_ativos or request.GET.obra %}
+                        <td style="font-size:0.82rem;">{{ img.nome_obra|default:"—" }}</td>
+                        {% endif %}
+                        {% if not filtros_ativos or request.GET.componente %}
+                        <td style="font-size:0.82rem;">{{ img.componente_curricular|default:"—" }}</td>
+                        {% endif %}
+                        {% if not filtros_ativos or request.GET.lote %}
                         <td style="font-size:0.82rem;">
-                            {{ img.nome_obra|default:"—" }}
+                            {% if img.lote %}{{ img.lote.nome }}{% else %}<span class="text-secondary">Avulsa</span>{% endif %}
                         </td>
-
-
+                        {% endif %}
+                        {% if not filtros_ativos or request.GET.status %}
+                        <td><span class="dito-status dito-status-{{ img.status.slug }}" style="font-size:0.68rem;">{{ img.status.nome }}</span></td>
+                        {% endif %}
+                        {% if not filtros_ativos or request.GET.responsavel %}
                         <td style="font-size:0.82rem;">
-                            {{ img.componente_curricular|default:"—" }}
+                            {% if img.responsavel %}{{ img.responsavel.get_full_name|default:img.responsavel.email }}{% else %}<span class="text-secondary">—</span>{% endif %}
                         </td>
-
-
-                        <td style="font-size:0.82rem;">
-                            {% if img.lote %}
-                                {{ img.lote.nome }}
-                            {% else %}
-                                <span class="text-secondary">
-                                    Avulsa
-                                </span>
-                            {% endif %}
-                        </td>
-
-
-                        <td>
-                            <span
-                                class="dito-status dito-status-{{ img.status.slug }}"
-                                style="font-size:0.68rem;"
-                            >
-                                {{ img.status.nome }}
-                            </span>
-                        </td>
-
-
-                        <td style="font-size:0.82rem;">
-                            {% if img.responsavel %}
-                                {{ img.responsavel.get_full_name|default:img.responsavel.email }}
-                            {% else %}
-                                <span class="text-secondary">—</span>
-                            {% endif %}
-                        </td>
-
-
-                        <td style="font-size:0.78rem;">
-                            {{ img.get_pagamento_descritor_display }}
-                        </td>
-
-
-                        <td style="font-size:0.78rem;">
-                            {{ img.get_pagamento_revisor_display }}
-                        </td>
-
-
-                        <td
-                            class="text-secondary"
-                            style="font-size:0.78rem;"
-                        >
-                            {% if img.lote and img.lote.data_prevista %}
-                                {{ img.lote.data_prevista|date:"d/m/Y" }}
-                            {% else %}
-                                —
-                            {% endif %}
-                        </td>
-
-
-                        <td
-                            class="text-secondary"
-                            style="font-size:0.78rem;"
-                        >
-                            {% if img.lote and img.lote.data_efetiva %}
-                                {{ img.lote.data_efetiva|date:"d/m/Y" }}
-                            {% else %}
-                                —
-                            {% endif %}
-                        </td>
-
-
-                        <td
-                            class="text-secondary"
-                            style="font-size:0.78rem;"
-                        >
-                            {{ img.atualizado_em|date:"d/m/Y H:i" }}
-                        </td>
-
-
+                        {% endif %}
+                        {% if not filtros_ativos or request.GET.pagamento_descritor %}
+                        <td style="font-size:0.78rem;">{{ img.get_pagamento_descritor_display }}</td>
+                        {% endif %}
+                        {% if not filtros_ativos or request.GET.pagamento_revisor %}
+                        <td style="font-size:0.78rem;">{{ img.get_pagamento_revisor_display }}</td>
+                        {% endif %}
+                        {% if not filtros_ativos %}
+                        <td class="text-secondary" style="font-size:0.78rem;">{% if img.lote and img.lote.data_prevista %}{{ img.lote.data_prevista|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+                        <td class="text-secondary" style="font-size:0.78rem;">{% if img.lote and img.lote.data_efetiva %}{{ img.lote.data_efetiva|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+                        <td class="text-secondary" style="font-size:0.78rem;">{{ img.atualizado_em|date:"d/m/Y H:i" }}</td>
+                        {% endif %}
+                        {% if request.GET.data_inicio or request.GET.data_fim %}
+                        <td class="text-secondary" style="font-size:0.78rem;">{{ img.criado_em|date:"d/m/Y H:i" }}</td>
+                        {% endif %}
                         <td class="text-end pe-3">
-
-                            <a
-                                href="{% url 'descricao_imagem' img.pk %}?next={{ request.get_full_path|urlencode }}"
-                                class="btn btn-sm btn-outline-secondary dito-btn-acao"
-                                title="Abrir imagem"
-                            >
+                            <a href="{% url 'descricao_imagem' img.pk %}?next={{ request.get_full_path|urlencode }}"
+                               class="btn btn-sm btn-outline-secondary dito-btn-acao" title="Abrir imagem">
                                 <i class="bi bi-eye"></i>
                             </a>
-
                         </td>
-
                     </tr>
-
                     {% endfor %}
-
                 </tbody>
 
             </table>
@@ -847,8 +822,9 @@
             style="font-size:0.82rem;"
         >
             <strong>Exportação filtrada:</strong>
-            o botão de Excel exporta todas as imagens do resultado atual,
-            e não apenas as imagens exibidas na página atual.
+            a lista e os downloads usam os mesmos filtros aplicados.
+            A exportação inclui todo o resultado filtrado, não só a página exibida.
+            Excel fica disponível até 200 imagens; CSV não tem esse limite.
         </p>
 
         <p

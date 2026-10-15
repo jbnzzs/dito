@@ -27,6 +27,9 @@ from .models import (
     Usuario,
 )
 from .forms import ImagemForm
+# DITO_PERCURSO_USUARIO_V1: numeração por visita, isolada por sessão.
+from .services.percurso_lote_service import registrar_visita_lote
+from .limites_exportacao import limitar_xlsx_200
 
 # DITO_EXTRACAO_SHAREPOINT_V1: mantém os nomes públicos compatíveis.
 from .services.excel_service import _valor_excel
@@ -2623,29 +2626,22 @@ def descricao_imagem(request, pk):
         ensure_ascii=False,
     )
 
-    # Posição real da retranca no conjunto do lote (inclui Avaliando).
+    # DITO_PERCURSO_USUARIO_V1: ordem de visita na sessão deste usuário.
     lote_progresso_atual = None
     lote_total = None
     lote_eh_ultima = False
     imagem_anterior_url = None
 
     if imagem.lote_id:
-        escopo_lote = _escopo_fixo_do_lote(imagem.lote, usuario)
-        ids_lote = list(escopo_lote.values_list("pk", flat=True))
-        if imagem.pk not in ids_lote:
-            # Para visualização histórica ou troca de responsável, o
-            # contador continua refletindo a posição real dentro do lote.
-            ids_lote = list(Imagem.objects.filter(
-                lote_id=imagem.lote_id, ativo=True
-            ).order_by("retranca", "pk").values_list("pk", flat=True))
-        lote_total = len(ids_lote)
-        if imagem.pk in ids_lote:
-            posicao = ids_lote.index(imagem.pk)
-            lote_progresso_atual = posicao + 1
-            if posicao > 0:
-                imagem_anterior_url = reverse(
-                    "descricao_imagem", kwargs={"pk": ids_lote[posicao - 1]}
-                )
+        total_visivel = _escopo_fixo_do_lote(imagem.lote, usuario).count()
+        lote_progresso_atual, lote_total, anterior_pk = registrar_visita_lote(
+            request, imagem.lote_id, imagem.pk, total_visivel,
+        )
+        if anterior_pk is not None:
+            imagem_anterior_url = (
+                reverse("descricao_imagem", kwargs={"pk": anterior_pk})
+                + "?dito_percurso=anterior"
+            )
         lote_eh_ultima = _proxima_imagem_do_lote(imagem, usuario) is None
 
     correcao_ativa = _correcao_ativa_da_imagem(
@@ -3022,11 +3018,11 @@ def avancar_status(request, pk):
                 kwargs={"pk": proxima.pk},
             )
 
+            # DITO_PERCURSO_USUARIO_V1: informa ao destino que houve avanço.
+            parametros = {"dito_percurso": "proximo"}
             if url_retorno:
-                proxima_url = (
-                    f"{proxima_url}?"
-                    f"{urlencode({'next': url_retorno})}"
-                )
+                parametros["next"] = url_retorno
+            proxima_url += "?" + urlencode(parametros)
 
     return JsonResponse({
         "ok": True,
@@ -4504,9 +4500,43 @@ def lotes_lista(request):
         .order_by("-criado_em")
     )
 
+    # DITO_REVISAO_PERCURSO_V1: autoria real das conferências concluídas.
+    # A consulta atende todos os lotes exibidos de uma vez, sem N+1.
+    lotes = list(lotes)
+    revisores_por_lote = {}
+    if lotes:
+        conclusoes = (
+            HistoricoItem.objects.filter(
+                imagem__lote_id__in=[lote.pk for lote in lotes],
+                imagem__ativo=True,
+                tipo_acao=HistoricoItem.TipoAcao.CONFERENCIA_CONCLUIDA,
+                usuario__isnull=False,
+            )
+            .values_list(
+                "imagem__lote_id", "usuario_id", "usuario__first_name",
+                "usuario__last_name", "usuario__email",
+            )
+            .distinct()
+        )
+        for lote_id, revisor_id, primeiro, ultimo, email in conclusoes:
+            nome = " ".join(x for x in (primeiro, ultimo) if x).strip()
+            nome = nome or email or f"Usuário {revisor_id}"
+            revisores_por_lote.setdefault(lote_id, {})[revisor_id] = nome
+
     lotes_dados = []
 
     for lote in lotes:
+        nomes_revisores = sorted(
+            revisores_por_lote.get(lote.pk, {}).values(), key=str.casefold,
+        )
+        if len(nomes_revisores) <= 3:
+            lote.revisores_concluidos_texto = ", ".join(nomes_revisores)
+        else:
+            lote.revisores_concluidos_texto = (
+                ", ".join(nomes_revisores[:3])
+                + f" +{len(nomes_revisores) - 3}"
+            )
+
         imagens_do_lote = list(
             getattr(
                 lote,
@@ -4738,11 +4768,13 @@ def proxima_imagem_lote(request, pk):
 
     if proxima:
         destino = reverse("descricao_imagem", kwargs={"pk": proxima.pk})
+        # DITO_PERCURSO_USUARIO_V1: a próxima imagem mantém o contador.
+        parametros = {"dito_percurso": "proximo"}
         if imagem_atual.lote_id:
-            destino += "?" + urlencode({
-                "next": f"{reverse('minhas_tarefas')}?lote={imagem_atual.lote_id}"
-            })
-        return redirect(destino)
+            parametros["next"] = (
+                f"{reverse('minhas_tarefas')}?lote={imagem_atual.lote_id}"
+            )
+        return redirect(destino + "?" + urlencode(parametros))
 
     messages.success(
         request,
@@ -5837,6 +5869,7 @@ def relatorios_lista(request):
 
 
 @login_required
+@limitar_xlsx_200
 def relatorios_exportar_fotoweb(request):
     # Exporta no mesmo conjunto e ordem de colunas do FotoWeb,
     # usando os dados atuais do Dito nos campos editáveis.
@@ -6049,6 +6082,7 @@ def relatorios_exportar_fotoweb(request):
     return resposta
 
 @login_required
+@limitar_xlsx_200
 def relatorios_exportar(request):
     """
     Exporta um arquivo .xlsx com duas abas.
@@ -6065,6 +6099,7 @@ def relatorios_exportar(request):
     from django.http import HttpResponse
     from django.utils import timezone
     from openpyxl import Workbook
+    from .relatorios_colunas import colunas_dito, selecionar_valores_dito, larguras_dito
 
     def _valor_data_excel(valor, incluir_hora=False):
         """
@@ -6102,28 +6137,7 @@ def relatorios_exportar(request):
     aba_geral = wb.active
     aba_geral.title = "Geral"
 
-    colunas_geral = [
-        "Retranca",
-        "Obra",
-        "Componente curricular",
-        "Volume/Ano/Módulo",
-        "Capítulo/Unidade",
-        "Etapa",
-        "Lote",
-        "Data prevista do lote",
-        "Data efetiva do lote",
-        "Status",
-        "Responsável atual",
-        "Descritor",
-        "Revisor",
-        "Coordenador",
-        "Pagamento descritor",
-        "Pagamento revisor",
-        "Prazo da imagem",
-        "Cadastrada em",
-        "Atualizada em",
-        "Descrição completa",
-    ]
+    colunas_geral = colunas_dito(request)
     aba_geral.append(colunas_geral)
 
     for imagem in imagens:
@@ -6166,7 +6180,7 @@ def relatorios_exportar(request):
             else ""
         )
 
-        aba_geral.append([
+        aba_geral.append(selecionar_valores_dito(imagem, [
             imagem.retranca,
             imagem.nome_obra,
             imagem.componente_curricular.nome if imagem.componente_curricular else "",
@@ -6197,12 +6211,13 @@ def relatorios_exportar(request):
                 incluir_hora=True,
             ),
             descricao_flat or None,
-        ])
+        ], colunas_geral))
 
     larguras_geral = [
         28, 22, 20, 18, 18, 12, 18, 18, 18, 22,
         24, 24, 24, 24, 20, 20, 16, 20, 20, 50,
     ]
+    larguras_geral = larguras_dito(colunas_geral, larguras_geral)
     for i, largura in enumerate(larguras_geral, start=1):
         aba_geral.column_dimensions[
             aba_geral.cell(row=1, column=i).column_letter

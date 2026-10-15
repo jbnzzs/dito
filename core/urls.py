@@ -1,5 +1,7 @@
 from django.urls import path
 from . import views
+from .relatorios_fotoweb_csv import relatorios_exportar_fotoweb_csv
+from .relatorios_csv import relatorios_exportar_csv
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
@@ -70,6 +72,8 @@ urlpatterns = [
     # ---- Relatórios ----
     path("relatorios/", views.relatorios_lista, name="relatorios_lista"),
     path("relatorios/exportar/", views.relatorios_exportar, name="relatorios_exportar"),
+    path("relatorios/exportar-fotoweb-csv/", relatorios_exportar_fotoweb_csv, name="relatorios_exportar_fotoweb_csv"),
+    path("relatorios/exportar-csv/", relatorios_exportar_csv, name="relatorios_exportar_csv"),
     path(
         "relatorios/exportar-fotoweb/",
         views.relatorios_exportar_fotoweb,

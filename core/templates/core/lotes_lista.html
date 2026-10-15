@@ -433,6 +433,14 @@
                             {{ item.obj.criado_em|date:"d/m/Y" }}
                         </span>
                         {% endif %}
+
+                        {# DITO_REVISAO_PERCURSO_V1: autorias já concluídas #}
+                        {% if item.obj.revisores_concluidos_texto %}
+                        <span>
+                            <i class="bi bi-clipboard-check me-1"></i>
+                            Revisão: {{ item.obj.revisores_concluidos_texto }}
+                        </span>
+                        {% endif %}
                     </div>
 
                 </div>
