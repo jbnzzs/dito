@@ -1,0 +1,21 @@
+/* DITO_CREDITOS_E_TITULOS_SEM_ICONS_20261019 */
+/* Creditos discretos, sem modificar estilos ou tamanhos dos icones. */
+.dito-creditos-menu {
+  margin: 8px 4px 0;
+  padding: 8px 3px 0;
+  border-top: 1px solid rgba(255,255,255,.09);
+  text-align: center;
+  font-family: Manrope, system-ui, sans-serif;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #AAB9C8;
+  white-space: normal;
+}
+.dito-sidebar.collapsed .dito-creditos-menu {display: none;}
+.dito-credito-login {
+  margin: 14px 0 0;
+  text-align: center;
+  font-family: Manrope, system-ui, sans-serif;
+  font-size: 11px;
+  color: #6D7984;
+}

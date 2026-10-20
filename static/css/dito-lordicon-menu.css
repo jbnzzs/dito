@@ -1,0 +1,98 @@
+/* DITO_LORDICON_MENU_V1: menu lateral e ações de conta */
+.dito-lordicon-slot {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    min-width: 1.25rem;
+    flex: 0 0 1.25rem;
+    line-height: 1;
+    color: inherit;
+    vertical-align: middle;
+}
+.dito-lordicon-slot > i {
+    font-size: 1.05rem;
+    line-height: 1;
+    margin: 0;
+}
+.dito-lordicon-stage {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    pointer-events: none;
+    color: inherit;
+}
+.dito-lordicon-stage > svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+.dito-lordicon-slot.dito-lordicon-carregado > i { visibility: hidden; }
+.dito-lordicon-slot.dito-lordicon-carregado .dito-lordicon-stage { opacity: 1; }
+/* O mesmo JSON funciona na sidebar escura e no cabeçalho claro. */
+.dito-lordicon-stage svg [fill]:not([fill="none"]) { fill: currentColor !important; }
+.dito-lordicon-stage svg [stroke]:not([stroke="none"]) { stroke: currentColor !important; }
+/* Preserva o posicionamento central no modo recolhido. */
+.dito-sidebar.collapsed .dito-sidebar-nav .dito-nav-item > .dito-lordicon-slot {
+    margin: 0 !important;
+    min-width: 1.25rem;
+    flex: 0 0 1.25rem;
+}
+.dito-header-right .dito-conta-acao > .dito-lordicon-slot {
+    width: 1.125rem;
+    min-width: 1.125rem;
+    height: 1.125rem;
+    flex: 0 0 1.125rem;
+}
+@media (prefers-reduced-motion: reduce) {
+    .dito-lordicon-slot .dito-lordicon-stage { opacity: 0 !important; }
+    .dito-lordicon-slot > i { visibility: visible !important; }
+}
+
+/* DITO_LORDICON_AJUSTE_V4: INICIO */
+/* Menu somente: 21px, traco Lottie real aumentado moderadamente no JS.
+   Preserva Configurações e Sair, inclusive a expansão do cabeçalho. */
+.dito-sidebar-nav .dito-nav-item .dito-lordicon-slot,
+.dito-sidebar.collapsed .dito-sidebar-nav .dito-nav-item > .dito-lordicon-slot {
+    width: 1.3125rem;
+    min-width: 1.3125rem;
+    height: 1.3125rem;
+    flex: 0 0 1.3125rem;
+    color: inherit;
+}
+.dito-sidebar-nav .dito-nav-item .dito-lordicon-stage svg {
+    overflow: visible;
+}
+.dito-sidebar-nav .dito-nav-item .dito-lordicon-slot > i {
+    font-size: 1.1rem;
+    -webkit-text-stroke: 0;
+}
+/* DITO_LORDICON_AJUSTE_V4: FIM */
+
+/* DITO_LORDICON_CABECALHO_V5: INICIO */
+/* Igual ao menu aprovado V4: 21px, tracos reais 15 -> 20,25 no JS.
+   Com 9px de padding lateral o desenho cabe no botao recolhido de 40px.
+   Mantem as animacoes de expansao Configuracoes/Sair. */
+.dito-header-right .dito-conta-acao {
+    padding-left: 9px;
+    padding-right: 9px;
+}
+.dito-header-right .dito-conta-acao > .dito-lordicon-slot {
+    width: 1.3125rem;
+    min-width: 1.3125rem;
+    height: 1.3125rem;
+    flex: 0 0 1.3125rem;
+    color: inherit;
+}
+.dito-header-right .dito-conta-acao .dito-lordicon-stage svg {
+    overflow: visible;
+}
+.dito-header-right .dito-conta-acao > .dito-lordicon-slot > i {
+    font-size: 1.1rem;
+    -webkit-text-stroke: 0;
+}
+/* DITO_LORDICON_CABECALHO_V5: FIM */

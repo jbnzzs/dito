@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Dito!{% endblock %}</title>
+    <title>Dito! | {% block title %}Dashboard{% endblock %} | © João Bueno</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
@@ -374,55 +374,13 @@
 
 
 
-/* DITO_MOTION_V3_BEGIN */
-.dito-sidebar-nav .dito-nav-item .dito-motion-svg{width:1em;height:1em;min-width:1em;display:inline-block;vertical-align:-.125em;overflow:visible;flex-shrink:0}
-.dito-sidebar-nav .dito-nav-item[data-dito-v3] .dito-motion-svg *{transform-box:fill-box;transform-origin:center}
-@keyframes dm3-drop{0%{transform:translateY(-7px);opacity:.15}65%{transform:translateY(1px);opacity:1}100%{transform:none;opacity:1}}
-@keyframes dm3-search{0%,100%{transform:none}35%{transform:translate(2px,-2px) rotate(12deg)}70%{transform:translate(-1px,1px) rotate(-8deg)}}
-@keyframes dm3-scan{0%,100%{opacity:0}40%,65%{opacity:1}}
-@keyframes dm3-back{0%{transform:translate(-4px,-3px);opacity:.3}100%{transform:none;opacity:1}}
-@keyframes dm3-front{0%{transform:translate(5px,4px);opacity:.3}100%{transform:none;opacity:1}}
-@keyframes dm3-draw{from{stroke-dashoffset:28}to{stroke-dashoffset:0}}
-@keyframes dm3-clock{from{transform:rotate(0)}to{transform:rotate(-360deg)}}
-@keyframes dm3-bar{0%{transform:scaleY(.05)}75%{transform:scaleY(1.08)}100%{transform:scaleY(1)}}
-@keyframes dm3-folder{0%,100%{transform:rotate(0)}50%{transform:rotate(-24deg) translateY(1px)}}
-@keyframes dm3-page-l{0%,100%{transform:scaleX(1)}50%{transform:scaleX(.65) skewY(-6deg)}}
-@keyframes dm3-page-r{0%,100%{transform:scaleX(1)}50%{transform:scaleX(.65) skewY(6deg)}}
-@keyframes dm3-sign-l{from{transform:translateX(-12px);opacity:.1}to{transform:none;opacity:1}}
-@keyframes dm3-sign-r{from{transform:translateX(12px);opacity:.1}to{transform:none;opacity:1}}
-@keyframes dm3-person{from{transform:translateY(5px);opacity:0}to{transform:none;opacity:1}}
-@keyframes dm3-shield{from{stroke-dashoffset:85}to{stroke-dashoffset:0}}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="home"] .roof{animation:dm3-drop .52s ease both}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="stack"] .sheet-a{animation:dm3-drop .45s ease both}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="stack"] .sheet-b{animation:dm3-drop .45s .13s ease both}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="stack"] .sheet-c{animation:dm3-drop .45s .26s ease both}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="search"] .lens{animation:dm3-search .65s ease both}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="search"] .scan{animation:dm3-scan .65s ease both}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="images"] .photo-back{animation:dm3-back .5s ease both}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="images"] .photo-front{animation:dm3-front .5s .12s ease both}
-.dito-nav-item[data-dito-v3="tasks"] .tick{stroke-dasharray:28;stroke-dashoffset:0}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="tasks"] .tick{animation:dm3-draw .55s ease both}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="history"] .hand{animation:dm3-clock .7s ease both;transform-origin:37% 45%}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="reports"] .bar-one{animation:dm3-bar .45s ease both;transform-origin:bottom}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="reports"] .bar-two{animation:dm3-bar .45s .12s ease both;transform-origin:bottom}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="reports"] .bar-three{animation:dm3-bar .45s .24s ease both;transform-origin:bottom}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="folder"] .folder-lid{animation:dm3-folder .65s ease both;transform-origin:top left}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="book"] .page-left{animation:dm3-page-l .65s ease both;transform-origin:right}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="book"] .page-right{animation:dm3-page-r .65s ease both;transform-origin:left}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="sign"] .sign-left{animation:dm3-sign-l .5s ease both}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="sign"] .sign-right{animation:dm3-sign-r .5s .14s ease both}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="users"] .person-left{animation:dm3-person .4s ease both}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="users"] .person-mid{animation:dm3-person .4s .13s ease both}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="users"] .person-right{animation:dm3-person .4s .26s ease both}
-.dito-nav-item[data-dito-v3="shield"] .shield{stroke-dasharray:85}
-.dito-nav-item[data-dito-v3="shield"] .shield-check{stroke-dasharray:28}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="shield"] .shield{animation:dm3-shield .65s ease both}
-.dito-nav-item:is(:hover,:focus-visible)[data-dito-v3="shield"] .shield-check{animation:dm3-draw .4s .32s ease both}
-@media(prefers-reduced-motion:reduce){.dito-sidebar-nav .dito-nav-item[data-dito-v3] .dito-motion-svg *{animation:none!important}}
-/* DITO_MOTION_V3_END */
+
 </style>
     <!-- DITO_PALETA_STATUS_20261009 -->
     <link rel="stylesheet" href="{% static 'css/dito-status-cores.css' %}?v=20261009lotes">
+    <!-- DITO_LORDICON_MENU_V1: estilos -->
+    <link rel="stylesheet" href="{% static 'css/dito-lordicon-menu.css' %}?v=5">
+    <link rel="stylesheet" href="{% static 'css/dito-identidade.css' %}?v=1">
 </head>
 <body>
 
@@ -448,34 +406,34 @@
             <span class="dito-nav-section">Principal</span>
 
             <a href="{% url 'dashboard' %}" class="dito-nav-item {% block nav_dashboard %}{% endblock %}">
-                <i class="bi bi-house"></i>
+                <span class="dito-lordicon-slot" data-lordicon-src="{% static 'icons/system-outline-4143-houses.json' %}" data-lordicon-marker="default:hover-pinch" aria-hidden="true"><i class="bi bi-house"></i><span class="dito-lordicon-stage"></span></span>
                 <span class="dito-nav-label">Dashboard</span>
             </a>
 
             <a href="{% url 'lotes_lista' %}" class="dito-nav-item {% block nav_lotes %}{% endblock %}">
-                <i class="bi bi-collection"></i>
+                <span class="dito-lordicon-slot" data-lordicon-src="{% static 'icons/system-outline-12-layers.json' %}" data-lordicon-marker="default:hover-pinch" aria-hidden="true"><i class="bi bi-collection"></i><span class="dito-lordicon-stage"></span></span>
                 <span class="dito-nav-label">Lotes</span>
             </a>
 
             <a href="{% url 'buscar_retranca' %}" class="dito-nav-item {% block nav_busca %}{% endblock %}">
-                <i class="bi bi-search"></i>
+                <span class="dito-lordicon-slot" data-lordicon-src="{% static 'icons/system-outline-19-magnifier.json' %}" data-lordicon-marker="default:hover-pinch" aria-hidden="true"><i class="bi bi-search"></i><span class="dito-lordicon-stage"></span></span>
                 <span class="dito-nav-label">Buscar retranca</span>
             </a>
 
             <!-- Itens que antes ficavam na seção "Editorial" (coordenador e administrador) -->
             {% if request.user.tipo == 'coordenador' or request.user.tipo == 'administrador' %}
             <a href="{% url 'imagens_lista' %}" class="dito-nav-item {% block nav_imagens %}{% endblock %}">
-                <i class="bi bi-images"></i>
+                <span class="dito-lordicon-slot" data-lordicon-src="{% static 'icons/system-outline-54-image-mountain.json' %}" data-lordicon-marker="default:hover-pinch" aria-hidden="true"><i class="bi bi-images"></i><span class="dito-lordicon-stage"></span></span>
                 <span class="dito-nav-label">Imagens</span>
             </a>
 
             <a href="{% url 'historico_lista' %}" class="dito-nav-item {% block nav_historico %}{% endblock %}">
-                <i class="bi bi-clock-history"></i>
+                <span class="dito-lordicon-slot" data-lordicon-src="{% static 'icons/system-outline-3105-clock-arrow-rotate-right.json' %}" data-lordicon-marker="default:hover-pinch" aria-hidden="true"><i class="bi bi-clock-history"></i><span class="dito-lordicon-stage"></span></span>
                 <span class="dito-nav-label">Histórico</span>
             </a>
 
             <a href="{% url 'relatorios_lista' %}" class="dito-nav-item {% block nav_relatorios %}{% endblock %}">
-                <i class="bi bi-bar-chart"></i>
+                <span class="dito-lordicon-slot" data-lordicon-src="{% static 'icons/system-outline-153-bar-chart-vertical-grow.json' %}" data-lordicon-marker="default:hover-pinch" aria-hidden="true"><i class="bi bi-bar-chart"></i><span class="dito-lordicon-stage"></span></span>
                 <span class="dito-nav-label">Relatórios</span>
             </a>
             {% endif %}
@@ -484,23 +442,23 @@
             <span class="dito-nav-section">Gestão</span>
 
             <a href="{% url 'projeto_lista' %}" class="dito-nav-item {% block nav_projetos %}{% endblock %}">
-                <i class="bi bi-folder2-open"></i>
+                <span class="dito-lordicon-slot" data-lordicon-src="{% static 'icons/system-outline-120-folder.json' %}" data-lordicon-marker="default:hover-pinch" aria-hidden="true"><i class="bi bi-folder2-open"></i><span class="dito-lordicon-stage"></span></span>
                 <span class="dito-nav-label">Projetos</span>
             </a>
 
             <a href="{% url 'componente_lista' %}" class="dito-nav-item {% block nav_componentes %}{% endblock %}">
-                <i class="bi bi-journal-bookmark"></i>
+                <span class="dito-lordicon-slot" data-lordicon-src="{% static 'icons/system-outline-4092-book.json' %}" data-lordicon-marker="default:hover-pinch" aria-hidden="true"><i class="bi bi-journal-bookmark"></i><span class="dito-lordicon-stage"></span></span>
                 <span class="dito-nav-label">Componentes</span>
             </a>
 
             <a href="{% url 'status_lista' %}" class="dito-nav-item {% block nav_status %}{% endblock %}">
-                <i class="bi bi-signpost-split"></i>
+                <span class="dito-lordicon-slot" data-lordicon-src="{% static 'icons/system-outline-469-flag.json' %}" data-lordicon-marker="default:hover-pinch" aria-hidden="true"><i class="bi bi-signpost-split"></i><span class="dito-lordicon-stage"></span></span>
                 <span class="dito-nav-label">Status do Workflow</span>
             </a>
 
             {% if request.user.tipo == 'administrador' %}
             <a href="{% url 'usuarios_lista' %}" class="dito-nav-item {% block nav_usuarios %}{% endblock %}">
-                <i class="bi bi-people-fill"></i>
+                <span class="dito-lordicon-slot" data-lordicon-src="{% static 'icons/system-outline-314-avatars-group.json' %}" data-lordicon-marker="default:hover-pinch" aria-hidden="true"><i class="bi bi-people-fill"></i><span class="dito-lordicon-stage"></span></span>
                 <span class="dito-nav-label">Usuários</span>
             </a>
             {% endif %}
@@ -510,7 +468,7 @@
             <span class="dito-nav-section">Sistema</span>
 
             <a href="/admin/" class="dito-nav-item">
-                <i class="bi bi-shield-check"></i>
+                <span class="dito-lordicon-slot" data-lordicon-src="{% static 'icons/system-outline-457-shield-check.json' %}" data-lordicon-marker="default:hover-pinch" aria-hidden="true"><i class="bi bi-shield-check"></i><span class="dito-lordicon-stage"></span></span>
                 <span class="dito-nav-label">Painel Adm</span>
             </a>
             {% endif %}
@@ -523,6 +481,7 @@
                 <i class="bi bi-chevron-double-left"></i>
                 <span class="dito-collapse-label">Recolher menu</span>
             </button>
+            <div class="dito-creditos-menu">Desenvolvido por João Bueno © 2026</div>
         </div>
 
     </aside>
@@ -545,7 +504,7 @@
                 <a href="{% url 'minha_conta' %}"
                    class="dito-conta-acao dito-conta-config"
                    aria-label="Configurações" title="Configurações">
-                    <i class="bi bi-gear" aria-hidden="true"></i>
+                    <span class="dito-lordicon-slot" data-lordicon-src="{% static 'icons/system-outline-39-cog.json' %}" data-lordicon-marker="hover-mechanic" aria-hidden="true"><i class="bi bi-gear"></i><span class="dito-lordicon-stage"></span></span>
                     <span class="dito-conta-rotulo" aria-hidden="true">Configurações</span>
                 </a>
 
@@ -554,7 +513,7 @@
                     {% csrf_token %}
                     <button type="submit" class="dito-conta-acao dito-conta-sair"
                             aria-label="Sair" title="Sair">
-                        <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                        <span class="dito-lordicon-slot" data-lordicon-src="{% static 'icons/system-outline-381-arrow-right-sign-out.json' %}" data-lordicon-marker="hover-slide" aria-hidden="true"><i class="bi bi-box-arrow-right"></i><span class="dito-lordicon-stage"></span></span>
                         <span class="dito-conta-rotulo" aria-hidden="true">Sair</span>
                     </button>
                 </form>
@@ -589,5 +548,8 @@
     });
 </script>
 
+    <!-- DITO_LORDICON_MENU_V1: animações Lordicon com fallback Bootstrap Icons -->
+    <script src="https://cdn.jsdelivr.net/npm/lottie-web@5.12.2/build/player/lottie.min.js" defer></script>
+    <script src="{% static 'js/dito-lordicon-menu.js' %}?v=5" defer></script>
 </body>
 </html>
