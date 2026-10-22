@@ -4957,7 +4957,7 @@ def aprovar_solicitacao(request, pk):
         try:
             url_login = request.build_absolute_uri(reverse("login"))
             send_mail(
-                subject="Dito! — Seu acesso foi aprovado",
+                subject="Dito! | Seu acesso foi aprovado",
                 message=(
                     f"Olá, {solicitante.get_full_name() or solicitante.email}!\n\n"
                     f"Seu acesso ao Dito! foi aprovado.\n"
@@ -4965,7 +4965,7 @@ def aprovar_solicitacao(request, pk):
                     f"Acesse: {url_login}\n\n"
                     "Utilize a senha escolhida no cadastro. Se não lembrar, "
                     "selecione 'Esqueci minha senha' na página de login.\n\n"
-                    "Dito! — Notificação automática (ambiente de teste)"
+                    "Dito! | Notificação automática (ambiente de teste)"
                 ),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[solicitante.email],
@@ -5624,13 +5624,10 @@ def _data_filtro(valor):
         return None
 
 
-def _imagens_relatorio(request):
-    """
-    Queryset base do relatório geral.
+def _imagens_relatorio(request, aplicar_filtros=True):
+    """Queryset do relatório; a tela e as exportações usam os mesmos filtros.
 
-    Todos os filtros desta função são compartilhados pela tela e pela
-    exportação. Assim, o Excel sempre contém exatamente o mesmo conjunto
-    encontrado no relatório após aplicar os filtros.
+    aplicar_filtros=False só é usado quando explicitamente solicitado.
     """
     imagens = (
         Imagem.objects
@@ -5649,6 +5646,9 @@ def _imagens_relatorio(request):
         .prefetch_related("descricao__trechos")
         .order_by("nome_obra", "retranca")
     )
+
+    if not aplicar_filtros:
+        return imagens
 
     retranca_f = request.GET.get("retranca", "").strip()
     if retranca_f:
@@ -5713,7 +5713,10 @@ def _imagens_relatorio(request):
     if data_fim:
         imagens = imagens.filter(criado_em__date__lte=data_fim)
 
-    return imagens
+    # DITO_FILTROS_CABECALHO_V5: aplica filtros de cada coluna no SQL.
+    # A mesma função atende à tela, Excel e CSV.
+    from .filtros_relatorio_cabecalhos import aplicar_filtros_cabecalho
+    return aplicar_filtros_cabecalho(imagens, request)
 
 
 def _imagens_finalizadas(request):
@@ -5763,6 +5766,17 @@ def relatorios_lista(request):
     )
     pagina_obj = paginacao["pagina_obj"]
 
+    # A tabela mostra todas as colunas; as datas vêm do histórico por imagem.
+    # Prefetch somente da página exibida para não consultar por linha/célula.
+    from django.db.models import prefetch_related_objects
+    from .relatorios_datas import historico_prefetch_dito, datas_tela_dito
+
+    pagina_obj.object_list = list(pagina_obj.object_list)
+    prefetch_related_objects(pagina_obj.object_list, historico_prefetch_dito())
+    cache_lotes = {}
+    for imagem in pagina_obj.object_list:
+        imagem.datas_relatorio = datas_tela_dito(imagem, cache_lotes)
+
     # Query string compartilhada por exportação e paginação.
     # "pagina" não entra porque o Excel exporta todo o resultado filtrado,
     # não apenas a página atual da tabela.
@@ -5801,7 +5815,9 @@ def relatorios_lista(request):
         .order_by("ordem", "nome")
     )
 
-    filtros_ativos = any([
+    from .filtros_relatorio_cabecalhos import parametros_cabecalho
+    filtros_cabecalho_parametros = parametros_cabecalho(request)
+    filtros_ativos = bool(filtros_cabecalho_parametros) or any([
         request.GET.get("retranca"),
         request.GET.get("projeto"),
         request.GET.get("obra"),
@@ -5859,6 +5875,8 @@ def relatorios_lista(request):
 
         "filtros_query": filtros_query,
         "filtros_ativos": filtros_ativos,
+        "filtros_cabecalho_parametros": filtros_cabecalho_parametros,
+        "etapas_relatorio": list(Imagem.Etapa.choices),
         "por_pagina": paginacao["por_pagina"],
         "por_pagina_opcoes": paginacao["por_pagina_opcoes"],
         "qs_sem_pagina": paginacao["qs_sem_pagina"],
@@ -6082,24 +6100,20 @@ def relatorios_exportar_fotoweb(request):
     return resposta
 
 @login_required
-@limitar_xlsx_200
 def relatorios_exportar(request):
-    """
-    Exporta um arquivo .xlsx com duas abas.
+    """Exporta apenas as imagens que correspondem aos filtros ativos.
 
-    A função usa _imagens_relatorio(request), portanto TODOS os filtros
-    escolhidos na tela também são respeitados no arquivo exportado.
-
-    1. Geral
-       Todas as imagens que respeitam os filtros atuais.
-
-    2. FotoWeb - Finalizados
-       Apenas as imagens filtradas que já chegaram ao status final.
+    As colunas visuais ocultas não afetam o download. A aba FotoWeb é um
+    subconjunto das imagens filtradas que já foram finalizadas.
     """
     from django.http import HttpResponse
     from django.utils import timezone
     from openpyxl import Workbook
-    from .relatorios_colunas import colunas_dito, selecionar_valores_dito, larguras_dito
+    from .relatorios_colunas import (
+        colunas_exportacao_dito, selecionar_valores_dito, larguras_dito,
+    )
+    from .relatorios_datas import imagens_exportacao_dito, datas_formatadas_dito
+    from .relatorios_csv import _imagens_em_blocos
 
     def _valor_data_excel(valor, incluir_hora=False):
         """
@@ -6120,27 +6134,27 @@ def relatorios_exportar(request):
 
         return valor.strftime("%d/%m/%Y")
 
-    imagens = list(_imagens_relatorio(request))
-    imagens_finalizadas = [
-        imagem
-        for imagem in imagens
-        if imagem.status
-        and imagem.status.is_final
-        and getattr(getattr(imagem, "descricao", None), "finalizado", False)
-    ]
-
-    wb = Workbook()
+    # Iteração paginada: não carrega todas as imagens ou históricos na RAM.
+    queryset = imagens_exportacao_dito(request)
+    wb = Workbook(write_only=True)
 
     # ========================================================
     # ABA 1 — RELATÓRIO GERAL
     # ========================================================
-    aba_geral = wb.active
-    aba_geral.title = "Geral"
-
-    colunas_geral = colunas_dito(request)
+    aba_geral = wb.create_sheet("Geral")
+    colunas_geral = colunas_exportacao_dito()
+    larguras_geral = larguras_dito(
+        colunas_geral,
+        [28, 22, 20, 18, 18, 12, 18, 18, 18, 22,
+         24, 24, 24, 24, 20, 20, 16, 20, 20, 50],
+    )
+    for i, largura in enumerate(larguras_geral, start=1):
+        from openpyxl.utils import get_column_letter
+        aba_geral.column_dimensions[get_column_letter(i)].width = largura
     aba_geral.append(colunas_geral)
 
-    for imagem in imagens:
+    cache_lotes = {}
+    for imagem in _imagens_em_blocos(queryset):
         descricao = getattr(imagem, "descricao", None)
 
         if descricao:
@@ -6211,22 +6225,19 @@ def relatorios_exportar(request):
                 incluir_hora=True,
             ),
             descricao_flat or None,
-        ], colunas_geral))
-
-    larguras_geral = [
-        28, 22, 20, 18, 18, 12, 18, 18, 18, 22,
-        24, 24, 24, 24, 20, 20, 16, 20, 20, 50,
-    ]
-    larguras_geral = larguras_dito(colunas_geral, larguras_geral)
-    for i, largura in enumerate(larguras_geral, start=1):
-        aba_geral.column_dimensions[
-            aba_geral.cell(row=1, column=i).column_letter
-        ].width = largura
+        ], colunas_geral, datas=datas_formatadas_dito(imagem, _valor_data_excel, cache_lotes)))
 
     # ========================================================
     # ABA 2 — FORMATO FOTOWEB (SÓ FINALIZADOS)
     # ========================================================
     aba_fotoweb = wb.create_sheet("FotoWeb - Finalizados")
+
+    # No modo write_only as larguras precisam ser definidas antes do cabeçalho.
+    from openpyxl.utils import get_column_letter
+    for i, largura in enumerate(
+        [16, 14, 8, 10, 10, 14, 24, 40, 40, 14, 12, 24, 40], start=1,
+    ):
+        aba_fotoweb.column_dimensions[get_column_letter(i)].width = largura
 
     colunas_fotoweb = [
         "obra",
@@ -6245,7 +6256,12 @@ def relatorios_exportar(request):
     ]
     aba_fotoweb.append(colunas_fotoweb)
 
-    for imagem in imagens_finalizadas:
+    for imagem in _imagens_em_blocos(queryset):
+        if not (
+            imagem.status and imagem.status.is_final
+            and getattr(getattr(imagem, "descricao", None), "finalizado", False)
+        ):
+            continue
         descricao = imagem.descricao
         trechos = list(
             descricao.trechos
@@ -6283,14 +6299,6 @@ def relatorios_exportar(request):
             imagem.retranca.lower(),
             descricao_flat or None,
         ])
-
-    for i, largura in enumerate(
-        [16, 14, 8, 10, 10, 14, 24, 40, 40, 14, 12, 24, 40],
-        start=1,
-    ):
-        aba_fotoweb.column_dimensions[
-            aba_fotoweb.cell(row=1, column=i).column_letter
-        ].width = largura
 
     resposta = HttpResponse(
         content_type=(

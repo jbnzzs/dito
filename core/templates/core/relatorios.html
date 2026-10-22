@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Relatórios{% endblock %}
 {% block page_title %}Relatórios{% endblock %}
@@ -24,15 +25,13 @@
             class="text-secondary mb-0"
             style="font-size:0.875rem;"
         >
-            Filtre as imagens e exporte exatamente o resultado exibido.
+            Os filtros selecionam as imagens da tabela e da exportação Dito; as colunas ocultas são exportadas.
         </p>
     </div>
 
 
     <div class="d-flex align-items-center gap-2 flex-wrap">
 
-        {% if total > 0 %}
-            {% if total <= 200 %}
             <a
                 href="{% url 'relatorios_exportar' %}{% if filtros_query %}?{{ filtros_query }}{% endif %}"
                 class="btn btn-primary"
@@ -40,7 +39,6 @@
                 <i class="bi bi-file-earmark-excel me-1"></i>
                 Exportar Dito (Excel)
             </a>
-            {% endif %}
 
             <a
                 href="{% url 'relatorios_exportar_csv' %}{% if filtros_query %}?{{ filtros_query }}{% endif %}"
@@ -50,6 +48,7 @@
                 Exportar Dito (CSV)
             </a>
 
+            {% if total > 0 %}
             {% if total <= 200 %}
             <a
                 href="{% url 'relatorios_exportar_fotoweb' %}{% if filtros_query %}?{{ filtros_query }}{% endif %}"
@@ -67,15 +66,13 @@
                 <i class="bi bi-filetype-csv me-1"></i>
                 Exportar FotoWeb (CSV)
             </a>
-        {% else %}
-            <span class="text-secondary small">Nenhuma imagem para exportar.</span>
-        {% endif %}
+            {% endif %}
 
     </div>
     {% if total > 200 %}
     <p class="text-secondary small mb-0 mt-2">
-        Resultado filtrado com {{ total }} imagens: exportação Excel limitada a 200.
-        Utilize CSV para exportar todas as imagens do resultado.
+        O Excel do FotoWeb permanece limitado a 200 imagens filtradas.
+        Exportar Dito (Excel ou CSV) inclui somente as imagens filtradas, sem limite de 200.
     </p>
     {% endif %}
 
@@ -240,7 +237,7 @@
                     class="text-secondary"
                     style="font-size:0.78rem;"
                 >
-                    Os filtros podem ser combinados. A exportação respeita todos eles.
+                    Os filtros podem ser combinados: eles também se aplicam à exportação Dito.
                 </div>
 
             </div>
@@ -259,7 +256,11 @@
         </div>
 
 
-        <form method="get">
+        <form method="get" id="dito-relatorio-filtros-legados">
+            {# Preserva filtros aplicados diretamente nos cabeçalhos. #}
+            {% for filtro in filtros_cabecalho_parametros %}
+            <input type="hidden" name="{{ filtro.nome }}" value="{{ filtro.valor }}">
+            {% endfor %}
 
             <div class="row g-3">
 
@@ -541,6 +542,19 @@
                 </div>
 
 
+            </div>
+
+            {# V8: principais sempre visiveis, complementares no mesmo formulario. #}
+            <details class="dito-relatorio-avancados mt-3" id="dito-relatorio-avancados">
+                <summary class="dito-relatorio-avancados-toggle" aria-controls="dito-relatorio-avancados-campos">
+                    <i class="bi bi-sliders" aria-hidden="true"></i>
+                    <span>Filtros avançados</span>
+                    <span class="dito-relatorio-avancados-contador" id="dito-relatorio-avancados-contador" hidden></span>
+                    <i class="bi bi-chevron-down dito-relatorio-avancados-seta" aria-hidden="true"></i>
+                </summary>
+                <div class="row g-3 mt-1 pt-2 dito-relatorio-avancados-campos"
+                     id="dito-relatorio-avancados-campos">
+
                 {# 8. PAGAMENTO DESCRITOR #}
                 <div class="col-md-6 col-xl-3">
 
@@ -660,7 +674,154 @@
 
                 </div>
 
-            </div>
+
+                {# V7: todos os demais filtros no MESMO formulario superior. #}
+                <div class="col-md-6 col-xl-3">
+                    <label for="dito-super-volume" class="form-label mb-1">Volume/Ano/Módulo</label>
+                    <input type="search" id="dito-super-volume" name="cf_volume"
+                           data-dito-filtro-novo="1" class="form-control form-control-sm"
+                           placeholder="Ex.: V2, 8º ano..." autocomplete="off">
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label for="dito-super-capitulo" class="form-label mb-1">Capítulo/Unidade</label>
+                    <input type="search" id="dito-super-capitulo" name="cf_capitulo"
+                           data-dito-filtro-novo="1" class="form-control form-control-sm"
+                           placeholder="Pesquisar capítulo ou unidade..." autocomplete="off">
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label for="dito-super-descritor" class="form-label mb-1">Descritor</label>
+                    <input type="search" id="dito-super-descritor" name="cf_descritor"
+                           data-dito-filtro-novo="1" class="form-control form-control-sm"
+                           placeholder="Pesquisar nome ou e-mail..." autocomplete="off">
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label for="dito-super-revisor" class="form-label mb-1">Revisor</label>
+                    <input type="search" id="dito-super-revisor" name="cf_revisor"
+                           data-dito-filtro-novo="1" class="form-control form-control-sm"
+                           placeholder="Pesquisar nome ou e-mail..." autocomplete="off">
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label for="dito-super-coordenador" class="form-label mb-1">Coordenador</label>
+                    <input type="search" id="dito-super-coordenador" name="cf_coordenador"
+                           data-dito-filtro-novo="1" class="form-control form-control-sm"
+                           placeholder="Pesquisar nome ou e-mail..." autocomplete="off">
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label for="dito-super-descricao" class="form-label mb-1">Descrição completa</label>
+                    <input type="search" id="dito-super-descricao" name="cf_descricao"
+                           data-dito-filtro-novo="1" class="form-control form-control-sm"
+                           placeholder="Pesquisar palavras na descrição..." autocomplete="off">
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label for="dito-super-etapa" class="form-label mb-1">Etapa</label>
+                    <select id="dito-super-etapa" name="cf_etapa"
+                            data-dito-filtro-novo="1" class="form-select form-select-sm">
+                        <option value="">Todas as etapas</option>
+                        {% for valor, nome in etapas_relatorio %}
+                        <option value="{{ valor }}">{{ nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label mb-1" for="dito-super-prevista-de">Data prevista do lote</label>
+                    <div class="dito-relatorio-periodo">
+                        <input type="date" id="dito-super-prevista-de" name="cf_prevista_de"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Data prevista do lote: de" title="De (inclusive)">
+                        <input type="date" id="dito-super-prevista-ate" name="cf_prevista_ate"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Data prevista do lote: até" title="Até (inclusive)">
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label mb-1" for="dito-super-efetiva-de">Data efetiva do lote</label>
+                    <div class="dito-relatorio-periodo">
+                        <input type="date" id="dito-super-efetiva-de" name="cf_efetiva_de"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Data efetiva do lote: de" title="De (inclusive)">
+                        <input type="date" id="dito-super-efetiva-ate" name="cf_efetiva_ate"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Data efetiva do lote: até" title="Até (inclusive)">
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label mb-1" for="dito-super-prazo-de">Prazo da imagem</label>
+                    <div class="dito-relatorio-periodo">
+                        <input type="date" id="dito-super-prazo-de" name="cf_prazo_de"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Prazo da imagem: de" title="De (inclusive)">
+                        <input type="date" id="dito-super-prazo-ate" name="cf_prazo_ate"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Prazo da imagem: até" title="Até (inclusive)">
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label mb-1" for="dito-super-atualizada-de">Atualizada em</label>
+                    <div class="dito-relatorio-periodo">
+                        <input type="date" id="dito-super-atualizada-de" name="cf_atualizada_de"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Atualizada em: de" title="De (inclusive)">
+                        <input type="date" id="dito-super-atualizada-ate" name="cf_atualizada_ate"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Atualizada em: até" title="Até (inclusive)">
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label mb-1" for="dito-super-inicio-desc-de">Início Desc.</label>
+                    <div class="dito-relatorio-periodo">
+                        <input type="date" id="dito-super-inicio-desc-de" name="cf_inicio-desc_de"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Início Desc.: de" title="De (inclusive)">
+                        <input type="date" id="dito-super-inicio-desc-ate" name="cf_inicio-desc_ate"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Início Desc.: até" title="Até (inclusive)">
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label mb-1" for="dito-super-entregue-desc-de">Entregue Desc.</label>
+                    <div class="dito-relatorio-periodo">
+                        <input type="date" id="dito-super-entregue-desc-de" name="cf_entregue-desc_de"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Entregue Desc.: de" title="De (inclusive)">
+                        <input type="date" id="dito-super-entregue-desc-ate" name="cf_entregue-desc_ate"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Entregue Desc.: até" title="Até (inclusive)">
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label mb-1" for="dito-super-inicio-rev-de">Início Rev.</label>
+                    <div class="dito-relatorio-periodo">
+                        <input type="date" id="dito-super-inicio-rev-de" name="cf_inicio-rev_de"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Início Rev.: de" title="De (inclusive)">
+                        <input type="date" id="dito-super-inicio-rev-ate" name="cf_inicio-rev_ate"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Início Rev.: até" title="Até (inclusive)">
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label mb-1" for="dito-super-entregue-rev-de">Entregue Rev.</label>
+                    <div class="dito-relatorio-periodo">
+                        <input type="date" id="dito-super-entregue-rev-de" name="cf_entregue-rev_de"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Entregue Rev.: de" title="De (inclusive)">
+                        <input type="date" id="dito-super-entregue-rev-ate" name="cf_entregue-rev_ate"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Entregue Rev.: até" title="Até (inclusive)">
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label mb-1" for="dito-super-data-final-de">Data Final</label>
+                    <div class="dito-relatorio-periodo">
+                        <input type="date" id="dito-super-data-final-de" name="cf_data-final_de"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Data Final: de" title="De (inclusive)">
+                        <input type="date" id="dito-super-data-final-ate" name="cf_data-final_ate"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="Data Final: até" title="Até (inclusive)">
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label mb-1" for="dito-super-primeira-lote-desc-de">1ª entrega do lote (Desc.)</label>
+                    <div class="dito-relatorio-periodo">
+                        <input type="date" id="dito-super-primeira-lote-desc-de" name="cf_primeira-lote-desc_de"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="1ª entrega do lote (Desc.): de" title="De (inclusive)">
+                        <input type="date" id="dito-super-primeira-lote-desc-ate" name="cf_primeira-lote-desc_ate"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="1ª entrega do lote (Desc.): até" title="Até (inclusive)">
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label mb-1" for="dito-super-primeira-lote-rev-de">1ª entrega do lote (Rev.)</label>
+                    <div class="dito-relatorio-periodo">
+                        <input type="date" id="dito-super-primeira-lote-rev-de" name="cf_primeira-lote-rev_de"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="1ª entrega do lote (Rev.): de" title="De (inclusive)">
+                        <input type="date" id="dito-super-primeira-lote-rev-ate" name="cf_primeira-lote-rev_ate"
+                               data-dito-filtro-novo="1" class="form-control form-control-sm" aria-label="1ª entrega do lote (Rev.): até" title="Até (inclusive)">
+                    </div>
+                </div>
+            </details>
 
 
             <div class="d-flex align-items-center gap-2 mt-3 flex-wrap">
@@ -695,88 +856,150 @@
 
         </form>
 
+
     </div>
 
 </div>
 
 
-{# TABELA GERAL #}
+{# TABELA GERAL - colunas independentes dos filtros e da exportação #}
+<link rel="stylesheet" href="{% static 'css/dito-relatorios-filtros-colunas.css' %}?v=8">
+<style>
+  .dito-relatorio-colunas { position: relative; }
+  .dito-relatorio-colunas summary { display: inline-flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; }
+  .dito-relatorio-colunas summary::-webkit-details-marker { display: none; }
+  .dito-relatorio-colunas-painel {
+    position: absolute; right: 0; top: calc(100% + 7px); z-index: 1050;
+    width: min(600px, calc(100vw - 48px)); max-height: 55vh; overflow-y: auto;
+    background: var(--bs-body-bg, #fff); color: var(--bs-body-color, #212529);
+    box-shadow: 0 8px 26px rgba(0, 0, 0, .14);
+  }
+  .dito-relatorio-colunas-opcoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; row-gap: 8px; }
+  .dito-relatorio-colunas-opcoes label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: .81rem; margin: 0; }
+  .dito-relatorio-tabela { width: max-content; min-width: 100%; }
+  .dito-relatorio-tabela th, .dito-relatorio-tabela td { white-space: nowrap; }
+  .dito-relatorio-tabela .dito-relatorio-descricao { max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+  .dito-relatorio-tabela [data-coluna="retranca"] {
+    position: sticky; left: 0; z-index: 2;
+    background: var(--bs-body-bg, #fff);
+  }
+  .dito-relatorio-tabela thead [data-coluna="retranca"] { z-index: 3; }
+  @media (max-width: 560px) { .dito-relatorio-colunas-opcoes { grid-template-columns: 1fr; } }
+</style>
 <div class="card">
-
     <div class="card-body p-0">
 
-        {% if pagina_obj.object_list %}
+        {% if pagina_obj.object_list or filtros_ativos %}
 
-        <div class="px-3 py-2 small text-secondary border-bottom">
-            {% if filtros_ativos %}
-                Tabela completa sem filtros; após filtrar, exibe Retranca e as colunas selecionadas.
-            {% else %}
-                Exibindo todas as imagens ativas.
-            {% endif %}
-            <strong>{{ total }}</strong>
-            {% if total == 1 %}imagem no resultado{% else %}imagens no resultado{% endif %}.
+        <div class="px-3 py-2 small text-secondary border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <span>
+                <strong>{{ total }}</strong>
+                {% if total == 1 %}imagem no resultado{% else %}imagens no resultado{% endif %}.
+                Use o funil de cada coluna para filtrar, como no Excel. Os filtros combinam entre si e
+                também valem para Excel e CSV. Ocultar uma coluna afeta somente a tela.
+            </span>
+            <details class="dito-relatorio-colunas">
+                <summary class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-layout-three-columns" aria-hidden="true"></i>
+                    Escolher colunas
+                </summary>
+                <div class="dito-relatorio-colunas-painel border rounded p-3">
+                    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                        <strong>Colunas da tabela</strong>
+                        <div class="d-flex align-items-center gap-2">
+                            <button type="button" id="dito-mostrar-todas-colunas" class="btn btn-sm btn-outline-secondary">
+                                Desmarcar todas
+                            </button>
+                            <button type="button" id="dito-fechar-colunas" class="btn btn-sm btn-outline-secondary"
+                                    aria-label="Fechar escolha de colunas" title="Fechar">
+                                <i class="bi bi-x-lg" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="small text-secondary mb-3">
+                        Desmarque para ocultar na tela. O Excel e o CSV continuarão completos.
+                    </p>
+                    <div id="dito-relatorio-colunas-opcoes" class="dito-relatorio-colunas-opcoes"></div>
+                </div>
+            </details>
         </div>
+
         <div class="table-responsive">
-
-            <table class="table table-sm mb-0 align-middle">
-
+            <table id="dito-relatorio-tabela" class="table table-sm mb-0 align-middle dito-relatorio-tabela">
                 <thead>
                     <tr>
-                        <th class="ps-3">Retranca</th>
-                        {% if request.GET.projeto %}<th>Projeto</th>{% endif %}
-                        {% if not filtros_ativos or request.GET.obra %}<th>Obra</th>{% endif %}
-                        {% if not filtros_ativos or request.GET.componente %}<th>Componente</th>{% endif %}
-                        {% if not filtros_ativos or request.GET.lote %}<th>Lote</th>{% endif %}
-                        {% if not filtros_ativos or request.GET.status %}<th>Status</th>{% endif %}
-                        {% if not filtros_ativos or request.GET.responsavel %}<th>Responsável</th>{% endif %}
-                        {% if not filtros_ativos or request.GET.pagamento_descritor %}<th>Pag. descritor</th>{% endif %}
-                        {% if not filtros_ativos or request.GET.pagamento_revisor %}<th>Pag. revisor</th>{% endif %}
-                        {% if not filtros_ativos %}<th>Prevista</th><th>Efetiva</th><th>Atualizada</th>{% endif %}
-                        {% if request.GET.data_inicio or request.GET.data_fim %}<th>Cadastrada em</th>{% endif %}
-                        <th class="text-end pe-3"></th>
+                        <th data-coluna="retranca" class="ps-3">Retranca</th>
+                        <th data-coluna="projeto">Projeto</th>
+                        <th data-coluna="obra">Obra</th>
+                        <th data-coluna="componente">Componente curricular</th>
+                        <th data-coluna="volume">Volume/Ano/Módulo</th>
+                        <th data-coluna="capitulo">Capítulo/Unidade</th>
+                        <th data-coluna="etapa">Etapa</th>
+                        <th data-coluna="lote">Lote</th>
+                        <th data-coluna="prevista">Data prevista do lote</th>
+                        <th data-coluna="efetiva">Data efetiva do lote</th>
+                        <th data-coluna="status">Status</th>
+                        <th data-coluna="responsavel">Responsável atual</th>
+                        <th data-coluna="descritor">Descritor</th>
+                        <th data-coluna="revisor">Revisor</th>
+                        <th data-coluna="coordenador">Coordenador</th>
+                        <th data-coluna="pag-descritor">Pagamento descritor</th>
+                        <th data-coluna="pag-revisor">Pagamento revisor</th>
+                        <th data-coluna="prazo">Prazo da imagem</th>
+                        <th data-coluna="cadastrada">Cadastrada em</th>
+                        <th data-coluna="atualizada">Atualizada em</th>
+                        <th data-coluna="descricao">Descrição completa</th>
+                        <th data-coluna="inicio-desc">Início Desc.</th>
+                        <th data-coluna="entregue-desc">Entregue Desc.</th>
+                        <th data-coluna="inicio-rev">Início Rev.</th>
+                        <th data-coluna="entregue-rev">Entregue Rev.</th>
+                        <th data-coluna="data-final">Data Final</th>
+                        <th data-coluna="primeira-lote-desc">1ª entrega do lote (Desc.)</th>
+                        <th data-coluna="primeira-lote-rev">1ª entrega do lote (Rev.)</th>
+                        <th class="text-end pe-3">Abrir</th>
                     </tr>
                 </thead>
-
                 <tbody>
                     {% for img in pagina_obj %}
                     <tr>
-                        <td class="ps-3"><span class="dito-retranca">{{ img.retranca }}</span></td>
-                        {% if request.GET.projeto %}
-                        <td style="font-size:0.82rem;">{{ img.projeto.nome|default:"—" }}</td>
-                        {% endif %}
-                        {% if not filtros_ativos or request.GET.obra %}
-                        <td style="font-size:0.82rem;">{{ img.nome_obra|default:"—" }}</td>
-                        {% endif %}
-                        {% if not filtros_ativos or request.GET.componente %}
-                        <td style="font-size:0.82rem;">{{ img.componente_curricular|default:"—" }}</td>
-                        {% endif %}
-                        {% if not filtros_ativos or request.GET.lote %}
-                        <td style="font-size:0.82rem;">
-                            {% if img.lote %}{{ img.lote.nome }}{% else %}<span class="text-secondary">Avulsa</span>{% endif %}
+                        <td data-coluna="retranca" class="ps-3"><span class="dito-retranca">{{ img.retranca }}</span></td>
+                        <td data-coluna="projeto">{{ img.projeto.nome|default:"—" }}</td>
+                        <td data-coluna="obra">{{ img.nome_obra|default:"—" }}</td>
+                        <td data-coluna="componente">{{ img.componente_curricular.nome|default:"—" }}</td>
+                        <td data-coluna="volume">{{ img.volume_ano_modulo|default:"—" }}</td>
+                        <td data-coluna="capitulo">{{ img.capitulo_unidade|default:"—" }}</td>
+                        <td data-coluna="etapa">{{ img.get_etapa_display|default:"—" }}</td>
+                        <td data-coluna="lote">{% if img.lote %}{{ img.lote.nome }}{% else %}Avulsa{% endif %}</td>
+                        <td data-coluna="prevista">{{ img.lote.data_prevista|date:"d/m/Y"|default:"—" }}</td>
+                        <td data-coluna="efetiva">{{ img.lote.data_efetiva|date:"d/m/Y"|default:"—" }}</td>
+                        <td data-coluna="status">
+                            {% if img.status %}
+                            <span class="dito-status dito-status-{{ img.status.slug }}" style="font-size:0.68rem;">{{ img.status.nome }}</span>
+                            {% else %}—{% endif %}
                         </td>
-                        {% endif %}
-                        {% if not filtros_ativos or request.GET.status %}
-                        <td><span class="dito-status dito-status-{{ img.status.slug }}" style="font-size:0.68rem;">{{ img.status.nome }}</span></td>
-                        {% endif %}
-                        {% if not filtros_ativos or request.GET.responsavel %}
-                        <td style="font-size:0.82rem;">
-                            {% if img.responsavel %}{{ img.responsavel.get_full_name|default:img.responsavel.email }}{% else %}<span class="text-secondary">—</span>{% endif %}
+                        <td data-coluna="responsavel">{% if img.responsavel %}{{ img.responsavel.get_full_name|default:img.responsavel.email }}{% else %}—{% endif %}</td>
+                        <td data-coluna="descritor">{% if img.descricao.descritor %}{{ img.descricao.descritor.get_full_name|default:img.descricao.descritor.email }}{% else %}—{% endif %}</td>
+                        <td data-coluna="revisor">{% if img.descricao.revisor %}{{ img.descricao.revisor.get_full_name|default:img.descricao.revisor.email }}{% else %}—{% endif %}</td>
+                        <td data-coluna="coordenador">{% if img.descricao.coordenador %}{{ img.descricao.coordenador.get_full_name|default:img.descricao.coordenador.email }}{% else %}—{% endif %}</td>
+                        <td data-coluna="pag-descritor">{{ img.get_pagamento_descritor_display }}</td>
+                        <td data-coluna="pag-revisor">{{ img.get_pagamento_revisor_display }}</td>
+                        <td data-coluna="prazo">{{ img.prazo|date:"d/m/Y"|default:"—" }}</td>
+                        <td data-coluna="cadastrada">{{ img.criado_em|date:"d/m/Y H:i"|default:"—" }}</td>
+                        <td data-coluna="atualizada">{{ img.atualizado_em|date:"d/m/Y H:i"|default:"—" }}</td>
+                        <td data-coluna="descricao" class="dito-relatorio-descricao">
+                            {% if img.descricao %}
+                                {% for trecho in img.descricao.trechos.all %}
+                                    {% if trecho.ativo %}{{ trecho.texto }} {% endif %}
+                                {% empty %}—{% endfor %}
+                            {% else %}—{% endif %}
                         </td>
-                        {% endif %}
-                        {% if not filtros_ativos or request.GET.pagamento_descritor %}
-                        <td style="font-size:0.78rem;">{{ img.get_pagamento_descritor_display }}</td>
-                        {% endif %}
-                        {% if not filtros_ativos or request.GET.pagamento_revisor %}
-                        <td style="font-size:0.78rem;">{{ img.get_pagamento_revisor_display }}</td>
-                        {% endif %}
-                        {% if not filtros_ativos %}
-                        <td class="text-secondary" style="font-size:0.78rem;">{% if img.lote and img.lote.data_prevista %}{{ img.lote.data_prevista|date:"d/m/Y" }}{% else %}—{% endif %}</td>
-                        <td class="text-secondary" style="font-size:0.78rem;">{% if img.lote and img.lote.data_efetiva %}{{ img.lote.data_efetiva|date:"d/m/Y" }}{% else %}—{% endif %}</td>
-                        <td class="text-secondary" style="font-size:0.78rem;">{{ img.atualizado_em|date:"d/m/Y H:i" }}</td>
-                        {% endif %}
-                        {% if request.GET.data_inicio or request.GET.data_fim %}
-                        <td class="text-secondary" style="font-size:0.78rem;">{{ img.criado_em|date:"d/m/Y H:i" }}</td>
-                        {% endif %}
+                        <td data-coluna="inicio-desc">{{ img.datas_relatorio.inicio_desc|date:"d/m/Y H:i"|default:"—" }}</td>
+                        <td data-coluna="entregue-desc">{{ img.datas_relatorio.entregue_desc|date:"d/m/Y H:i"|default:"—" }}</td>
+                        <td data-coluna="inicio-rev">{{ img.datas_relatorio.inicio_rev|date:"d/m/Y H:i"|default:"—" }}</td>
+                        <td data-coluna="entregue-rev">{{ img.datas_relatorio.entregue_rev|date:"d/m/Y H:i"|default:"—" }}</td>
+                        <td data-coluna="data-final">{{ img.datas_relatorio.data_final|date:"d/m/Y"|default:"—" }}</td>
+                        <td data-coluna="primeira-lote-desc">{{ img.datas_relatorio.primeira_entrega_lote_desc|date:"d/m/Y H:i"|default:"—" }}</td>
+                        <td data-coluna="primeira-lote-rev">{{ img.datas_relatorio.primeira_entrega_lote_rev|date:"d/m/Y H:i"|default:"—" }}</td>
                         <td class="text-end pe-3">
                             <a href="{% url 'descricao_imagem' img.pk %}?next={{ request.get_full_path|urlencode }}"
                                class="btn btn-sm btn-outline-secondary dito-btn-acao" title="Abrir imagem">
@@ -784,13 +1007,112 @@
                             </a>
                         </td>
                     </tr>
+                    {% empty %}
+                    <tr><td colspan="29" class="text-center text-secondary py-4">
+                        Nenhuma imagem encontrada com esses filtros. Use o funil para alterar ou limpar uma coluna.
+                    </td></tr>
                     {% endfor %}
                 </tbody>
-
             </table>
-
         </div>
+        <script>
+        (function () {
+            function iniciarSeletorColunas() {
+                const tabela = document.getElementById('dito-relatorio-tabela');
+                const opcoes = document.getElementById('dito-relatorio-colunas-opcoes');
+                const mostrarTodas = document.getElementById('dito-mostrar-todas-colunas');
+                if (!tabela || !opcoes || !mostrarTodas) return;
+                const chave = 'dito-relatorio-colunas-ocultas-v2';
+                let ocultas = [];
+                try {
+                    const salvas = JSON.parse(localStorage.getItem(chave) || '[]');
+                    if (Array.isArray(salvas)) ocultas = salvas.filter(x => typeof x === 'string');
+                } catch (_) { /* Navegador sem armazenamento: funciona na página atual. */ }
 
+                function aplicar(coluna, visivel) {
+                    tabela.querySelectorAll('[data-coluna="' + coluna + '"]').forEach(celula => {
+                        celula.style.display = visivel ? '' : 'none';
+                    });
+                }
+                function salvar() {
+                    try { localStorage.setItem(chave, JSON.stringify(ocultas)); } catch (_) {}
+                }
+
+                const painelColunas = document.querySelector('.dito-relatorio-colunas');
+                const fecharColunas = document.getElementById('dito-fechar-colunas');
+                function atualizarAlternancia() {
+                    const caixas = Array.from(opcoes.querySelectorAll('input[type="checkbox"]'));
+                    const todasVisiveis = caixas.length > 0 && caixas.every(c => c.checked);
+                    mostrarTodas.textContent = todasVisiveis ? 'Desmarcar todas' : 'Selecionar todas';
+                    mostrarTodas.setAttribute('aria-pressed', String(todasVisiveis));
+                }
+
+                tabela.querySelectorAll('thead th[data-coluna]').forEach(cabecalho => {
+                    const coluna = cabecalho.dataset.coluna;
+                    if (coluna === 'retranca') return; // Sempre identificar a imagem.
+                    const label = document.createElement('label');
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'form-check-input mt-0';
+                    checkbox.value = coluna;
+                    checkbox.checked = !ocultas.includes(coluna);
+                    checkbox.setAttribute('aria-label', 'Exibir ' + cabecalho.textContent.trim());
+                    const texto = document.createElement('span');
+                    texto.textContent = cabecalho.textContent.trim();
+                    label.append(checkbox, texto);
+                    opcoes.appendChild(label);
+                    aplicar(coluna, checkbox.checked);
+                    checkbox.addEventListener('change', function () {
+                        ocultas = checkbox.checked
+                            ? ocultas.filter(c => c !== coluna)
+                            : [...new Set([...ocultas, coluna])];
+                        aplicar(coluna, checkbox.checked);
+                        salvar();
+                        atualizarAlternancia();
+                    });
+                });
+
+                atualizarAlternancia();
+                mostrarTodas.addEventListener('click', function () {
+                    const caixas = Array.from(opcoes.querySelectorAll('input[type="checkbox"]'));
+                    const selecionar = !caixas.every(checkbox => checkbox.checked);
+                    ocultas = selecionar ? [] : caixas.map(checkbox => checkbox.value);
+                    caixas.forEach(checkbox => {
+                        checkbox.checked = selecionar;
+                        aplicar(checkbox.value, selecionar);
+                    });
+                    salvar();
+                    atualizarAlternancia();
+                });
+
+                if (painelColunas && fecharColunas) {
+                    fecharColunas.addEventListener('click', function () {
+                        painelColunas.open = false;
+                    });
+                    document.addEventListener('pointerdown', function (evento) {
+                        if (painelColunas.open && !painelColunas.contains(evento.target)) {
+                            painelColunas.open = false;
+                        }
+                    });
+                    document.addEventListener('keydown', function (evento) {
+                        if (evento.key === 'Escape' && painelColunas.open) {
+                            painelColunas.open = false;
+                            const resumo = painelColunas.querySelector('summary');
+                            if (resumo) resumo.focus();
+                        }
+                    });
+                }
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', iniciarSeletorColunas);
+            } else {
+                iniciarSeletorColunas();
+            }
+        })();
+        </script>
+
+        {{ etapas_relatorio|json_script:"dito-relatorio-etapas" }}
+        <script src="{% static 'js/dito-relatorios-filtros-colunas.js' %}?v=8" defer></script>
 
         {% include "core/_paginacao_imagens.html" %}
 
@@ -821,19 +1143,20 @@
             class="mb-1"
             style="font-size:0.82rem;"
         >
-            <strong>Exportação filtrada:</strong>
-            a lista e os downloads usam os mesmos filtros aplicados.
-            A exportação inclui todo o resultado filtrado, não só a página exibida.
-            Excel fica disponível até 200 imagens; CSV não tem esse limite.
+            <strong>Exportação Dito filtrada:</strong>
+            Excel e CSV incluem somente as imagens que atendem aos filtros,
+            com todas as colunas, as cinco datas e os marcos de primeira entrega do lote.
+            A entrega mais recente da imagem não sobrescreve a primeira entrega do lote.
+            Datas sem evento no histórico ficam vazias no arquivo.
         </p>
 
         <p
             class="mb-0 text-secondary"
             style="font-size:0.78rem;"
         >
-            A aba <strong>Geral</strong> respeita todos os filtros.
-            A aba <strong>FotoWeb - Finalizados</strong> contém somente as
-            imagens desse mesmo resultado que já estão finalizadas.
+            No Excel Dito, a aba <strong>Geral</strong> inclui as imagens ativas filtradas.
+            A aba <strong>FotoWeb - Finalizados</strong> inclui somente as finalizadas desse resultado.
+            As exportações específicas FotoWeb continuam respeitando os filtros.
         </p>
 
     </div>

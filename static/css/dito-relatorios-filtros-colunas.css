@@ -1,0 +1,103 @@
+/* Relatorio Dito!: filtros diretamente nos cabecalhos estilo Excel. */
+#dito-relatorio-tabela thead th[data-coluna] {
+  vertical-align: middle;
+  padding-right: .65rem;
+}
+.dito-filtro-botao {
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-left: .45rem; border: 1px solid transparent;
+  border-radius: 5px; padding: .2rem .28rem;
+  background: transparent; color: #6b7280; font-size: .82rem;
+  line-height: 1.2; cursor: pointer;
+}
+.dito-filtro-botao:hover, .dito-filtro-botao:focus-visible {
+  border-color: #d7dde3; background: #f2f5f9; color: #1b3a5c;
+}
+.dito-filtro-botao.dito-filtro-ativo {
+  background: #e8f2ff; color: #155a96; border-color: #a6c7ed;
+}
+.dito-filtro-menu-coluna {
+  position: fixed; z-index: 11000; width: min(290px, calc(100vw - 16px));
+  border: 1px solid #d9dfe7; border-radius: 10px; padding: 12px;
+  background: var(--bs-body-bg, #fff); color: var(--bs-body-color, #212529);
+  box-shadow: 0 10px 34px rgba(20, 38, 65, .18);
+  font-family: 'Manrope', system-ui, sans-serif;
+}
+.dito-filtro-menu-titulo {
+  display: block; margin-bottom: 12px; font-size: .82rem;
+  white-space: normal; line-height: 1.5;
+}
+.dito-filtro-menu-form { display: grid; gap: 10px; }
+.dito-filtro-campo { display: grid; gap: 5px; margin: 0; font-size: .78rem; }
+.dito-filtro-campo > span { font-size: .75rem; color: #596679; }
+.dito-filtro-menu-acoes { display: flex; justify-content: space-between; gap: 10px; padding-top: 3px; }
+.dito-filtro-menu-coluna .form-control, .dito-filtro-menu-coluna .form-select { width: 100%; }
+
+/* V7: datas de periodo lado a lado nos filtros superiores. */
+.dito-relatorio-periodo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
+}
+.dito-relatorio-periodo > input {
+  width: 100%; min-width: 0;
+  font-size: .75rem;
+  padding-left: .35rem;
+  padding-right: .25rem;
+}
+@media (max-width: 430px) {
+  .dito-relatorio-periodo { grid-template-columns: 1fr; }
+}
+/* Fechar deve permanecer alcancavel mesmo com varias opcoes na lista. */
+.dito-relatorio-colunas-painel > div:first-child {
+  position: sticky; top: -1rem; z-index: 1; background: var(--bs-body-bg, #fff);
+  padding: .35rem 0;
+}
+@media (max-width: 560px) {
+  .dito-relatorio-colunas-painel { max-height: 70vh; }
+}
+
+/* V8: progressive disclosure dos filtros menos utilizados. */
+.dito-relatorio-avancados > summary.dito-relatorio-avancados-toggle {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  border: 1px solid #bccbdc;
+  border-radius: 7px;
+  background: var(--bs-body-bg, #fff);
+  color: #254565;
+  padding: .42rem .7rem;
+  font-size: .82rem;
+  font-weight: 600;
+  line-height: 1.25;
+  cursor: pointer;
+  user-select: none;
+}
+.dito-relatorio-avancados > summary::-webkit-details-marker { display: none; }
+.dito-relatorio-avancados > summary.dito-relatorio-avancados-toggle:hover {
+  background: #f2f6fa;
+  border-color: #8da8c3;
+}
+.dito-relatorio-avancados > summary.dito-relatorio-avancados-toggle:focus-visible {
+  outline: 2px solid #1b5d94;
+  outline-offset: 2px;
+}
+.dito-relatorio-avancados-contador:not([hidden]) {
+  display: inline-block;
+  font-size: .72rem;
+  font-weight: 600;
+  color: #475569;
+  background: #edf2f7;
+  padding: .12rem .36rem;
+  border-radius: 999px;
+}
+.dito-relatorio-avancados-seta { transition: transform .18s ease; }
+.dito-relatorio-avancados[open] .dito-relatorio-avancados-seta { transform: rotate(180deg); }
+.dito-relatorio-avancados-campos {
+  border-top: 1px solid var(--bs-border-color, #e4e9ef);
+  margin-top: .75rem !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dito-relatorio-avancados-seta { transition: none; }
+}

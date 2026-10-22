@@ -1,11 +1,8 @@
-"""Colunas dinamicas do relatorio Dito (NAO se aplica ao FotoWeb).
+"""Colunas da exportação Dito (independente dos filtros da tela).
 
-Sem filtros, exporta as 20 colunas originais; com filtros, Retranca
-e os campos correspondentes exatamente aos filtros selecionados. Os filtros continuam responsaveis
-por determinar QUAIS imagens sao retornadas em _imagens_relatorio(request).
-
-A lista em _NOMES_ORIGINAIS espelha as 20 colunas da aba Geral existente
-antes desta melhoria. As colunas fixas do FotoWeb nao sao modificadas.
+Excel e CSV exportam todas as colunas, inclusive os marcos da primeira entrega do lote.
+A seleção visual de colunas no relatório não altera os downloads.
+Os arquivos FotoWeb mantêm seu layout separado.
 """
 
 _NOMES_ORIGINAIS = (
@@ -30,6 +27,23 @@ _NOMES_ORIGINAIS = (
     "Atualizada em",
     "Descrição completa",
 )
+
+# Mesmas cinco datas exibidas no popover de imagens_lista.html.
+_COLUNAS_DATAS = (
+    "Início Desc.",
+    "Entregue Desc.",
+    "Início Rev.",
+    "Entregue Rev.",
+    "Data Final",
+    "1ª entrega do lote (Desc.)",
+    "1ª entrega do lote (Rev.)",
+)
+
+
+def colunas_exportacao_dito():
+    """Sempre as colunas completas, independentemente das colunas ocultadas."""
+    return ["Retranca", "Projeto", *_NOMES_ORIGINAIS[1:], *_COLUNAS_DATAS]
+
 
 # Ordem segue a interface dos filtros, com Retranca sempre presente.
 MAPA_FILTROS = (
@@ -64,7 +78,7 @@ def colunas_dito(request):
     return colunas
 
 
-def selecionar_valores_dito(imagem, valores_originais, colunas):
+def selecionar_valores_dito(imagem, valores_originais, colunas, datas=None):
     """Seleciona os valores nas mesmas colunas/ordem da tabela e do CSV.
 
     `valores_originais` sao os 20 valores da aba Geral legada, ja calculados
@@ -75,6 +89,10 @@ def selecionar_valores_dito(imagem, valores_originais, colunas):
     mapa = dict(zip(_NOMES_ORIGINAIS, valores_originais))
     projeto = getattr(imagem, "projeto", None)
     mapa["Projeto"] = projeto.nome if projeto else ""
+    if datas is not None:
+        if len(datas) != len(_COLUNAS_DATAS):
+            raise ValueError("A exportação Dito deve conter sete datas.")
+        mapa.update(zip(_COLUNAS_DATAS, datas))
     return [mapa[nome] for nome in colunas]
 
 
@@ -83,4 +101,5 @@ def larguras_dito(colunas, larguras_originais):
         raise ValueError("Numero inesperado de larguras no Excel Dito.")
     mapa = dict(zip(_NOMES_ORIGINAIS, larguras_originais))
     mapa["Projeto"] = 26
+    mapa.update({nome: 21 for nome in _COLUNAS_DATAS})
     return [mapa[nome] for nome in colunas]

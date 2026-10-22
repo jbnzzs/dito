@@ -10,11 +10,13 @@ from django.db.models import Q
 from django.http import StreamingHttpResponse
 from django.utils import timezone
 
-from .relatorios_colunas import colunas_dito, selecionar_valores_dito
+from .relatorios_colunas import colunas_exportacao_dito, selecionar_valores_dito
+from .relatorios_datas import imagens_exportacao_dito, datas_formatadas_dito
 
 
 COLUNAS_GERAL = [
     "Retranca",
+    "Projeto",
     "Obra",
     "Componente curricular",
     "Volume/Ano/Módulo",
@@ -34,6 +36,13 @@ COLUNAS_GERAL = [
     "Cadastrada em",
     "Atualizada em",
     "Descrição completa",
+    "Início Desc.",
+    "Entregue Desc.",
+    "Início Rev.",
+    "Entregue Rev.",
+    "Data Final",
+    "1ª entrega do lote (Desc.)",
+    "1ª entrega do lote (Rev.)",
 ]
 
 
@@ -101,6 +110,7 @@ def _linhas_relatorio_csv(queryset, colunas):
     yield "\ufeff"
     yield escritor.writerow(colunas)
 
+    cache_lotes = {}
     for imagem in _imagens_em_blocos(queryset):
         descricao = getattr(imagem, "descricao", None)
         if descricao:
@@ -154,18 +164,18 @@ def _linhas_relatorio_csv(queryset, colunas):
             _data_csv(imagem.atualizado_em, incluir_hora=True),
             descricao_flat or None,
         ]
-        selecionados = selecionar_valores_dito(imagem, valores, colunas)
+        selecionados = selecionar_valores_dito(
+            imagem, valores, colunas,
+            datas=datas_formatadas_dito(imagem, _data_csv, cache_lotes),
+        )
         yield escritor.writerow([_celula_csv(valor) for valor in selecionados])
 
 
 @login_required
 def relatorios_exportar_csv(request):
-    """Baixa somente a aba Geral, com os mesmos filtros do relatório XLSX."""
-    # Import local: urls.py importa views antes deste módulo.
-    from .views import _imagens_relatorio
-
-    queryset = _imagens_relatorio(request)
-    colunas = colunas_dito(request)
+    """Exporta todas as imagens do resultado filtrado, sem limite de 200."""
+    queryset = imagens_exportacao_dito(request)
+    colunas = colunas_exportacao_dito()
     resposta = StreamingHttpResponse(
         _linhas_relatorio_csv(queryset, colunas),
         content_type="text/csv; charset=utf-8",
