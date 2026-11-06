@@ -124,7 +124,8 @@ def _montar_url_pdf_metadados_dito(editorial, scriba, sigla, ano):
     if anos_confirmados is not None and ano_num not in anos_confirmados:
         return ""
 
-    prefixo = (partes[0] + "_" + partes[1]).lower()
+    codigo_editora = f"E{int(partes[1][1:]):03d}"
+    prefixo = f"{partes[0]}_{codigo_editora}".lower()
     nome_pdf = f"{prefixo}_{ano_num}{numero}{sufixo}_mp.pdf"
     caminho = "/".join(
         _quote_dito(str(segmento), safe="")
