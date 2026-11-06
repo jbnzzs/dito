@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 from .relatorios_fotoweb_csv import relatorios_exportar_fotoweb_csv
 from .relatorios_csv import relatorios_exportar_csv
+from .pdf_reparo_urls_view import manutencao_urls_pdf
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
@@ -13,6 +14,7 @@ urlpatterns = [
     path("imagens/", views.imagens_lista, name="imagens_lista"),
     path("imagens/nova/", views.imagem_criar, name="imagem_criar"),
     path("imagens/importar/", views.importar_imagens, name="importar_imagens"),
+    path("imagens/manutencao-pdfs/", manutencao_urls_pdf, name="manutencao_urls_pdf"),
     path("imagens/importar/<uuid:importacao_id>/lotes/", views.organizar_lotes, name="organizar_lotes"),
     path("imagens/<int:pk>/editar/", views.imagem_editar, name="imagem_editar"),
     path("imagens/<int:pk>/excluir/", views.imagem_excluir, name="imagem_excluir"),

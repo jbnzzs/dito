@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Manutenção de PDFs antigos{% endblock %}
+{% block page_title %}Manutenção de PDFs antigos{% endblock %}
+{% block nav_imagens %}active{% endblock %}
+{% block content %}
+<div class="container-fluid" style="max-width:1100px;">
+  <h2 class="mb-2">Corrigir links antigos de PDF</h2>
+  <p class="text-secondary">Ferramenta restrita ao administrador. Corrige somente URLs antigas de PDFs do SharePoint com o nome <code>g28_e2_...</code> para <code>g28_e002_...</code> (qualquer componente). Não altera descrição, status, retranca, lote ou histórico.</p>
+  <div class="alert alert-warning" role="alert">
+    <strong>Atenção:</strong> a URL corrigida não comprova a existência de cada PDF no SharePoint. Testamos o exemplo de Matemática, mas confira outras disciplinas antes de executar em massa. Os registros alterados serão os do banco utilizado por este site.
+  </div>
+  <div class="card mb-3">
+    <div class="card-body">
+      <h5 class="card-title">Prévia — {{ total_candidatos }} link(s) elegível(is)</h5>
+      <p class="text-secondary mb-2">Apenas imagens ativas cujos links atendem exatamente ao padrão <code>gNN_e2_ANOpNNNletra_mp.pdf</code>. Outras URLs ficam intactas.</p>
+      <a class="btn btn-outline-primary" href="?baixar_backup=1"><i class="bi bi-download me-1"></i> Baixar backup CSV (URLs originais e corrigidas)</a>
+      {% if amostras %}
+      <div class="table-responsive mt-3" style="max-height:420px;">
+        <table class="table table-sm table-striped align-middle">
+          <thead><tr><th>Retranca</th><th>URL atual</th><th>URL proposta</th></tr></thead>
+          <tbody>
+            {% for id, retranca, antiga, nova in amostras %}
+            <tr><td><code>{{ retranca }}</code></td><td style="min-width:250px;word-break:break-all;">{{ antiga }}</td><td style="min-width:250px;word-break:break-all;">{{ nova }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="small text-secondary mb-0">Exibindo as primeiras 20; o backup CSV inclui todas as candidatas.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% if total_candidatos %}
+  <div class="card mb-3"><div class="card-body">
+    <h5>Confirmar correção</h5>
+    <form id="formCorrigirPDF" method="post" novalidate>
+      {% csrf_token %}
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="backupConfirmado" name="backup_confirmado" value="sim" required>
+        <label class="form-check-label" for="backupConfirmado">Baixei e guardei o backup CSV acima.</label>
+      </div>
+      <label for="confirmacaoPDF" class="form-label">Digite <strong>CORRIGIR PDF</strong> para autorizar a alteração apenas de <code>url_pdf</code>:</label>
+      <input id="confirmacaoPDF" class="form-control mb-3" style="max-width:330px" name="confirmacao" required pattern="CORRIGIR PDF" autocomplete="off" placeholder="CORRIGIR PDF">
+      <button type="submit" id="botaoCorrigirPDF" class="btn btn-danger"><i class="bi bi-arrow-repeat me-1"></i> Corrigir links em produção</button>
+    </form>
+    <div id="resultadoReparoPDF" role="status" aria-live="polite" class="mt-3 small"></div>
+    <div class="progress mt-2" style="height:9px;" aria-label="Progresso do reparo"><div class="progress-bar" id="progressoReparoPDF" style="width:0%"></div></div>
+    <p class="small text-secondary mt-2 mb-0">O processo aplica lotes de até 200 imagens por requisição. Mantenha esta aba aberta até a conclusão. Se for interrompido, basta entrar novamente: links já corrigidos não serão processados outra vez.</p>
+  </div></div>
+  <script>
+  (() => {
+    const form = document.getElementById('formCorrigirPDF');
+    if (!form) return;
+    const botao = document.getElementById('botaoCorrigirPDF');
+    const saida = document.getElementById('resultadoReparoPDF');
+    const progresso = document.getElementById('progressoReparoPDF');
+    const totalInicial = {{ total_candidatos }};
+    form.addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      if (!form.reportValidity()) return;
+      if (!window.confirm('Você guardou o backup e deseja alterar as URLs antigas no banco deste site?')) return;
+      botao.disabled = true;
+      const campos = new FormData(form);
+      let totalAlterado = 0;
+      try {
+        for (let i = 0; i < 1000; i++) {
+          const resposta = await fetch(form.action || window.location.href, {
+            method: 'POST', credentials: 'same-origin', body: campos,
+            headers: {'X-Requested-With': 'XMLHttpRequest'},
+          });
+          const dados = await resposta.json();
+          if (!resposta.ok || dados.erro) throw new Error(dados.erro || 'Falha na atualização.');
+          totalAlterado += dados.alteradas || 0;
+          const restantes = dados.restantes || 0;
+          const feito = Math.max(0, Math.min(100, Math.round(100 * (1 - restantes / totalInicial))));
+          progresso.style.width = feito + '%';
+          saida.textContent = 'URLs corrigidas nesta operação: ' + totalAlterado + '. Restantes: ' + restantes + '.';
+          if (restantes === 0) {
+            saida.textContent += ' Concluído. Atualize a página para conferir a prévia.';
+            return;
+          }
+          if (!dados.alteradas) throw new Error('Nenhuma URL alterada neste lote; interrompido para evitar repetição infinita.');
+        }
+        throw new Error('Limite de lotes atingido. Atualize a página para continuar.');
+      } catch (erro) {
+        saida.textContent = 'Processo interrompido: ' + erro.message + '. Foram corrigidas ' + totalAlterado + ' URLs. Atualize a página para verificar o restante.';
+      } finally {
+        botao.disabled = false;
+      }
+    });
+  })();
+  </script>
+  {% else %}
+  <div class="alert alert-success" role="status">Nenhuma URL antiga deste padrão foi encontrada no banco utilizado por este site. Nenhuma alteração é necessária.</div>
+  {% endif %}
+</div>
+{% endblock %}
