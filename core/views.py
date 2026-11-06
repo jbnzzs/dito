@@ -598,6 +598,46 @@ def _correcao_ativa_da_imagem(imagem):
     return evento
 
 
+def _entrega_historica_permite_devolucao(imagem, perfil):
+    """Fallback de exibicao da devolucao para coordenacao/administracao.
+
+    Quando a imagem ja esta em avaliacao pela coordenacao, uma flag de
+    bloqueio ausente nao deve esconder o formulario de devolucao.
+    Fora dessa etapa, usamos o evento gravado de conclusao, sem permitir
+    devolucao ao perfil que ainda executa a tarefa.
+
+    Funcao somente de leitura: nao modifica historico, status ou flags.
+    A view chamadora tambem exige um profissional vinculado a cada fase.
+    """
+    from .models import HistoricoItem
+
+    status = imagem.status
+    if not status or status.perfil_responsavel == perfil:
+        return False
+
+    # Ex.: status "Avaliando" operado pela coordenacao. A etapa do
+    # descritor/revisor terminou, mesmo se a flag nao foi sincronizada.
+    if (
+        status.perfil_responsavel == Usuario.Tipo.COORDENADOR
+        and not status.is_final
+    ):
+        return True
+
+    tipos = {
+        Usuario.Tipo.DESCRITOR: HistoricoItem.TipoAcao.DESCRICAO_SALVA,
+        Usuario.Tipo.REVISOR: HistoricoItem.TipoAcao.CONFERENCIA_CONCLUIDA,
+    }
+    tipo_acao = tipos.get(perfil)
+    if not tipo_acao:
+        return False
+
+    return HistoricoItem.objects.filter(
+        imagem_id=imagem.pk,
+        tipo_acao=tipo_acao,
+        novo_status__ordem__lte=status.ordem,
+    ).exists()
+
+
 def _normalizar_texto_descricao(texto):
     """Substitui aspas duplas por aspas simples antes de persistir."""
     return str(texto or "").replace('"', "'")
@@ -2648,10 +2688,35 @@ def descricao_imagem(request, pk):
         imagem
     )
 
+    # Exibir a devolucao pelo estado real da tarefa, nao exclusivamente
+    # pelas flags de bloqueio (que podem faltar em imagens importadas).
+    pode_devolver_descritor = False
+    pode_devolver_revisor = False
+    if (
+        descricao
+        and usuario.tipo in (Usuario.Tipo.COORDENADOR, Usuario.Tipo.ADMINISTRADOR)
+    ):
+        if descricao.descritor_id:
+            pode_devolver_descritor = bool(
+                descricao.descritor_bloqueado
+                or _entrega_historica_permite_devolucao(
+                    imagem, Usuario.Tipo.DESCRITOR
+                )
+            )
+        if descricao.revisor_id:
+            pode_devolver_revisor = bool(
+                descricao.revisor_bloqueado
+                or _entrega_historica_permite_devolucao(
+                    imagem, Usuario.Tipo.REVISOR
+                )
+            )
+
     ctx = {
         "imagem": imagem,
         "descricao": descricao,
         "correcao_ativa": correcao_ativa,
+        "pode_devolver_descritor": pode_devolver_descritor,
+        "pode_devolver_revisor": pode_devolver_revisor,
         "alerta_origem_g27": origem_g27(imagem),
         "trechos": trechos,
         "pode_editar": pode_editar,

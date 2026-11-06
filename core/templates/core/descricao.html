@@ -435,7 +435,7 @@
                 </div>
             </div>
             {% if request.user.tipo == 'coordenador' or request.user.tipo == 'administrador' %}
-                {% if descricao and descricao.descritor_bloqueado %}
+                {% if pode_devolver_descritor %}
                 <form method="post" action="{% url 'devolver_descritor' imagem.pk %}" class="mt-3 pt-3" style="border-top:0.5px solid #DAD6CD;">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -453,7 +453,7 @@
                 </form>
                 {% endif %}
 
-                {% if descricao and descricao.revisor_bloqueado %}
+                {% if pode_devolver_revisor %}
                 <form method="post" action="{% url 'devolver_revisor' imagem.pk %}" class="mt-3 pt-3" style="border-top:0.5px solid #DAD6CD;">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
